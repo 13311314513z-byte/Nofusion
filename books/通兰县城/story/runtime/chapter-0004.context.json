@@ -1,0 +1,75 @@
+{
+  "chapter": 4,
+  "selectedContext": [
+    {
+      "source": "runtime/chapter_memo",
+      "reason": "Carry the planner's chapter memo into governed writing.",
+      "excerpt": "goal=曹二泥决定去北街裁缝铺辨灰布来源，并在路上与赵德禄完成一次无声对抗 | ## 当前任务\n曹二泥拎着补井灰布条去北街裁缝铺辨认，途中被赵德禄在路中央的馄饨摊截住——双方都沉默，但都明白了对方知道多少。\n\n## 读者此刻在等什么\n1) 读者前一章结尾第一次看到布条与裤子的画粉线一致，在等主角下一步——他会不会去查那个姓张的裁缝、赵德禄会不会知道他已经有了物证。\n2) 本章要部分兑现这个期待：让曹二泥动身去查，同时在去的过程中制造“赵德禄已经布好了一道网”的堵死感——曹二泥不能直接见到裁缝铺，但确认了“北街张记裁缝铺确实关了一个多月，门上贴的是警察署的封条”。兑现程度：得到信息来源，但未获取物证。\n\n## 该兑现的 / 暂不掀的\n- 该兑现：布条来源指向张记裁缝铺 → 兑现到“封条确认”程度\n- 该兑现：赵德禄与曹二木之间的无声对峙 → 兑现到一次眼神交锋+侧身让路\n- 暂不掀：灰布裤子对应的失踪者身份 → 留到第6章（给曹二泥一个必须冒险去翻墙查铺子的理由）\n- 暂不掀：墙上填土的深度与范围 → 留到第7章（等赵德禄压力升级迫使曹二泥再探）\n\n## 日常/过渡承担什么任务\n- [开篇 — 曹二泥屋中] → 以他缝补裤子外层的动作为引，展示他手中握有两条物证（裤子+布条），建立急迫感（他必须在赵德禄下一次询问前决定是否动）。五感：油灯暗光下灰布与灰布叠放的触感、画粉线在灯下显浅蓝、窗外北风吹门板响。\n- [出门 — 北大街偏巷] → 用工匠惯常的行路路线（从东侧偏巷横穿北大道，沿冰溜子墙根走）展示曹二泥如何在日常中避开盯梢。为后面赵德禄截住他的地点埋铺垫。\n- [馄饨摊对峙后 — 改道去南大街磨坊] → 曹二泥临时改道去磨坊赊玉米面，借磨坊主周老四的嘴，听到一句闲话：“张裁缝那铺子封了，有人说里头那堆布裁错了尺，也有人说那布料不是做衣裳的。”——这条信息与赵德禄的盯梢系统产生确凿联系。\n\n## 关键抉择过三连问\n- 主角本章最关键的一次选择：曹二泥在赵德禄起身示意馄饨摊坐下后，选择没有立刻回头，而是坐下来吃了那碗馄饨。\n  - 为什么这么做？如果他掉头就走，就等于承认自己心里有鬼；坐下来吃完，才是“匠人路过吃个早点”的样子。\n  - 符合当前利益吗？符合。他需要维持“还是那个补墙匠”的外壳。赵德禄此刻没有翻脸动手的把握，他也同样没有。谁先亮底谁输。\n  - 符合他的人设吗？符合。曹二泥寡言但善算，长期与穷街打交道，对“什么话该在什么时候咽”有直觉。他吃馄饨比回嘴更接近他的底色。\n- 对手/配角本章最关键的一次选择：赵德禄选择在馄饨摊前，不等曹二泥开口就先说自己“外甥从哈尔滨寄了件大衣，比县里裁缝做的针脚细。”\n  - 为什么这么做？他在用最轻的腔调扔最重的饵：裁缝这事谁都能碰，但你碰之前最好想清楚“针脚”是警察署的东西。\n  - 符合当前利益吗？符合。他不敢贸然从曹二泥手里直接搜物证（没有令状，且曹二泥是匠人，匠人丢衣料是常事），所以他敲边鼓。\n  - 符合他的人设吗？符合。赵德禄在第2章已展现过“从剃头棚走出来堵人”的耐心，这条线延续。他不是喊打喊杀的人，是那种让东西自己被“针脚”勒住的人。\n\n## 章尾必须发生的改变\n1. 信息改变：曹二泥确认了张记裁缝铺已于腊月初十被封（约三周前），封条上戳是警察署侦缉股。\n2. 关系改变：曹二泥与赵德禄的沉默对峙升级为互相都知道对方手里有牌却都不翻的“冷战”。赵德禄不再盯梢——开始布点（他坐在馄饨摊不是偶然，等于宣告“你往哪条街走我都知道”）。\n3. 物理改变：曹二泥回家的路上，发现自家大门锁鼻被换过——旧的锈蚀，新的是铁匠铺打的未锈。没人留下话。\n\n## 本章 hook 账\n\nopen:\n- [new] H009（赵德禄的钥匙串：锁鼻）|| 理由：本章章尾门锁鼻被换，直接把赵德禄的行动触角伸到曹二泥家门槛。不在本章解释谁换的，留给读者自己去嗅——这是赵德禄在扩大他“管控”的周长。\n- [new] H010（磨坊周老四的闲话：有人收旧布头，给的价够买三斤棒子面）|| 理由：让曹二泥拿到另一个切入点——谁在收？收来做什么？跟墙根填土、裁缝铺关门、警察署封条——“收布头”这条线索可以跟裁缝铺的“铺子里那堆布”产生新的勾连，但这一章只把它作为闲话落在磨坊的玉米面堆里，不立刻追。\n\nadvance:\n- H005“张”裁缝 → 从planted推进至pressured（曹二泥亲眼看到封条，确认该人物确实存在于本案，但尚未建立直接联络）\n\nresolve:\n- H008（灰布条配裤子）→ 从planted resolve至clear（本章通过磨坊闲话和封条确认，灰布条确实来自张记裁缝铺，但布条本身仍未公开）\n\ndefer:\n- H006（赵德禄剃头棚盯梢）→ 本章不推进，理由：胡明远（剃头匠）在赵德禄的系统里只是“一个点”，本章赵德禄换到了馄饨摊，H006这条线可以压到第6章由曹二泥回头去找胡明远时再激活。\n\n## 不要做\n1. 不要让曹二泥在馄饨摊说任何超过六个字的话，包括内心独白——用动作（筷子夹馄饨的方式、放下碗时碗底的陶瓷刮桌面声、擦嘴时袖口蹭到的油渍）代替语言。\n2. 不要解释门锁鼻是谁换的——读者只能跟着曹二泥看见结果（有新的、没绣的锁鼻，但锁还在），这个悬念得累到第5章或第6章由赵德禄当面“借钥匙”来解开。\n3. 不要写任何裁缝铺内部的镜头——曹二泥没进去，读者就不能进去。本章只到北街路口、看到门板上的封条就转头。\n4. 不要让赵德禄露出任何“在恐吓”的明确表情或动作。他的威胁感应该来自节奏——从坐下到吃完，一句话正说到一半就行。"
+    },
+    {
+      "source": "story/current_focus.md",
+      "reason": "Current task focus for this chapter.",
+      "excerpt": "（描述接下来 1-3 章最需要优先推进的内容。）"
+    },
+    {
+      "source": "story/audit_drift.md",
+      "reason": "Carry forward audit drift guidance from the previous chapter without polluting hard state facts.",
+      "excerpt": "> 第3章审计发现以下问题，下一章写作时必须避免："
+    },
+    {
+      "source": "story/current_state.md",
+      "reason": "Preserve hard state facts referenced by the active chapter brief or hard constraints.",
+      "excerpt": "(状态卡未更新)"
+    },
+    {
+      "source": "story/outline/story_frame.md",
+      "reason": "Preserve canon constraints referenced by the active chapter brief or hard constraints.",
+      "excerpt": "---"
+    },
+    {
+      "source": "story/outline/volume_map.md",
+      "reason": "Anchor the default planning node for this chapter.",
+      "excerpt": "本书计划分四卷，每卷约50章（前后浮动），情绪曲线如下。"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_titles",
+      "reason": "Keep recent title history visible to avoid repetitive chapter naming.",
+      "excerpt": "2: 三指探墙"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_mood_type_trail",
+      "reason": "Keep recent mood and chapter-type cadence visible before writing the next chapter.",
+      "excerpt": "2: 压抑、紧张、渐进式焦虑 / 日常过渡型（含核心探查动作）"
+    },
+    {
+      "source": "story/chapters#recent_endings",
+      "reason": "Show how recent chapters ended so the writer avoids structural repetition (e.g. 3 consecutive collapse endings).",
+      "excerpt": "ch1: 可那股焦味，还在鼻子里绕。 | ch2: 他翻了个身。 | ch3: 那截布条上的画粉线在他手心里画了一道无声的印子，正慢慢往胸口里深。"
+    },
+    {
+      "source": "story/current_state.md#当前冲突",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前冲突 | 曹二泥试图弄清墙下真相 vs. 赵德禄的盯梢与压制；保存物证的冲动 vs. 销毁证据自保的本能；好奇心与正义感的萌发 vs. 个人安全"
+    },
+    {
+      "source": "story/current_state.md#当前目标",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前目标 | 弄清里外墙墙下到底有什么（从“怀疑墙下有鬼”升级为“确认墙被动过”）"
+    },
+    {
+      "source": "story/current_state.md#主角状态",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "主角状态 | 通过匠人手眼（钢钎探查、捻土色、敲音判断）确认里外墙北段墙根下填土异常，松土段约一米宽，黄壤非本地土，墙基受力不均；确认赵德禄今早再次来过墙根并看到暗记但未看懂；当面向赵德禄谎称看烟囱剁子搪塞；将灰布裤子（裤腰有“张”字与编号“0329”）及墙根碎砖一同藏在家中柜底；处于警觉、紧张但坚定的状态，决定“先藏着”"
+    },
+    {
+      "source": "story/current_state.md#当前限制",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前限制 | 赵德禄明确禁止他再碰那截墙，且今早已在路口和剃头棚两次盯梢；曹二泥需要在不引起注意的情况下进行下一步行动；明天还得上工"
+    },
+    {
+      "source": "story/chapter_summaries.md#2",
+      "reason": "Relevant episodic memory retrieved for the current chapter goal.",
+      "excerpt": "三指探墙 | 曹二泥清晨被赵德禄堵路（问去向）；在东大街补井台时听闻赵德禄昨夜在警察署待到后半夜；补完活后绕至里外墙后街，用钢钎探查确认墙根下有约一米宽填土异常；被赵德禄从剃头棚走出当面堵住质问（谎称看烟囱脱身）；回家后反复检查裤子（确认“张”字与编号0329）并决定“先藏着” | 曹二泥从“怀疑墙下异常”升级为“匠人实证确认异常”；赵德禄从单次警告升级为盯梢/跟踪；曹二泥与赵德禄关系进入互相试探阶段；曹二泥手中物证（裤子+碎砖）成为可验证底牌 | H001（物证）：advanced；H002（人物线索）：advanced；H006（新开）：赵德禄剃头棚盯梢"
+    }
+  ]
+}

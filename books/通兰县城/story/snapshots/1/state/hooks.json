@@ -1,0 +1,54 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "物证线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷后半段",
+      "payoffTiming": "near-term",
+      "notes": "裤子被曹二泥带回家，藏入棉袄内层；焦痕与赵德禄的紧张行为使此线索分量加重"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 1,
+      "type": "人物线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷后半段",
+      "payoffTiming": "mid-arc",
+      "notes": "赵德禄成为墙下秘密的直接阻力，曹二泥记住了墙根位置并留下暗记"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 1,
+      "type": "行为线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷中段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H001, H002]；暗示赵德禄并非第一次做这种事"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 1,
+      "type": "物证线索（账簿）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷后半段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H003]；可能与被删户有关联"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 1,
+      "type": "人物线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷前半段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H001]；裁缝失踪案可能为关键支线"
+    }
+  ]
+}

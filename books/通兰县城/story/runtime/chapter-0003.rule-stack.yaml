@@ -1,0 +1,73 @@
+layers:
+  - id: L1
+    name: hard_facts
+    precedence: 100
+    scope: global
+  - id: L2
+    name: author_intent
+    precedence: 80
+    scope: book
+  - id: L3
+    name: planning
+    precedence: 60
+    scope: arc
+  - id: L4
+    name: current_task
+    precedence: 70
+    scope: local
+sections:
+  hard:
+    - story_frame
+    - current_state
+    - book_rules
+    - roles
+  soft:
+    - author_intent
+    - current_focus
+    - volume_map
+  diagnostic:
+    - anti_ai_checks
+    - continuity_audit
+    - style_regression_checks
+overrideEdges:
+  - from: L4
+    to: L3
+    allowed: true
+    scope: current_chapter
+  - from: L4
+    to: L2
+    allowed: false
+    scope: current_chapter
+  - from: L4
+    to: L1
+    allowed: false
+    scope: current_chapter
+activeOverrides:
+  - from: L4
+    to: L3
+    target: chapter:3/mustAvoid
+    reason: 禁止任何形式的叙述者跳入人物内心进行直接的心理描写。
+  - from: L4
+    to: L3
+    target: chapter:3/mustAvoid
+    reason: 禁止用“巧合”作为关键情节推动力（如主角恰好捡到关键证据）。
+  - from: L4
+    to: L3
+    target: chapter:3/mustAvoid
+    reason: 禁止机械降神（如县公署恰好有良心未泯的官员无条件相助）。
+  - from: L4
+    to: L3
+    target: chapter:3/mustAvoid
+    reason: 禁止对县城气候与地理作超越时代背景的预设（如电灯、电话、铺装路的分布需严格按1940年代伪满小县城的现实来）。
+  - from: L4
+    to: L3
+    target: chapter:3/mustAvoid
+    reason: 禁止角色说任何不符合其身份、教育背景、所处时代的总结性“金句”。
+  - from: L4
+    to: L3
+    target: chapter:3/styleEmphasis
+    reason: '**西北**——权力核心。日本人、县长、参事官、绅商聚居。电灯、铺装路、门脸排场。水泥墙+玻璃碴，俗称"里外墙"——墙里是人上人，墙外是人下人。'
+  - from: L4
+    to: L3
+    target: chapter:3/styleEmphasis
+    reason: '**西南**——灰色地带。妓院、赌场、黑市。紧贴警察署背后，白天小吃摊，夜里什么都能卖，连自己带别人的命都可以。'

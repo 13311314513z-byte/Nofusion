@@ -1,0 +1,64 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "物证线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷后半段",
+      "payoffTiming": "near-term",
+      "notes": "线索存活，曹二泥决定“先藏着”"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 1,
+      "type": "人物线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷后半段",
+      "payoffTiming": "mid-arc",
+      "notes": "盯者与被盯者关系确立"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 1,
+      "type": "行为线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷中段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H001, H002]；暗示赵德禄并非第一次做这种事"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 1,
+      "type": "物证线索（账簿）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷后半段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H003]；可能与被删户有关联"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 1,
+      "type": "人物线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷前半段",
+      "payoffTiming": "mid-arc",
+      "notes": "依赖[H001]；裁缝失踪案可能为关键支线"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 2,
+      "type": "行为线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷后半段",
+      "payoffTiming": "near-term",
+      "notes": "新开伏笔：赵德禄在剃头棚盯梢，表明其警惕心升级"
+    }
+  ]
+}

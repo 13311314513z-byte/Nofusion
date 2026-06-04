@@ -1,0 +1,114 @@
+{
+  "hooks": [
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "药杵底部刻字与父亲身份关联",
+      "payoffTiming": "mid-arc",
+      "notes": "陈守拙在日光下看清药杵底部的六个缺口，确认密码序列为2-1-4-6-3-0，并记录在窗台背面。"
+    },
+    {
+      "hookId": "character-揭露自称西关-王先生的门外-人身份及其动",
+      "startChapter": 1,
+      "type": "character",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "揭露自称西关王先生的门外人身份及其动机",
+      "payoffTiming": "near-term",
+      "notes": "陈守拙主动前往西关巷子，三次试探黑门。门缝里的人（王先生）目光先落腰牌位置，然后否认“你找错了”。身份未正面揭露，但确认王先生知道腰牌存在。新增王先生窗台上的红绳（师傅系药包的手法）。"
+    },
+    {
+      "hookId": "mystery-揭示腰牌-通兰-己卯",
+      "startChapter": 1,
+      "type": "mystery",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "揭示腰牌'通兰·己卯·冬'的来历和陈守拙的身世关联",
+      "payoffTiming": "mid-arc",
+      "notes": "王先生的目光确认腰牌位置；陈守拙在腰牌边缘刻下记号用于未来验证；将腰牌与铜药杵并排放置对比。"
+    },
+    {
+      "hookId": "mystery-解释赵秉义为-何烧掉纸条并-勿回",
+      "startChapter": 1,
+      "type": "mystery",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "解释赵秉义为何烧掉纸条并写'勿回'，以及他的去向",
+      "payoffTiming": "near-term",
+      "notes": "本章未直接推进，但增加了一条线索：赵秉义在灶台砖洞中藏有纸条“正月初九前勿找王先生”，表明他对王先生有防范。"
+    },
+    {
+      "hookId": "organization-揭示七号门的-真实身份及其-与日本人的关",
+      "startChapter": 1,
+      "type": "organization",
+      "status": "open",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "揭示七号门的真实身份及其与日本人的关系",
+      "payoffTiming": "mid-arc",
+      "notes": "本章未推进。"
+    },
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "25",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "人物身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "45",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "120",
+      "payoffTiming": "mid-arc",
+      "notes": "[H001, H002]"
+    },
+    {
+      "hookId": "NEW_HOOK_001",
+      "startChapter": 2,
+      "type": "character",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "卖柴老汉的身份归属（佐佐木手下暗哨或抗联外围眼线）",
+      "payoffTiming": "near-term",
+      "notes": "老汉在巷口出现，喊话后消失，柴担和拖痕不翼而飞。身份未点破。"
+    },
+    {
+      "hookId": "NEW_HOOK_002",
+      "startChapter": 2,
+      "type": "item",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "王先生窗台上出现的红绳（师傅系药包的独特手法）",
+      "payoffTiming": "mid-arc",
+      "notes": "陈守拙认出编法为师傅所用，不确定是师傅留下的还是王先生故意放置。"
+    },
+    {
+      "hookId": "NEW_HOOK_003",
+      "startChapter": 2,
+      "type": "incident",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "门槛下出现的沾血灰布条",
+      "payoffTiming": "near-term",
+      "notes": "陈守拙回来后，门外有人放下沾血灰布条后离开。来源和意图不明。"
+    }
+  ]
+}

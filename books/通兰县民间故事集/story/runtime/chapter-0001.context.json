@@ -1,0 +1,70 @@
+{
+  "chapter": 1,
+  "selectedContext": [
+    {
+      "source": "runtime/chapter_memo",
+      "reason": "Carry the planner's chapter memo into governed writing.",
+      "excerpt": "goal=陈守拙在送药途中遭遇日伪追踪，并以铜药杵和一枚腰牌为线索，进入县城秘密斗争的暗流 | golden-opening=true | ## 当前任务\n陈守拙在隆冬清晨接到师傅的紧急送药指令，前往城外三岔河村，途中发现被两名伪警察盯梢。他必须在摆脱追踪的同时，完成第一次送药，并在过程中无意撞见一段关于“七号门”的对话，为后续身世和县城阴谋埋下钩子。\n\n## 读者此刻在等什么\n1. 读者正在等一个鲜明的开场——主角是谁、他面临什么危险、故事要往哪个方向走。\n2. 本章通过“送药被盯上”这个具体动作将主角立即抛入主线矛盾（生存+秘密），同时交代其沉默寡言、行动先于言语的个性，并借腰牌和铜药杵留下身世悬念。不追求解决矛盾，只制造更强的“他怎么脱身？”缺口。\n\n## 该兑现的 / 暂不掀的\n- 该兑现：核心冲突——送药任务被日伪势力威胁，主角必须做出抉择 → 兑现到“他成功送药但被留下记号（腰牌上的刻痕）”的程度，让读者看到冲突真实存在且主角已被卷入。\n- 暂不掀：“七号门”的具体含义、腰牌真正的主人、师傅为什么选他去送药 —— 这些留到第 2-3 章逐步揭示。\n\n## 日常/过渡承担什么任务\n不适用 – 本章为高压开场，无日常过渡段落。每一个场景（药房内、巷弄躲避、冰河沟、三岔河村）都直接推动核心冲突或埋下伏笔。\n\n## 关键抉择过三连问\n- 主角本章最关键的一次选择：在被两名伪警察盯上后，陈守拙没有选择扔掉药包（任务）或主动找师傅求援，而是冒险绕道冰河沟甩开追踪，继续前往三岔河村。\n  - 为什么这么做？因为他意识到这批药如果到不了村里，冬天里几个伤员会死。他的行动先于言语性格使然，而且他不想辜负师傅的信任。\n  - 符合当前利益吗？有危险，但甩开追踪后能完成任务，也避免药房被牵连。短期看合理。\n  - 符合他的人设吗？符合：沉默、不争辩、不求助、用行动解决问题、对他人性命有责任感（虽然不表达）。\n- 对手本章最关键的一次选择：伪警察队长王得禄（本章新设角色）没有当场抓捕陈守拙，而是选择跟踪放长线钓大鱼。\n  - 为什么这么做？他怀疑药房有通敌嫌疑，但证据不足，想借陈守拙的送药路线揪出更多接头人。\n  - 符合当前利益吗？符合——他想立功又不打草惊蛇。\n  - 符合他的人设吗？符合：老练、谨慎、有野心，但信息不对等——他不知道陈守拙的腰牌背后还有更深背景。\n\n## 章尾必须发生的改变\n1. **信息改变**：主角和读者都知道了“七号门”这个名词的存在（不明含义，但与县城日伪秘密有关），同时腰牌背面出现一小段刻文（“通兰·己卯·冬”），与师傅送药时欲言又止的表情形成对照。\n2. **关系改变**：陈守拙与师傅（德仁堂掌柜）之间产生一道无形的裂痕——师傅似乎知道腰牌的事但刻意隐瞒，而主角在离开药房时偷看到师傅烧掉了一张纸条（钩子）。\n3. **物理改变**：陈守拙为甩开追踪，将唯一一包火柴掉进冰窟窿，回程时只能靠体温和铜药杵取暖，为后续极寒生存埋下隐患。\n\n## 本章 hook 账\nopen:\n- [new] “七号门”第一次被提及（伪警察跟踪时低语）|| 理由：在护药任务暂时完成后留下更大谜团，不让本章变成“单次任务成功”的闭合闭环\n- [new] 师傅烧纸条的瞬间被陈守拙瞥见，纸条一角残余写着“药已发，勿回”|| 理由：暗示师傅的送药指令并非单纯救人，还有一层更高风险的信息传递\n\nadvance:\n（无 advance，本章为开局，没有任何 pending hook 需要推进）\n\nresolve:\n（无 resolve，本章不闭合任何已有钩子——但可选：让陈守拙成功将药送到村东头老槐树下，完成师傅交代的“第一层任务”）\n\ndefer:\n（无 defer，因为没有陈旧 hook。但如果要严格遵循输出要求，此处写一条：所有钩子均为 open，本章不处理 defer。）\n\n## 不要做\n1. 不要写陈守拙主动参与战斗或打斗——他只会利用地形、绕路、躲藏，不与伪警察正面冲突。\n2. 不要用大段旁白交代通兰县地理或历史——所有环境信息通过陈守拙移动路线中的自然观察带出（结冰的木兰河、伏虎岭、西关市场“破烟囱”等地标仅提及名称，不做解释）。\n3. 不要让陈守拙在章末突然变得“勇敢”“觉醒”——本章结束时他仍是那个闷头做事、心里压着很多问题但不说出来的伙计，只是对“七号门”和腰牌多了一份警觉。\n4. 不要在对话里直接点明“日本人的阴谋”“地下党”等词汇——所有政治身份只用行为暗示（伪警察的态度、药包里的绷带剂量、师傅的紧张），保持民间叙事距离感。"
+    },
+    {
+      "source": "story/current_focus.md",
+      "reason": "Current task focus for this chapter.",
+      "excerpt": "（描述接下来 1-3 章最需要优先推进的内容。）"
+    },
+    {
+      "source": "story/current_state.md",
+      "reason": "Preserve hard state facts referenced by the active chapter brief or hard constraints.",
+      "excerpt": "> 建书时占位。运行时每章之后由 consolidator 追加最新状态。每个角色的初始状态详见 roles/*.当前现状；承重的初始世界设定见 pending_hooks 里 startChapter=0 的行。"
+    },
+    {
+      "source": "story/outline/story_frame.md",
+      "reason": "Preserve canon constraints referenced by the active chapter brief or hard constraints.",
+      "excerpt": "---"
+    },
+    {
+      "source": "story/outline/volume_map.md",
+      "reason": "Anchor the default planning node for this chapter.",
+      "excerpt": "全书共三卷，每卷约65-70章，34万字左右。"
+    },
+    {
+      "source": "story/pending_hooks.md#H001",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 25 | near-term | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H002",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 60 | mid-arc | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H004",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 120 | mid-arc | [H001, H002]"
+    },
+    {
+      "source": "story/pending_hooks.md#H006",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "地点线索 | open | 150 | mid-arc | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H009",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 175 | slow-burn | [H004, H008]"
+    },
+    {
+      "source": "story/pending_hooks.md#H011",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 15 | near-term | [H005]"
+    },
+    {
+      "source": "story/pending_hooks.md#H013",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "地点线索 | open | 100 | mid-arc | [H009]"
+    },
+    {
+      "source": "story/pending_hooks.md#H016",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "物品线索 | open | 165 | mid-arc | [H014]"
+    }
+  ]
+}

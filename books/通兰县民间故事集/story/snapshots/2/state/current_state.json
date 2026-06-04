@@ -1,0 +1,53 @@
+{
+  "chapter": 2,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "药房灶房",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "左脚冻伤（钝痛），膝盖僵；持有铜药杵（发现底部密码序列2-1-4-6-3-0）、腰牌（已刻记号）、师傅纸条“正月初九前勿找王先生”、半截铅笔头、两斤米；高度警觉，主动进入猎场",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "解码药杵密码序列（2-1-4-6-3-0），确认王先生与师傅关系，应对至少两方势力的监视",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "身体冻伤、信息极度不对称（不知各方身份）、师傅失踪、门外再次出现未知人物",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "王先生（身份不明，知道腰牌存在、否认关联）、卖柴老汉（身份不明，消失后留下拖痕）、门外留下血布条的未知人物",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "陈守拙从被动怀疑转为主动进入猎场；被至少两方监视（王先生方+卖柴老汉代表的势力）；王先生否认与师傅关联但知道腰牌；师傅留下矛盾指令（勿找王先生但纸条藏于秘密砖洞）",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    }
+  ]
+}

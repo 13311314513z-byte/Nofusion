@@ -1,0 +1,214 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "25",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "人物身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "45",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "120",
+      "payoffTiming": "mid-arc",
+      "notes": "[H001, H002]"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 0,
+      "type": "人物关系",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "35",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 0,
+      "type": "地点线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "150",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 0,
+      "type": "人物秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "75",
+      "payoffTiming": "mid-arc",
+      "notes": "[H005]"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 0,
+      "type": "人物秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "110",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H009",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "175",
+      "payoffTiming": "slow-burn",
+      "notes": "[H004, H008]"
+    },
+    {
+      "hookId": "H010",
+      "startChapter": 0,
+      "type": "初始世界状态",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "3",
+      "payoffTiming": "immediate",
+      "notes": "无"
+    },
+    {
+      "hookId": "H011",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "15",
+      "payoffTiming": "near-term",
+      "notes": "[H005]"
+    },
+    {
+      "hookId": "H012",
+      "startChapter": 0,
+      "type": "人物秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "50",
+      "payoffTiming": "mid-arc",
+      "notes": "[H003]"
+    },
+    {
+      "hookId": "H013",
+      "startChapter": 0,
+      "type": "地点线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "100",
+      "payoffTiming": "mid-arc",
+      "notes": "[H009]"
+    },
+    {
+      "hookId": "H014",
+      "startChapter": 0,
+      "type": "叙事框架",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "200",
+      "payoffTiming": "slow-burn",
+      "notes": "[H013, H009, H004]"
+    },
+    {
+      "hookId": "H015",
+      "startChapter": 0,
+      "type": "人物关系",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "80",
+      "payoffTiming": "mid-arc",
+      "notes": "[H007]"
+    },
+    {
+      "hookId": "H016",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "165",
+      "payoffTiming": "mid-arc",
+      "notes": "[H014]"
+    },
+    {
+      "hookId": "H017",
+      "startChapter": 0,
+      "type": "人物身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "150",
+      "payoffTiming": "slow-burn",
+      "notes": "[H016]"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "物品线索",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "药杵底部刻字与父亲身份关联",
+      "payoffTiming": "mid-arc",
+      "notes": "本章陈守拙摸到药杵底部细密刻痕，并因纸团烧焦形状联想到腰牌，开始将两件物品联系起来，推进了对刻痕用途的认知。"
+    },
+    {
+      "hookId": "character-揭露自称西关-王先生的门外-人身份及其动",
+      "startChapter": 1,
+      "type": "character",
+      "status": "open",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "揭露自称西关王先生的门外人身份及其动机",
+      "payoffTiming": "near-term",
+      "notes": "门外的人三下敲门，自称西关王先生派来取药，并提到药包下的腰牌。陈守拙否认后对方离开。"
+    },
+    {
+      "hookId": "mystery-揭示腰牌-通兰-己卯",
+      "startChapter": 1,
+      "type": "mystery",
+      "status": "open",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "揭示腰牌'通兰·己卯·冬'的来历和陈守拙的身世关联",
+      "payoffTiming": "mid-arc",
+      "notes": "陈守拙查看腰牌背面刻字，且门外的人提及腰牌在药包下，表明腰牌与送药任务相关。"
+    },
+    {
+      "hookId": "mystery-解释赵秉义为-何烧掉纸条并-勿回",
+      "startChapter": 1,
+      "type": "mystery",
+      "status": "open",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "解释赵秉义为何烧掉纸条并写'勿回'，以及他的去向",
+      "payoffTiming": "near-term",
+      "notes": "陈守拙在灶台后捡到未烧尽的纸团，上写'药已发，勿回'，且赵秉义当晚未归，床铺未睡过。"
+    },
+    {
+      "hookId": "organization-揭示七号门的-真实身份及其-与日本人的关",
+      "startChapter": 1,
+      "type": "organization",
+      "status": "open",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "揭示七号门的真实身份及其与日本人的关系",
+      "payoffTiming": "mid-arc",
+      "notes": "陈守拙在芦苇丛偷听到两个陌生男人对话，提到七号门与日本人走得近，盯县城东面，涉及三岔河线路。这是全新的未解组织。"
+    }
+  ]
+}
