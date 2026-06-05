@@ -1,13 +1,18 @@
 import {
+  LayoutDashboard,
   MessageSquare,
   Files,
+  MapPinned,
   Users,
   GitBranch,
   BookOpen,
   ListTree,
+  Target,
   ShieldCheck,
   Download,
   Library,
+  Sparkles,
+  Cpu,
 } from "lucide-react";
 import { useColors } from "../../hooks/use-colors";
 import type { Theme } from "../../hooks/use-theme";
@@ -15,14 +20,19 @@ import type { TFunction } from "../../hooks/use-i18n";
 import type { BookSection } from "./book-workspace-types";
 
 const MENU_ITEMS: { readonly key: BookSection; readonly icon: React.ElementType }[] = [
+  { key: "overview", icon: LayoutDashboard },
   { key: "chat", icon: MessageSquare },
   { key: "chapters", icon: Files },
+  { key: "scenes", icon: MapPinned },
   { key: "characters", icon: Users },
   { key: "hooks", icon: GitBranch },
   { key: "truth", icon: BookOpen },
   { key: "summaries", icon: ListTree },
+  { key: "goals", icon: Target },
   { key: "audit", icon: ShieldCheck },
   { key: "export", icon: Download },
+  { key: "fanfic", icon: Sparkles },
+  { key: "runtime", icon: Cpu },
 ];
 
 interface BookWorkspaceNavProps {

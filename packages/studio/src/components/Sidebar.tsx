@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "../hooks/use-api";
 import type { SSEMessage } from "../hooks/use-sse";
 import { applyBookCollectionEvent, shouldRefetchBookCollections, shouldRefetchDaemonStatus } from "../hooks/use-book-activity";
@@ -38,6 +38,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Zap,
 } from "lucide-react";
 
 interface BookSummary {
@@ -62,6 +63,7 @@ interface Nav {
   toRadar: () => void;
   toDoctor: () => void;
   toAudit: () => void;
+  toAutomation: () => void;
 }
 
 export function Sidebar({ nav, activePage, sse, t }: {
@@ -127,14 +129,16 @@ export function Sidebar({ nav, activePage, sse, t }: {
 
   // bookDataVersion 变化（外部数据信号）时才重拉当前已展开书的 session 列表；
   // 展开/折叠本身不触发请求（展开由 toggleBook 驱动，已带"首次加载"判断）。
+  const expandedBooksRef = useRef(expandedBooks);
+  expandedBooksRef.current = expandedBooks;
+
   useEffect(() => {
-    for (const bookId of expandedBooks) {
+    for (const bookId of expandedBooksRef.current) {
       void loadSessionList(bookId);
     }
     if (projectChatExpanded) {
       void loadSessionList(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookDataVersion, loadSessionList, projectChatExpanded]);
 
   useEffect(() => {
@@ -386,6 +390,12 @@ export function Sidebar({ nav, activePage, sse, t }: {
               icon={<Terminal size={16} />}
               active={activePage === "logs"}
               onClick={nav.toLogs}
+            />
+            <SidebarItem
+              label={t("nav.automation" as any)}
+              icon={<Zap size={16} />}
+              active={activePage === "automation"}
+              onClick={nav.toAutomation}
             />
           </div>
         </div>

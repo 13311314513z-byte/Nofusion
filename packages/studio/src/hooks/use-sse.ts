@@ -71,8 +71,8 @@ export function useSSE(url = "/api/v1/events") {
       try {
         const data = e.data ? JSON.parse(e.data) : null;
         setMessages((prev) => [...prev.slice(-99), { event: e.type, data, timestamp: Date.now() }]);
-      } catch {
-        // ignore parse errors
+      } catch (parseErr) {
+        console.error(`[SSE] Failed to parse event "${e.type}" body: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`, e.data);
       }
     };
 

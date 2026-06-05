@@ -76,9 +76,16 @@ import {
   type ChapterImportPlan,
   type ChapterGoalCard,
   type RoleCard,
+  type RoleTier,
   type AuditIssue,
+  sendTelegram,
+  sendFeishu,
+  sendWechatWork,
+  sendWebhook,
+  analyzeStyleFingerprint,
+  type StyleFingerprint,
 } from "@actalk/inkos-core";
-import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { isIP } from "node:net";
@@ -203,6 +210,20 @@ async function assertSafeStyleImportTarget(url: URL): Promise<void> {
 
   if (addresses.length === 0 || addresses.some((record) => isBlockedStyleImportAddress(record.address))) {
     throw new Error("private or local URLs are not allowed");
+  }
+}
+
+async function normalizeSafeNotificationWebhookUrl(input: unknown): Promise<string> {
+  if (typeof input !== "string" || !input.trim()) {
+    throw new ApiError(400, "INVALID_NOTIFY_WEBHOOK_URL", "Notification webhook URL is required");
+  }
+  try {
+    const url = parseSafeStyleImportUrl(input);
+    await assertSafeStyleImportTarget(url);
+    return url.toString();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    throw new ApiError(400, "INVALID_NOTIFY_WEBHOOK_URL", `Invalid notification webhook URL: ${message}`);
   }
 }
 
@@ -878,12 +899,45 @@ function syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
 
 async function loadRawConfig(root: string): Promise<Record<string, unknown>> {
   const configPath = join(root, "inkos.json");
-  const raw = await readFile(configPath, "utf-8");
-  return JSON.parse(raw) as Record<string, unknown>;
+  try {
+    const raw = await readFile(configPath, "utf-8");
+    if (!raw.trim()) {
+      throw new SyntaxError("inkos.json is empty");
+    }
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      throw new ApiError(400, "INVALID_CONFIG", `inkos.json parse error: ${e.message}. Check the file at ${configPath} for syntax issues.`);
+    }
+    throw e;
+  }
+}
+
+async function assertBookExists(state: StateManager, id: string): Promise<void> {
+  try {
+    await state.loadBookConfig(id);
+  } catch {
+    throw new ApiError(404, "BOOK_NOT_FOUND", `Book not found: ${id}`);
+  }
+}
+
+async function assertBookDirectoryExists(state: StateManager, id: string): Promise<void> {
+  try {
+    const info = await lstat(state.bookDir(id));
+    if (!info.isDirectory()) {
+      throw new Error("not a directory");
+    }
+  } catch {
+    throw new ApiError(404, "BOOK_NOT_FOUND", `Book not found: ${id}`);
+  }
 }
 
 async function saveRawConfig(root: string, config: Record<string, unknown>): Promise<void> {
-  await writeFile(join(root, "inkos.json"), JSON.stringify(config, null, 2), "utf-8");
+  const configPath = join(root, "inkos.json");
+  const tmpPath = configPath + ".tmp." + Date.now().toString(36);
+  const { rename: renameFile } = await import("node:fs/promises");
+  await writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+  await renameFile(tmpPath, configPath);
 }
 
 async function readEnvConfigSummary(path: string): Promise<EnvConfigSummary> {
@@ -1645,6 +1699,55 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  app.patch("/api/v1/books/:id/config", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const body = await c.req.json<Record<string, unknown>>().catch((): Record<string, unknown> => ({}));
+
+    const cleanString = (value: unknown): string | undefined => {
+      if (typeof value !== "string") return undefined;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+
+    const cleanNumber = (value: unknown): number | undefined => {
+      if (value === null || value === undefined || value === "") return undefined;
+      const numeric = typeof value === "number" ? value : Number(value);
+      return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined;
+    };
+
+    const cleanStringArray = (value: unknown): string[] | undefined => {
+      if (Array.isArray(value)) {
+        const arr = value.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean);
+        return arr.length > 0 ? arr : undefined;
+      }
+      if (typeof value === "string") {
+        const arr = value.split(/[,，\n]/).map((v) => v.trim()).filter(Boolean);
+        return arr.length > 0 ? arr : undefined;
+      }
+      return undefined;
+    };
+
+    try {
+      const book = await state.loadBookConfig(id);
+      const updated = {
+        ...book,
+        updatedAt: new Date().toISOString(),
+        ...(cleanNumber(body.volumeCount) !== undefined ? { volumeCount: cleanNumber(body.volumeCount) } : {}),
+        ...(cleanNumber(body.currentVolume) !== undefined ? { currentVolume: cleanNumber(body.currentVolume) } : {}),
+        ...(cleanStringArray(body.keywords) !== undefined ? { keywords: cleanStringArray(body.keywords) } : {}),
+        ...(cleanString(body.targetAudience) !== undefined ? { targetAudience: cleanString(body.targetAudience) } : {}),
+        ...(typeof body.serializationStatus === "string" && ["draft", "serializing", "completed", "hiatus"].includes(body.serializationStatus)
+          ? { serializationStatus: body.serializationStatus as "draft" | "serializing" | "completed" | "hiatus" }
+          : {}),
+      };
+      await state.saveBookConfig(id, updated);
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Failed to update config" }, 500);
+    }
+  });
+
   app.patch("/api/v1/books/:id/chapters/:num/meta", async (c) => {
     const id = c.req.param("id");
     const num = parseInt(c.req.param("num"), 10);
@@ -1785,6 +1888,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.get("/api/v1/books/:id/truth/:file{.+}", async (c) => {
     const file = c.req.param("file");
     const id = c.req.param("id");
+    await assertBookDirectoryExists(state, id);
 
     const bookDir = state.bookDir(id);
     const resolved = resolveTruthFilePath(bookDir, file);
@@ -1809,6 +1913,79 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Runtime artifacts ---
+
+  const MAX_RUNTIME_FILE_BYTES = 1024 * 1024;
+
+  function resolveRuntimeFilePath(bookDir: string, file: string): string | null {
+    if (!file || file.includes("\0") || isAbsolute(file) || file.includes("..")) {
+      return null;
+    }
+    const runtimeDir = resolve(bookDir, "story", "runtime");
+    const resolved = resolve(runtimeDir, file);
+    const relativePath = relative(runtimeDir, resolved);
+    if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+      return null;
+    }
+    return resolved;
+  }
+
+  app.get("/api/v1/books/:id/runtime", async (c) => {
+    const id = c.req.param("id");
+    const bookDir = state.bookDir(id);
+    const runtimeDir = resolve(bookDir, "story", "runtime");
+    const files: Array<{ readonly name: string; readonly path: string; readonly size: number; readonly isDirectory: boolean }> = [];
+
+    async function walk(dir: string, prefix = ""): Promise<void> {
+      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const fullPath = resolve(dir, entry.name);
+        const relativePath = relative(runtimeDir, fullPath);
+        if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+          continue;
+        }
+        const info = await lstat(fullPath).catch(() => null);
+        if (info?.isSymbolicLink()) continue;
+        files.push({
+          name: entry.name,
+          path: relPath,
+          size: info?.size ?? 0,
+          isDirectory: entry.isDirectory(),
+        });
+        if (entry.isDirectory()) {
+          await walk(fullPath, relPath);
+        }
+      }
+    }
+
+    await walk(runtimeDir);
+    return c.json({ files });
+  });
+
+  app.get("/api/v1/books/:id/runtime/:file{.+}", async (c) => {
+    const id = c.req.param("id");
+    const file = c.req.param("file");
+    const bookDir = state.bookDir(id);
+    const resolved = resolveRuntimeFilePath(bookDir, file);
+    if (!resolved) {
+      return c.json({ error: "Invalid runtime file" }, 400);
+    }
+
+    try {
+      const info = await lstat(resolved);
+      if (info.isSymbolicLink()) return c.json({ error: "Runtime symlinks are not supported" }, 400);
+      if (info.isDirectory()) return c.json({ error: "Runtime path is a directory" }, 400);
+      if (info.size > MAX_RUNTIME_FILE_BYTES) {
+        return c.json({ error: "Runtime file is too large to preview" }, 413);
+      }
+      const content = await readFile(resolved, "utf-8");
+      return c.json({ file, content });
+    } catch {
+      return c.json({ error: "Runtime file not found" }, 404);
+    }
+  });
+
   // --- Analytics ---
 
   app.get("/api/v1/books/:id/analytics", async (c) => {
@@ -1821,10 +1998,166 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Hooks ---
+
+  interface HookRecord {
+    readonly hookId: string;
+    readonly startChapter: number;
+    readonly type: string;
+    readonly status: string;
+    readonly lastAdvancedChapter: number;
+    readonly expectedPayoff: string;
+    readonly payoffTiming: string;
+    readonly dependsOn: string;
+    readonly paysOffInArc: string;
+    readonly coreHook: string;
+    readonly halfLife: string;
+    readonly notes: string;
+  }
+
+  function normalizeHookHeader(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, "").replace(/[_-]/g, "");
+  }
+
+  function parseHookChapterNumber(value: string): number {
+    const match = value.match(/\d+/);
+    return match ? Number.parseInt(match[0], 10) || 0 : 0;
+  }
+
+  function normalizeHookStatus(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return "open";
+    if (/resolved|closed|已回收|已解决|完成/.test(normalized)) return "resolved";
+    if (/deferred|推迟|延后|搁置/.test(normalized)) return "deferred";
+    if (/progress|推进中|进行中/.test(normalized)) return "progressing";
+    if (/open|待展开|未回收|开启|开放/.test(normalized)) return "open";
+    return normalized;
+  }
+
+  function parseHooksMarkdown(content: string): HookRecord[] {
+    const lines = content.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("|") && l.endsWith("|"));
+    if (lines.length < 2) return [];
+
+    const dataLines = lines.filter((l) => !/^[|\s\-:=]+$/.test(l));
+    if (dataLines.length < 2) return [];
+
+    const headers = dataLines[0]!.split("|").slice(1, -1).map(normalizeHookHeader);
+    const records: HookRecord[] = [];
+
+    for (let i = 1; i < dataLines.length; i++) {
+      const cells = dataLines[i]!.split("|").slice(1, -1).map((c) => c.trim());
+      if (cells.length < 3) continue;
+
+      const get = (...names: string[]): string => {
+        const normalizedNames = names.map(normalizeHookHeader);
+        const idx = headers.findIndex((header) => normalizedNames.some((name) => header.includes(name)));
+        return idx >= 0 ? (cells[idx] ?? "").trim() : "";
+      };
+
+      const hookId = get("hookid", "hook_id", "id", "伏笔id", "钩子id", "伏笔编号");
+      if (!hookId) continue;
+
+      records.push({
+        hookId,
+        startChapter: parseHookChapterNumber(get("startchapter", "start_chapter", "起始章节", "起始章")),
+        type: get("type", "类型"),
+        status: normalizeHookStatus(get("status", "状态")),
+        lastAdvancedChapter: parseHookChapterNumber(get("lastadvanced", "last_advanced_chapter", "last_advanced", "最近推进")),
+        expectedPayoff: get("expectedpayoff", "expected_payoff", "预期回收"),
+        payoffTiming: get("payofftiming", "payoff_timing", "回收节奏", "回收时机"),
+        dependsOn: get("dependson", "depends_on", "上游依赖", "依赖"),
+        paysOffInArc: get("paysoffinarc", "pays_off_in_arc", "回收卷"),
+        coreHook: get("corehook", "core_hook", "核心", "核心伏笔"),
+        halfLife: get("halflife", "half_life", "半衰期"),
+        notes: get("notes", "备注"),
+      });
+    }
+    return records;
+  }
+
+  app.get("/api/v1/books/:id/hooks", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const bookDir = state.bookDir(id);
+    const filePath = resolve(bookDir, "story", "pending_hooks.md");
+    try {
+      const content = await readFile(filePath, "utf-8");
+      return c.json({ hooks: parseHooksMarkdown(content) });
+    } catch {
+      return c.json({ hooks: [] });
+    }
+  });
+
+  app.post("/api/v1/books/:id/chapters/:num/style-score", async (c) => {
+    const id = c.req.param("id");
+    const num = parseInt(c.req.param("num"), 10);
+    await assertBookExists(state, id);
+
+    const chapterPath = await findChapterFile(root, id, num);
+    if (!chapterPath) return c.json({ error: "Chapter not found" }, 404);
+
+    try {
+      const content = await readFile(chapterPath, "utf-8");
+      const chapterFp = analyzeStyleFingerprint(content);
+
+      const bookDir = state.bookDir(id);
+      const profilePath = join(bookDir, "story", "style_profile.json");
+      let profileFp: StyleFingerprint | undefined;
+      try {
+        const raw = await readFile(profilePath, "utf-8");
+        const parsed = JSON.parse(raw) as { fingerprint?: StyleFingerprint };
+        profileFp = parsed.fingerprint;
+      } catch {
+        // No style profile — score will be null
+      }
+
+      if (!profileFp) {
+        return c.json({ score: null, chapterFingerprint: chapterFp, message: "No style profile found for this book" });
+      }
+
+      const dims = [
+        Math.abs(chapterFp.dialogueRatio - profileFp.dialogueRatio),
+        Math.abs(chapterFp.actionDensity - profileFp.actionDensity),
+        Math.abs(chapterFp.psychologicalRatio - profileFp.psychologicalRatio),
+        Math.abs(chapterFp.sensoryDensity - profileFp.sensoryDensity),
+        Math.abs(chapterFp.colloquialismScore - profileFp.colloquialismScore),
+        Math.abs(chapterFp.rhetoricDensity - profileFp.rhetoricDensity),
+        Math.abs(chapterFp.aiTellRisk - profileFp.aiTellRisk),
+      ];
+
+      const sensoryDiffs = [
+        Math.abs(chapterFp.sensoryBreakdown.visual - profileFp.sensoryBreakdown.visual),
+        Math.abs(chapterFp.sensoryBreakdown.auditory - profileFp.sensoryBreakdown.auditory),
+        Math.abs(chapterFp.sensoryBreakdown.tactile - profileFp.sensoryBreakdown.tactile),
+        Math.abs(chapterFp.sensoryBreakdown.olfactory - profileFp.sensoryBreakdown.olfactory),
+        Math.abs(chapterFp.sensoryBreakdown.gustatory - profileFp.sensoryBreakdown.gustatory),
+      ];
+      dims.push(sensoryDiffs.reduce((a, b) => a + b, 0) / sensoryDiffs.length);
+
+      const punctDiffs = [
+        Math.abs(chapterFp.punctuationRhythm.commaRatio - profileFp.punctuationRhythm.commaRatio),
+        Math.abs(chapterFp.punctuationRhythm.periodRatio - profileFp.punctuationRhythm.periodRatio),
+        Math.abs(chapterFp.punctuationRhythm.questionRatio - profileFp.punctuationRhythm.questionRatio),
+        Math.abs(chapterFp.punctuationRhythm.exclamationRatio - profileFp.punctuationRhythm.exclamationRatio),
+        Math.abs(chapterFp.punctuationRhythm.ellipsisRatio - profileFp.punctuationRhythm.ellipsisRatio),
+        Math.abs(chapterFp.punctuationRhythm.semicolonRatio - profileFp.punctuationRhythm.semicolonRatio),
+      ];
+      dims.push(punctDiffs.reduce((a, b) => a + b, 0) / punctDiffs.length);
+
+      const avgDiff = dims.reduce((a, b) => a + b, 0) / dims.length;
+      const score = Math.round(Math.max(0, 1 - avgDiff) * 100);
+
+      return c.json({ score, chapterFingerprint: chapterFp, profileFingerprint: profileFp });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Failed to compute style score" }, 500);
+    }
+  });
+
   // --- Actions ---
 
   app.post("/api/v1/books/:id/write-next", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const body = await c.req.json<{ wordCount?: number }>().catch(() => ({ wordCount: undefined }));
 
     broadcast("write:start", { bookId: id });
@@ -1845,6 +2178,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/draft", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const body = await c.req.json<{ wordCount?: number; context?: string }>().catch(() => ({ wordCount: undefined, context: undefined }));
 
     broadcast("draft:start", { bookId: id });
@@ -1864,6 +2198,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/chapters/:num/approve", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const num = parseInt(c.req.param("num"), 10);
 
     try {
@@ -1880,6 +2215,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/chapters/:num/reject", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const num = parseInt(c.req.param("num"), 10);
 
     try {
@@ -2333,6 +2669,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const configPath = join(root, "inkos.json");
     try {
       const raw = await readFile(configPath, "utf-8");
+      if (!raw.trim()) {
+        return c.json({ error: "inkos.json is empty — cannot update" }, 400);
+      }
       const existing = JSON.parse(raw);
       // Merge LLM settings
       if (updates.temperature !== undefined) {
@@ -2344,8 +2683,10 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       if (updates.language === "zh" || updates.language === "en") {
         existing.language = updates.language;
       }
-      const { writeFile: writeFileFs } = await import("node:fs/promises");
-      await writeFileFs(configPath, JSON.stringify(existing, null, 2), "utf-8");
+      const tmpPath = configPath + ".tmp." + Date.now().toString(36);
+      const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
+      await writeFileFs(tmpPath, JSON.stringify(existing, null, 2), "utf-8");
+      await renameFs(tmpPath, configPath);
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -2356,6 +2697,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/truth", async (c) => {
     const id = c.req.param("id");
+    await assertBookDirectoryExists(state, id);
     const bookDir = state.bookDir(id);
     const storyDir = join(bookDir, "story");
 
@@ -3142,10 +3484,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const configPath = join(root, "inkos.json");
     try {
       const raw = await readFile(configPath, "utf-8");
+      if (!raw.trim()) {
+        return c.json({ error: "inkos.json is empty" }, 400);
+      }
       const existing = JSON.parse(raw);
       existing.language = language;
-      const { writeFile: writeFileFs } = await import("node:fs/promises");
-      await writeFileFs(configPath, JSON.stringify(existing, null, 2), "utf-8");
+      const tmpPath = configPath + ".tmp." + Date.now().toString(36);
+      const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
+      await writeFileFs(tmpPath, JSON.stringify(existing, null, 2), "utf-8");
+      await renameFs(tmpPath, configPath);
       return c.json({ ok: true, language });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -3791,41 +4138,145 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Model overrides ---
 
   app.get("/api/v1/project/model-overrides", async (c) => {
-    const raw = JSON.parse(await readFile(join(root, "inkos.json"), "utf-8"));
-    return c.json({ overrides: raw.modelOverrides ?? {} });
+    let overrides = {};
+    try {
+      const rawContent = await readFile(join(root, "inkos.json"), "utf-8");
+      if (rawContent.trim()) {
+        overrides = JSON.parse(rawContent).modelOverrides ?? {};
+      }
+    } catch {
+      // Corrupted config — return empty
+    }
+    return c.json({ overrides });
   });
 
   app.put("/api/v1/project/model-overrides", async (c) => {
     const { overrides } = await c.req.json<{ overrides: Record<string, unknown> }>();
     const configPath = join(root, "inkos.json");
-    const raw = JSON.parse(await readFile(configPath, "utf-8"));
+    let raw: Record<string, unknown>;
+    try {
+      const rawContent = await readFile(configPath, "utf-8");
+      if (!rawContent.trim()) {
+        return c.json({ error: "inkos.json is empty" }, 400);
+      }
+      raw = JSON.parse(rawContent);
+    } catch (e) {
+      return c.json({ error: `inkos.json parse error: ${e instanceof Error ? e.message : String(e)}` }, 400);
+    }
     raw.modelOverrides = overrides;
-    const { writeFile: writeFileFs } = await import("node:fs/promises");
-    await writeFileFs(configPath, JSON.stringify(raw, null, 2), "utf-8");
+    const tmpPath = configPath + ".tmp." + Date.now().toString(36);
+    const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
+    await writeFileFs(tmpPath, JSON.stringify(raw, null, 2), "utf-8");
+    await renameFs(tmpPath, configPath);
     return c.json({ ok: true });
   });
 
   // --- Notify channels ---
 
   app.get("/api/v1/project/notify", async (c) => {
-    const raw = JSON.parse(await readFile(join(root, "inkos.json"), "utf-8"));
-    return c.json({ channels: raw.notify ?? [] });
+    let channels: unknown[] = [];
+    try {
+      const rawContent = await readFile(join(root, "inkos.json"), "utf-8");
+      if (rawContent.trim()) {
+        channels = JSON.parse(rawContent).notify ?? [];
+      }
+    } catch {
+      // Corrupted config — return empty
+    }
+    return c.json({ channels });
   });
 
   app.put("/api/v1/project/notify", async (c) => {
     const { channels } = await c.req.json<{ channels: unknown[] }>();
     const configPath = join(root, "inkos.json");
-    const raw = JSON.parse(await readFile(configPath, "utf-8"));
+    let raw: Record<string, unknown>;
+    try {
+      const rawContent = await readFile(configPath, "utf-8");
+      if (!rawContent.trim()) {
+        return c.json({ error: "inkos.json is empty" }, 400);
+      }
+      raw = JSON.parse(rawContent);
+    } catch (e) {
+      return c.json({ error: `inkos.json parse error: ${e instanceof Error ? e.message : String(e)}` }, 400);
+    }
     raw.notify = channels;
-    const { writeFile: writeFileFs } = await import("node:fs/promises");
-    await writeFileFs(configPath, JSON.stringify(raw, null, 2), "utf-8");
+    const tmpPath = configPath + ".tmp." + Date.now().toString(36);
+    const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
+    await writeFileFs(tmpPath, JSON.stringify(raw, null, 2), "utf-8");
+    await renameFs(tmpPath, configPath);
     return c.json({ ok: true });
+  });
+
+  app.post("/api/v1/project/notify/test", async (c) => {
+    const body = await c.req.json<{ channel: Record<string, unknown> }>();
+    const channel = body.channel;
+    if (!channel || typeof channel !== "object") {
+      throw new ApiError(400, "INVALID_NOTIFY_CHANNEL", "Notification channel is required");
+    }
+    const type = String(channel.type ?? "");
+    const title = "InkOS Test Notification";
+    const text = "This is a test message from InkOS notification configuration.";
+    const fullText = `**${title}**\n\n${text}`;
+
+    try {
+      switch (type) {
+        case "telegram": {
+          await sendTelegram(
+            { botToken: String(channel.token ?? ""), chatId: String(channel.chatId ?? "") },
+            fullText,
+          );
+          break;
+        }
+        case "feishu": {
+          const webhookUrl = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.webhookUrl);
+          await sendFeishu(
+            { webhookUrl },
+            title,
+            text,
+          );
+          break;
+        }
+        case "wechat":
+        case "wechat-work": {
+          const webhookUrl = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.webhookUrl);
+          await sendWechatWork(
+            { webhookUrl },
+            fullText,
+          );
+          break;
+        }
+        case "webhook": {
+          const url = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.url);
+          await sendWebhook(
+            {
+              url,
+              secret: typeof channel.secret === "string" ? channel.secret : undefined,
+              events: Array.isArray(channel.events) ? channel.events.map(String) : ["*"],
+            },
+            {
+              event: "diagnostic-alert",
+              bookId: "",
+              timestamp: new Date().toISOString(),
+              data: { title, body: text },
+            },
+          );
+          break;
+        }
+        default:
+          return c.json({ error: `Unsupported channel type: ${type}` }, 400);
+      }
+      return c.json({ ok: true });
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
   });
 
   // --- AIGC Detection ---
 
   app.post("/api/v1/books/:id/detect/:chapter", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const chapterNum = parseInt(c.req.param("chapter"), 10);
     const bookDir = state.bookDir(id);
 
@@ -3849,6 +4300,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.put("/api/v1/books/:id/truth/:file{.+}", async (c) => {
     const id = c.req.param("id");
+    await assertBookDirectoryExists(state, id);
     const file = c.req.param("file");
     const body: { content?: unknown } = await c.req.json<{ content?: unknown }>().catch(() => ({}));
     if (typeof body.content !== "string") {
@@ -3929,6 +4381,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/rewrite/:chapter", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const chapterNum = parseInt(c.req.param("chapter"), 10);
     const body: { brief?: string } = await c.req
       .json<{ brief?: string }>()
@@ -3954,6 +4407,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/resync/:chapter", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const chapterNum = parseInt(c.req.param("chapter"), 10);
     const body: { brief?: string } = await c.req
       .json<{ brief?: string }>()
@@ -3974,6 +4428,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/detect-all", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const bookDir = state.bookDir(id);
 
     try {
@@ -4000,6 +4455,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/detect/stats", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     try {
       const { loadDetectionHistory, analyzeDetectionInsights } = await import("@actalk/inkos-core");
       const bookDir = state.bookDir(id);
@@ -4495,6 +4951,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/chapter-goals", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     try {
       const state = new StateManager(root);
       const bookDir = state.bookDir(id);
@@ -4507,6 +4964,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.put("/api/v1/books/:id/chapter-goals/:chapterNumber", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const chapterNumber = Number(c.req.param("chapterNumber"));
     if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
       return c.json({ error: "Invalid chapter number" }, 400);
@@ -4531,6 +4989,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.delete("/api/v1/books/:id/chapter-goals/:chapterNumber", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const chapterNumber = Number(c.req.param("chapterNumber"));
     if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
       return c.json({ error: "Invalid chapter number" }, 400);
@@ -4551,6 +5010,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/roles", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     try {
       const state = new StateManager(root);
       const bookDir = state.bookDir(id);
@@ -4563,6 +5023,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/roles/:roleId", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const roleId = c.req.param("roleId");
     try {
       const state = new StateManager(root);
@@ -4577,7 +5038,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.post("/api/v1/books/:id/roles", async (c) => {
     const id = c.req.param("id");
-    const body = await c.req.json<{ id: string; name: string; roleTier?: "major" | "minor" }>();
+    await assertBookExists(state, id);
+    const body = await c.req.json<{ id: string; name: string; roleTier?: RoleTier }>();
     if (!body.id || !body.name) return c.json({ error: "id and name are required" }, 400);
     try {
       const state = new StateManager(root);
@@ -4592,6 +5054,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.put("/api/v1/books/:id/roles/:roleId", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const roleId = c.req.param("roleId");
     const body = await c.req.json<Partial<RoleCard>>();
     try {
@@ -4613,6 +5076,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.delete("/api/v1/books/:id/roles/:roleId", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const roleId = c.req.param("roleId");
     try {
       const state = new StateManager(root);
@@ -4670,6 +5134,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/books/:id/fanfic", async (c) => {
     const id = c.req.param("id");
+    await assertBookExists(state, id);
     const bookDir = state.bookDir(id);
     try {
       const content = await readFile(join(bookDir, "story", "fanfic_canon.md"), "utf-8");

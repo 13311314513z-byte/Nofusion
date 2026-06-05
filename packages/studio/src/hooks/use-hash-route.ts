@@ -18,7 +18,8 @@ export type HashRoute =
   | { page: "import" }
   | { page: "radar" }
   | { page: "doctor" }
-  | { page: "audit" };
+  | { page: "audit" }
+  | { page: "automation" };
 
 function parseHash(hash: string): HashRoute {
   const path = hash.replace(/^#\/?/, "");

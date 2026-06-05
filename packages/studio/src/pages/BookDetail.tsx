@@ -31,7 +31,9 @@ import {
   Layers,
   Clock,
   SlidersHorizontal,
-  Plus
+  Plus,
+  BookOpen,
+  Users,
 } from "lucide-react";
 
 interface ChapterMeta {
@@ -59,6 +61,11 @@ interface BookData {
     readonly targetChapters?: number;
     readonly language?: string;
     readonly fanficMode?: string;
+    readonly volumeCount?: number;
+    readonly currentVolume?: number;
+    readonly keywords?: ReadonlyArray<string>;
+    readonly targetAudience?: string;
+    readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
   };
   readonly chapters: ReadonlyArray<ChapterMeta>;
   readonly nextChapter: number;
@@ -601,6 +608,23 @@ export function BookDetail({
               <span className="flex items-center gap-1 text-purple-500">
                 <Sparkles size={12} />
                 <span className="italic">fanfic:{book.fanficMode}</span>
+              </span>
+            )}
+            {book.volumeCount !== undefined && book.currentVolume !== undefined && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <BookOpen size={12} />
+                <span>{t("book.currentVolume")} {book.currentVolume}/{book.volumeCount}</span>
+              </span>
+            )}
+            {book.serializationStatus && (
+              <span className="px-2 py-0.5 rounded bg-secondary/50 text-foreground/70 uppercase tracking-wider text-xs">
+                {book.serializationStatus}
+              </span>
+            )}
+            {book.targetAudience && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Users size={12} />
+                <span>{book.targetAudience}</span>
               </span>
             )}
           </div>

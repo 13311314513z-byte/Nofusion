@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchJson } from "../hooks/use-api";
 import { useServiceStore } from "../store/service";
 import { Eye, EyeOff, Loader2, ArrowLeft, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ServiceQuickLinks } from "../components/ServiceQuickLinks";
 import {
   deleteServiceConfig,
@@ -59,6 +60,7 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
 
   // -- Unified connection status --
   const [status, setStatus] = useState<ConnectionStatus>({ state: "idle" });
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,8 +180,12 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm(`删除“${label}”的配置和密钥？`)) return;
+  const handleDelete = () => {
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async () => {
+    setConfirmOpen(false);
     setStatus({ state: "saving" });
     try {
       await deleteServiceConfig(effectiveServiceId);
@@ -379,6 +385,16 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
           </div>
         </details>
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="确认删除"
+        message={`删除"${label}"的配置和密钥？`}
+        confirmLabel="删除"
+        cancelLabel="取消"
+        variant="danger"
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

@@ -72,11 +72,25 @@ export class MemoryDB {
 
   constructor(bookDir: string) {
     // node:sqlite requires Node 22+; require() via createRequire for ESM compat
-    const { DatabaseSync } = require("node:sqlite");
-    const dbPath = join(bookDir, "story", "memory.db");
-    this.db = new DatabaseSync(dbPath);
-    this.db.exec("PRAGMA journal_mode = WAL");
-    this.migrate();
+    try {
+      const { DatabaseSync } = require("node:sqlite");
+      const dbPath = join(bookDir, "story", "memory.db");
+      this.db = new DatabaseSync(dbPath);
+      this.db.exec("PRAGMA journal_mode = WAL");
+      this.migrate();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(`SQLite memory index unavailable (node:sqlite requires Node 22+): ${message}`);
+    }
+  }
+
+  private ensureDb(): void {
+    if (!this.db) {
+      throw new Error(
+        "MemoryDB is unavailable because node:sqlite could not be opened (requires Node 22+). " +
+        "Core functionality works without it, but some acceleration features are disabled.",
+      );
+    }
   }
 
   private migrate(): void {
@@ -138,6 +152,7 @@ export class MemoryDB {
 
   /** Add a new fact. */
   addFact(fact: Omit<Fact, "id">): number {
+    this.ensureDb();
     const stmt = this.db.prepare(
       `INSERT INTO facts (subject, predicate, object, valid_from_chapter, valid_until_chapter, source_chapter)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -151,6 +166,7 @@ export class MemoryDB {
 
   /** Invalidate a fact (set valid_until). */
   invalidateFact(id: number, untilChapter: number): void {
+    this.ensureDb();
     this.db.prepare(
       "UPDATE facts SET valid_until_chapter = ? WHERE id = ?",
     ).run(untilChapter, id);
@@ -158,6 +174,7 @@ export class MemoryDB {
 
   /** Get all currently valid facts (valid_until is null). */
   getCurrentFacts(): ReadonlyArray<Fact> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
        FROM facts
@@ -168,6 +185,7 @@ export class MemoryDB {
 
   /** Get facts about a specific subject that are valid at a given chapter. */
   getFactsAt(subject: string, chapter: number): ReadonlyArray<Fact> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
        FROM facts
@@ -179,6 +197,7 @@ export class MemoryDB {
 
   /** Get all facts about a subject (including historical). */
   getFactHistory(subject: string): ReadonlyArray<Fact> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
        FROM facts
@@ -189,6 +208,7 @@ export class MemoryDB {
 
   /** Search facts by predicate (e.g., all "location" facts). */
   getFactsByPredicate(predicate: string): ReadonlyArray<Fact> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
        FROM facts
@@ -200,6 +220,7 @@ export class MemoryDB {
   /** Get facts relevant to a set of character names. */
   getFactsForCharacters(names: ReadonlyArray<string>): ReadonlyArray<Fact> {
     if (names.length === 0) return [];
+    this.ensureDb();
     const placeholders = names.map(() => "?").join(",");
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
@@ -210,6 +231,7 @@ export class MemoryDB {
   }
 
   replaceCurrentFacts(facts: ReadonlyArray<Omit<Fact, "id">>): void {
+    this.ensureDb();
     this.db.exec("DELETE FROM facts WHERE valid_until_chapter IS NULL");
     for (const fact of facts) {
       this.addFact(fact);
@@ -217,6 +239,7 @@ export class MemoryDB {
   }
 
   resetFacts(): void {
+    this.ensureDb();
     this.db.exec("DELETE FROM facts");
   }
 
@@ -226,6 +249,7 @@ export class MemoryDB {
 
   /** Upsert a chapter summary. */
   upsertSummary(summary: StoredSummary): void {
+    this.ensureDb();
     this.db.prepare(
       `INSERT OR REPLACE INTO chapter_summaries (chapter, title, characters, events, state_changes, hook_activity, mood, chapter_type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -236,6 +260,7 @@ export class MemoryDB {
   }
 
   replaceSummaries(summaries: ReadonlyArray<StoredSummary>): void {
+    this.ensureDb();
     this.db.exec("DELETE FROM chapter_summaries");
     for (const summary of summaries) {
       this.upsertSummary(summary);
@@ -244,6 +269,7 @@ export class MemoryDB {
 
   /** Get summaries for a range of chapters. */
   getSummaries(fromChapter: number, toChapter: number): ReadonlyArray<StoredSummary> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT
          chapter,
@@ -263,6 +289,7 @@ export class MemoryDB {
   /** Get summaries matching any of the given character names. */
   getSummariesByCharacters(names: ReadonlyArray<string>): ReadonlyArray<StoredSummary> {
     if (names.length === 0) return [];
+    this.ensureDb();
     const conditions = names.map(() => "characters LIKE ?").join(" OR ");
     const params = names.map((n) => `%${n}%`);
     return this.db.prepare(
@@ -283,12 +310,14 @@ export class MemoryDB {
 
   /** Get total chapter count. */
   getChapterCount(): number {
+    this.ensureDb();
     const row = this.db.prepare("SELECT COUNT(*) as count FROM chapter_summaries").get() as unknown as { count: number };
     return row.count;
   }
 
   /** Get the most recent N summaries. */
   getRecentSummaries(count: number): ReadonlyArray<StoredSummary> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT
          chapter,
@@ -310,6 +339,7 @@ export class MemoryDB {
   // ---------------------------------------------------------------------------
 
   upsertHook(hook: StoredHook): void {
+    this.ensureDb();
     this.db.prepare(
       `INSERT OR REPLACE INTO hooks (hook_id, start_chapter, type, status, last_advanced_chapter, expected_payoff, payoff_timing, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -326,6 +356,7 @@ export class MemoryDB {
   }
 
   replaceHooks(hooks: ReadonlyArray<StoredHook>): void {
+    this.ensureDb();
     this.db.exec("DELETE FROM hooks");
     for (const hook of hooks) {
       this.upsertHook(hook);
@@ -333,6 +364,7 @@ export class MemoryDB {
   }
 
   getActiveHooks(): ReadonlyArray<StoredHook> {
+    this.ensureDb();
     return this.db.prepare(
       `SELECT
          hook_id AS hookId,
@@ -354,6 +386,7 @@ export class MemoryDB {
   // ---------------------------------------------------------------------------
 
   close(): void {
+    if (!this.db) return;
     this.db.close();
   }
 }

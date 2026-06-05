@@ -62,9 +62,16 @@ export async function dispatchNotification(
       }
     } catch (e) {
       // Log but don't throw — notification failure shouldn't block pipeline
-      process.stderr.write(
-        `[notify] ${channel.type} failed: ${e}\n`,
-      );
+      const msg = `[notify] ${channel.type} failed: ${e instanceof Error ? e.message : String(e)}`;
+      process.stderr.write(msg + "\n");
+      // Route to application log buffer if available
+      if (typeof globalThis !== "undefined" && (globalThis as any).__inkosLogBuffer) {
+        try {
+          (globalThis as any).__inkosLogBuffer("error", msg, new Date().toISOString());
+        } catch {
+          // fallback to stderr
+        }
+      }
     }
   });
 

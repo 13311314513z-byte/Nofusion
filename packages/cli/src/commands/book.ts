@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { access, readFile, rm } from "node:fs/promises";
+import { access, readFile, rename, rm } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { join, resolve } from "node:path";
 import { deriveBookIdFromTitle, normalizePlatformOrOther, PipelineRunner, StateManager, type BookConfig } from "@actalk/inkos-core";
@@ -40,7 +40,10 @@ bookCommand
         if (await state.isCompleteBookDirectory(bookDir)) {
           throw new Error(`Book "${bookId}" already exists at books/${bookId}/. Use a different title or delete the existing book first.`);
         }
-        await rm(bookDir, { recursive: true, force: true });
+        // Move incomplete directory to backup instead of deleting — prevents accidental data loss
+        const backupDir = bookDir + ".backup." + Date.now().toString(36);
+        await rename(bookDir, backupDir);
+        console.warn(`[warn] Moved incomplete book directory to ${backupDir} for safety. Use --force to permanently delete.`);
       } catch (e) {
         if (e instanceof Error && e.message.includes("already exists")) throw e;
         // Directory doesn't exist, good

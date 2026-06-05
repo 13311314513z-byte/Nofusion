@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Loader2, Plus, Search, X } from "lucide-react";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, GROUP_SHORT_LABELS } from "../constants/service-groups";
 import { fetchJson } from "../hooks/use-api";
+import { useI18n } from "../hooks/use-i18n";
 import { useServiceStore } from "../store/service";
 import type { EndpointGroup, ServiceInfo } from "../store/service";
 import { ServiceQuickLinks, getServiceQuickLinks } from "../components/ServiceQuickLinks";
+import { ModelOverridesPanel } from "../components/ModelOverridesPanel";
+import { NotifyConfigPanel } from "../components/NotifyConfigPanel";
 
 interface Nav {
   toDashboard: () => void;
   toServiceDetail: (id: string) => void;
+  toAudit: () => void;
 }
 
 function SkeletonCard() {
@@ -232,6 +236,7 @@ function CoverConfigCard() {
 }
 
 export function ServiceListPage({ nav }: { nav: Nav }) {
+  const { t } = useI18n();
   const services = useServiceStore((s) => s.services);
   const loading = useServiceStore((s) => s.servicesLoading);
   const fetchServices = useServiceStore((s) => s.fetchServices);
@@ -318,7 +323,15 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
         <span className="text-foreground">服务商管理</span>
       </div>
 
-      <h1 className="font-serif text-2xl">服务商管理</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-serif text-2xl">服务商管理</h1>
+        <button
+          onClick={nav.toAudit}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors"
+        >
+          {t("nav.audit")}
+        </button>
+      </div>
 
       <CoverConfigCard />
 
@@ -455,9 +468,12 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
 
       {!loading && filtered.length === 0 && filteredCustom.length === 0 && !canCreateCustom && (
         <div className="rounded-lg border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
-          没有匹配的服务商
+          {t("service.noMatch")}
         </div>
       )}
+
+      <ModelOverridesPanel t={t} />
+      <NotifyConfigPanel t={t} />
     </div>
   );
 }

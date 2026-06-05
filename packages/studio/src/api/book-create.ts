@@ -8,6 +8,11 @@ export interface StudioCreateBookBody {
   readonly chapterWordCount?: number;
   readonly targetChapters?: number;
   readonly blurb?: string;
+  readonly volumeCount?: number;
+  readonly currentVolume?: number;
+  readonly keywords?: string[];
+  readonly targetAudience?: string;
+  readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
 }
 
 export interface StudioBookConfigDraft {
@@ -21,6 +26,11 @@ export interface StudioBookConfigDraft {
   readonly language?: "zh" | "en";
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly volumeCount?: number;
+  readonly currentVolume?: number;
+  readonly keywords?: string[];
+  readonly targetAudience?: string;
+  readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
 }
 
 interface StudioBookDetail {
@@ -60,6 +70,11 @@ export function buildStudioBookConfig(body: StudioCreateBookBody, now: string): 
         : {}),
     createdAt: now,
     updatedAt: now,
+    ...(body.volumeCount !== undefined ? { volumeCount: body.volumeCount } : {}),
+    ...(body.currentVolume !== undefined ? { currentVolume: body.currentVolume } : {}),
+    ...(body.keywords !== undefined ? { keywords: body.keywords } : {}),
+    ...(body.targetAudience !== undefined ? { targetAudience: body.targetAudience } : {}),
+    ...(body.serializationStatus !== undefined ? { serializationStatus: body.serializationStatus } : {}),
   };
 }
 

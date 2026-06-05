@@ -353,6 +353,32 @@ describe("StateManager", () => {
       expect(books).not.toContain("not-a-book");
       expect(books).toHaveLength(2);
     });
+
+    it("ignores backup and staging directories even when they contain book.json", async () => {
+      const bookConfig: BookConfig = {
+        id: "alpha",
+        title: "Alpha",
+        platform: "tomato",
+        genre: "urban",
+        status: "active",
+        targetChapters: 100,
+        chapterWordCount: 3000,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      await manager.saveBookConfig("alpha", bookConfig);
+
+      const backupDir = join(manager.booksDir, "alpha.backup.mq1bot83");
+      await mkdir(backupDir, { recursive: true });
+      await writeFile(join(backupDir, "book.json"), JSON.stringify({ ...bookConfig, id: "alpha.backup.mq1bot83" }), "utf-8");
+
+      const stagingDir = join(manager.booksDir, ".tmp-book-create-alpha-mq1bot83-abcd12");
+      await mkdir(stagingDir, { recursive: true });
+      await writeFile(join(stagingDir, "book.json"), JSON.stringify({ ...bookConfig, id: "tmp-alpha" }), "utf-8");
+
+      const books = await manager.listBooks();
+      expect(books).toEqual(["alpha"]);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -716,6 +742,24 @@ describe("StateManager", () => {
         expect(lockData).toContain(`pid:${process.pid}`);
 
         await release();
+      } finally {
+        killSpy.mockRestore();
+      }
+    });
+
+    it("does not reclaim an old lock when the recorded pid is still alive", async () => {
+      await mkdir(manager.bookDir("lock-book-live-old"), { recursive: true });
+      const lockPath = join(manager.bookDir("lock-book-live-old"), ".write.lock");
+      await writeFile(lockPath, `pid:424242 ts:${Date.now() - 60 * 60 * 1000}`, "utf-8");
+
+      const killSpy = vi.spyOn(process, "kill").mockImplementation((((pid: number) => {
+        if (pid === 424242) return true;
+        return true;
+      }) as unknown) as typeof process.kill);
+
+      try {
+        await expect(manager.acquireBookLock("lock-book-live-old")).rejects.toThrow(/locked by another process/);
+        await expect(readFile(lockPath, "utf-8")).resolves.toContain("pid:424242");
       } finally {
         killSpy.mockRestore();
       }

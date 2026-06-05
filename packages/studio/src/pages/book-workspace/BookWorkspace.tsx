@@ -4,14 +4,19 @@ import type { SSEMessage } from "../../hooks/use-sse";
 import { useApi } from "../../hooks/use-api";
 import type { BookSection } from "./book-workspace-types";
 import { BookWorkspaceNav } from "./BookWorkspaceNav";
+import { BookOverviewSection } from "./BookOverviewSection";
 import { BookChatSection } from "./BookChatSection";
 import { BookChaptersSection } from "./BookChaptersSection";
+import { BookScenesSection } from "./BookScenesSection";
 import { BookCharactersSection } from "./BookCharactersSection";
 import { BookHooksSection } from "./BookHooksSection";
 import { BookTruthSection } from "./BookTruthSection";
 import { BookSummariesSection } from "./BookSummariesSection";
+import { BookGoalsSection } from "./BookGoalsSection";
 import { BookAuditSection } from "./BookAuditSection";
 import { BookExportSection } from "./BookExportSection";
+import { BookFanficSection } from "./BookFanficSection";
+import { BookRuntimeSection } from "./BookRuntimeSection";
 
 interface NavLike {
   readonly toDashboard: () => void;
@@ -19,6 +24,7 @@ interface NavLike {
   readonly toBook: (bookId: string) => void;
   readonly toBookSection: (bookId: string, section: string) => void;
   readonly toServices: () => void;
+  readonly toAudit: () => void;
 }
 
 interface BookWorkspaceProps {
@@ -73,10 +79,14 @@ function SectionRenderer({
 }) {
   const commonProps = { bookId, nav, theme, t, sse };
   switch (section) {
+    case "overview":
+      return <BookOverviewSection {...commonProps} />;
     case "chat":
       return <BookChatSection {...commonProps} />;
     case "chapters":
       return <BookChaptersSection {...commonProps} />;
+    case "scenes":
+      return <BookScenesSection {...commonProps} />;
     case "characters":
       return <BookCharactersSection {...commonProps} />;
     case "hooks":
@@ -85,11 +95,17 @@ function SectionRenderer({
       return <BookTruthSection {...commonProps} />;
     case "summaries":
       return <BookSummariesSection {...commonProps} />;
+    case "goals":
+      return <BookGoalsSection {...commonProps} />;
     case "audit":
       return <BookAuditSection {...commonProps} />;
     case "export":
       return <BookExportSection {...commonProps} />;
+    case "fanfic":
+      return <BookFanficSection {...commonProps} />;
+    case "runtime":
+      return <BookRuntimeSection {...commonProps} />;
     default:
-      return <BookChatSection {...commonProps} />;
+      return <BookOverviewSection {...commonProps} />;
   }
 }

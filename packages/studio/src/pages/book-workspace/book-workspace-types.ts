@@ -1,22 +1,32 @@
 export type BookSection =
+  | "overview"
   | "chat"
   | "chapters"
+  | "scenes"
   | "characters"
   | "hooks"
   | "truth"
   | "summaries"
   | "audit"
-  | "export";
+  | "export"
+  | "goals"
+  | "fanfic"
+  | "runtime";
 
 export const BOOK_SECTIONS: BookSection[] = [
+  "overview",
   "chat",
   "chapters",
+  "scenes",
   "characters",
   "hooks",
   "truth",
   "summaries",
+  "goals",
   "audit",
   "export",
+  "fanfic",
+  "runtime",
 ];
 
 export function isBookSection(value: string): value is BookSection {

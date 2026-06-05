@@ -125,7 +125,15 @@ export class StateManager {
           (lockPid !== undefined && !this.isProcessAlive(lockPid)) ||
           (lockPid === process.pid && !this.activeWrites.has(bookId));
         if (isStale) {
-          await unlink(lockPath).catch(() => undefined);
+          try {
+            await unlink(lockPath);
+          } catch (unlinkErr) {
+            console.error(`[lock] Failed to remove stale lock for "${bookId}": ${unlinkErr}`);
+            throw new Error(
+              `Could not remove stale lock file at ${lockPath}. Check file permissions or disk space. ` +
+              `Lock data: ${lockData}`,
+            );
+          }
           return this.acquireBookLock(bookId);
         }
         throw new Error(
@@ -140,8 +148,15 @@ export class StateManager {
       this.activeWrites.delete(bookId);
       try {
         await unlink(lockPath);
-      } catch {
-        // ignore
+      } catch (unlinkErr) {
+        // Log the unlink failure instead of swallowing it silently
+        const msg = unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr);
+        // Use console.warn as fallback when logger is not available
+        try {
+          console.warn(`[lock] Failed to remove lock file ${lockPath}: ${msg}. Manual cleanup may be required if the owning process exits.`);
+        } catch {
+          console.warn(`[lock] Failed to remove lock file ${lockPath}: ${msg}`);
+        }
       }
     };
   }
@@ -223,6 +238,9 @@ export class StateManager {
       const entries = await readdir(this.booksDir);
       const bookIds: string[] = [];
       for (const entry of entries) {
+        if (entry.startsWith(".tmp-book-create-") || entry.includes(".backup.")) {
+          continue;
+        }
         const bookJsonPath = join(this.booksDir, entry, "book.json");
         try {
           await stat(bookJsonPath);

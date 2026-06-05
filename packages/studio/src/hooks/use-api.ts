@@ -105,16 +105,23 @@ export async function fetchJson<T>(
     return undefined as T;
   }
 
-  const contentType = res.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    const text = await res.text();
-    if (!text.trim()) {
-      return undefined as T;
-    }
-    return JSON.parse(text) as T;
+  // Read body as text FIRST — Response body can only be consumed once.
+  const bodyText = await res.text();
+  if (!bodyText.trim()) {
+    return undefined as T;
   }
 
-  return await res.json() as T;
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    // Non-JSON response (e.g. HTML from proxy/CDN error page)
+    throw new Error(`Expected JSON response but got ${contentType || "unknown"}. Status: ${res.status}. Body preview: ${bodyText.slice(0, 200)}`);
+  }
+
+  try {
+    return JSON.parse(bodyText) as T;
+  } catch (jsonErr) {
+    throw new Error(`Failed to parse JSON response: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}. Status: ${res.status}. Body preview: ${bodyText.slice(0, 200)}`);
+  }
 }
 
 export function useApi<T>(path: string | null) {

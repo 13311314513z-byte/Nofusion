@@ -691,7 +691,10 @@ export class PipelineRunner {
         if (await this.state.isCompleteBookDirectory(bookDir)) {
           throw new Error(`Book "${book.id}" already exists at books/${book.id}/. Use a different title or delete the existing book first.`);
         }
-        await rm(bookDir, { recursive: true, force: true });
+        // Move incomplete directory to backup instead of deleting
+        const backupDir = bookDir + ".backup." + Date.now().toString(36);
+        await rename(bookDir, backupDir);
+        this.config.logger?.warn(`Moved incomplete book directory to ${backupDir} for safety`);
       }
 
       await rename(stagingBookDir, bookDir);

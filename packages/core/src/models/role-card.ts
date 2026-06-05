@@ -3,13 +3,13 @@
  *
  * Persisted at: books/<bookId>/story/roles/<tier>/<roleId>.md
  *
- * Tiers: major (主要角色) | minor (次要角色)
+ * Tiers: core (核心角色) | major (重要角色) | minor (次要角色) | functional (功能角色)
  */
 
 import { readFile, readdir, writeFile, mkdir, rm, rename } from "node:fs/promises";
 import { join } from "node:path";
 
-export type RoleTier = "major" | "minor";
+export type RoleTier = "core" | "major" | "minor" | "functional";
 
 export interface RoleCardFrontmatter {
   readonly id: string;
@@ -43,13 +43,17 @@ export interface RoleCardListItem {
 }
 
 const TIER_DIR: Record<RoleTier, string> = {
+  core: "核心角色",
   major: "主要角色",
   minor: "次要角色",
+  functional: "功能角色",
 };
 
 const TIER_DIRS: Record<RoleTier, readonly string[]> = {
-  major: ["主要角色", "major"],
-  minor: ["次要角色", "minor"],
+  core:       ["核心角色", "core"],
+  major:      ["主要角色", "major", "重要角色"],  // 保留旧目录别名以兼容存量
+  minor:      ["次要角色", "minor"],
+  functional: ["功能角色", "functional"],
 };
 
 function parseFrontmatter(raw: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -68,7 +72,7 @@ function parseFrontmatter(raw: string): { frontmatter: Record<string, unknown>; 
       continue;
     }
 
-    const kvMatch = line.match(/^([\w-]+):\s*(.*)$/);
+    const kvMatch = line.match(/^([\w\u4e00-\u9fff-]+):\s*(.*)$/);
     if (kvMatch) {
       if (currentKey && currentList.length > 0) {
         frontmatter[currentKey] = currentList;
@@ -175,7 +179,7 @@ export function parseRoleCardMarkdown(id: string, raw: string, fallbackTier: Rol
     frontmatter: {
       id: String(frontmatter.id ?? id).trim(),
       name: String(frontmatter.name ?? id),
-      roleTier: (frontmatter.roleTier === "minor" || frontmatter.roleTier === "major" ? frontmatter.roleTier : fallbackTier) as RoleTier,
+      roleTier: (frontmatter.roleTier === "core" || frontmatter.roleTier === "major" || frontmatter.roleTier === "minor" || frontmatter.roleTier === "functional" ? frontmatter.roleTier : fallbackTier) as RoleTier,
       aliases: Array.isArray(frontmatter.aliases) ? frontmatter.aliases.map(String) : undefined,
       status: ["active", "hidden", "dead", "departed"].includes(String(frontmatter.status))
         ? (String(frontmatter.status) as RoleCardFrontmatter["status"])
@@ -197,7 +201,7 @@ export function parseRoleCardMarkdown(id: string, raw: string, fallbackTier: Rol
 export async function listRoleCards(bookDir: string): Promise<RoleCardListItem[]> {
   const rolesDir = join(bookDir, "story", "roles");
   const items = new Map<string, RoleCardListItem>();
-  for (const tier of ["major", "minor"] as RoleTier[]) {
+  for (const tier of ["core", "major", "minor", "functional"] as RoleTier[]) {
     for (const dirName of TIER_DIRS[tier]) {
       const tierDir = join(rolesDir, dirName);
       const files = await readdir(tierDir).catch(() => []);
@@ -232,7 +236,7 @@ export async function listRoleCards(bookDir: string): Promise<RoleCardListItem[]
 
 export async function loadRoleCard(bookDir: string, id: string): Promise<RoleCard | null> {
   const rolesDir = join(bookDir, "story", "roles");
-  for (const tier of ["major", "minor"] as RoleTier[]) {
+  for (const tier of ["core", "major", "minor", "functional"] as RoleTier[]) {
     for (const dirName of TIER_DIRS[tier]) {
       for (const stem of roleLookupStems(id)) {
         const filePath = join(rolesDir, dirName, `${stem}.md`);
@@ -273,15 +277,21 @@ export async function saveRoleCard(bookDir: string, card: RoleCard): Promise<voi
 export async function deleteRoleCard(bookDir: string, id: string): Promise<boolean> {
   const rolesDir = join(bookDir, "story", "roles");
   let deleted = false;
-  for (const tier of ["major", "minor"] as RoleTier[]) {
+  for (const tier of ["core", "major", "minor", "functional"] as RoleTier[]) {
     for (const dirName of TIER_DIRS[tier]) {
       for (const stem of roleLookupStems(id)) {
         const filePath = join(rolesDir, dirName, `${stem}.md`);
         try {
           await rm(filePath);
           deleted = true;
-        } catch {
-          // try next location
+        } catch (e) {
+          const code = (e as NodeJS.ErrnoException)?.code;
+          // ENOENT means file doesn't exist — skip to next location
+          // Other errors (EACCES, EPERM, ENOSPC) should not be silently swallowed
+          if (code !== "ENOENT") {
+            // Log the error; cannot use logger here in a model utility
+            console.warn(`[role-card] Failed to delete ${filePath}: ${code || e}`);
+          }
         }
       }
     }
@@ -291,7 +301,7 @@ export async function deleteRoleCard(bookDir: string, id: string): Promise<boole
 
 export function createRoleCardTemplate(id: string, name: string, tier: string = "major"): RoleCard {
   // Validate tier at runtime to prevent writing to undefined path
-  const validatedTier: RoleTier = (tier === "major" || tier === "minor") ? tier : "major";
+  const validatedTier: RoleTier = (tier === "core" || tier === "major" || tier === "minor" || tier === "functional") ? tier as RoleTier : "major";
   return {
     id: sanitizeRoleId(id),
     frontmatter: {

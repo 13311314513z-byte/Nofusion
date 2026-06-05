@@ -18,6 +18,7 @@ import { ImportManager } from "./pages/ImportManager";
 import { RadarView } from "./pages/RadarView";
 import { DoctorView } from "./pages/DoctorView";
 import { AuditView } from "./pages/AuditView";
+import { AutomationGuide } from "./pages/AutomationGuide";
 import { LanguageSelector } from "./pages/LanguageSelector";
 
 import { BookWorkspace } from "./pages/book-workspace/BookWorkspace";
@@ -88,6 +89,7 @@ export function App() {
     toRadar: () => setRoute({ page: "radar" }),
     toDoctor: () => setRoute({ page: "doctor" }),
     toAudit: () => setRoute({ page: "audit" }),
+    toAutomation: () => setRoute({ page: "automation" }),
   };
 
   const activeBookId = deriveActiveBookId(route);
@@ -202,7 +204,7 @@ export function App() {
           {route.page === "book" && (
             <div className="absolute inset-0 flex min-w-0">
               {(() => {
-                const section = (route.section ?? "chat") as BookSection;
+                const section = (route.section ?? "overview") as BookSection;
                 if (isBookSection(section)) {
                   return (
                     <BookWorkspace
@@ -298,6 +300,11 @@ export function App() {
           {route.page === "audit" && (
             <div className="max-w-6xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
               <AuditView nav={nav} theme={theme} t={t} />
+            </div>
+          )}
+          {route.page === "automation" && (
+            <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
+              <AutomationGuide nav={nav} theme={theme} t={t} />
             </div>
           )}
         </main>
