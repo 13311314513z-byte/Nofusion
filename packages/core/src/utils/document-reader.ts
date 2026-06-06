@@ -24,9 +24,21 @@ export interface ExtractedDocument {
   readonly charCount: number;
   readonly textHash: string;
   readonly warnings: ReadonlyArray<string>;
+  // ---- 分片元信息 ----
+  /** 是否因达到 maxChars 上限而被截断 */
+  readonly truncated: boolean;
+  /** 截断前原始提取长度（仅 truncated=true 时有意义） */
+  readonly originalLength?: number;
+  /** 总分片数 */
+  readonly totalChunks: number;
+  /** 当前分片索引（0-based） */
+  readonly chunkIndex: number;
 }
 
-const MAX_CHARS = 500_000;
+/** 单次提取最大字符数 */
+export const MAX_CHARS = 5_000_000;
+/** 每分片最大字符数（超过此值触发分片） */
+export const MAX_CHARS_PER_CHUNK = 500_000;
 
 function computeTextHash(text: string): string {
   return createHash("sha256").update(text).digest("hex").slice(0, 16);
@@ -144,6 +156,7 @@ const JSON_METADATA_FIELDS: ReadonlyArray<string> = [
   "mime",
   "url",
   "href",
+  "thumbnail",
 ];
 
 const JSON_WEAK_TEXT_FIELDS = new Set(["title", "summary", "description", "value"]);
@@ -199,6 +212,8 @@ function looksLikePathOrFilename(s: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(s)) return true;
   if (/^[/\\]?[\w .-]+([/\\][\w .-]+)+$/.test(s)) return true;
   if (/^[\w\u4e00-\u9fff ._-]+\.(jsonl?|md|txt|docx?|pdf|png|jpe?g|webp|ts|js|css|html?)$/i.test(s)) return true;
+  // URL path with query parameters (e.g. /thumbnail?type=persona&file=xxx.png)
+  if (/^\/?\w[\w\-./]*\?\w+=/.test(s)) return true;
   return false;
 }
 
@@ -241,7 +256,8 @@ function isValidTextValue(s: string, mode: "priority" | "weak" | "fallback" = "f
   // Fallback extraction is deliberately stricter because arbitrary JSON string
   // values are often enum labels, UI state, ids, or exported table cells.
   if (mode === "fallback") {
-    const hasSentencePunctuation = /[。！？.!?；;，,]/.test(trimmed);
+    // Sentence-ending punctuation: require CJK punctuation or period followed by space/end
+    const hasSentencePunctuation = /[。！？；;]/.test(trimmed) || /[.!?](?:\s|$)/.test(trimmed);
     const hasCjk = cjkCount >= 4;
     const hasEnoughWords = trimmed.split(/\s+/).filter(Boolean).length >= 4;
     if (!hasSentencePunctuation && !hasCjk && !hasEnoughWords) return false;
@@ -351,6 +367,123 @@ function extractFromJson(text: string): string {
   return text;
 }
 
+/**
+ * 估算总分片数。
+ */
+function estimateTotalChunks(originalLength: number, maxChars: number): number {
+  if (originalLength <= maxChars) return 1;
+  return Math.ceil(originalLength / maxChars);
+}
+
+function* chunkExtractedText(
+  text: string,
+  maxCharsPerChunk: number,
+): Generator<{ text: string; chunkIndex: number; isLast: boolean }> {
+  const chunkSize = Math.max(1, maxCharsPerChunk);
+  const totalChunks = Math.max(1, Math.ceil(text.length / chunkSize));
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+    const start = chunkIndex * chunkSize;
+    yield {
+      text: text.slice(start, start + chunkSize),
+      chunkIndex,
+      isLast: chunkIndex === totalChunks - 1,
+    };
+  }
+}
+
+/**
+ * JSONL 分片提取迭代器 — 按行分批，每批达到 maxCharsPerChunk 时 yield。
+ * 调用方可逐批消费，避免单次处理超大文件。
+ */
+export function* extractFromJsonlChunked(
+  text: string,
+  maxCharsPerChunk: number = MAX_CHARS_PER_CHUNK,
+): Generator<{ text: string; chunkIndex: number; isLast: boolean }> {
+  yield* chunkExtractedText(extractFromJsonl(text), maxCharsPerChunk);
+}
+
+/**
+ * JSON 分片提取迭代器 — 对大型 JSON Array 按元素分批，Object 按顶层 key 分批。
+ */
+export function* extractFromJsonChunked(
+  text: string,
+  maxCharsPerChunk: number = MAX_CHARS_PER_CHUNK,
+): Generator<{ text: string; chunkIndex: number; isLast: boolean }> {
+  yield* chunkExtractedText(extractFromJson(text), maxCharsPerChunk);
+}
+
+/**
+ * 分片提取的统一入口。根据 fileType 分发到对应分片提取器。
+ * 如果文件较小（不分片），行为与 extractDocumentFromText 一致。
+ */
+export function extractDocumentChunked(
+  text: string,
+  sourceName: string,
+  fileType: DocumentFileType = "txt",
+  options?: {
+    maxChars?: number;
+    chunkSize?: number;
+    chunkIndex?: number;
+  },
+): Generator<ExtractedDocument> {
+  const maxChars = options?.maxChars ?? MAX_CHARS;
+  const chunkSize = options?.chunkSize ?? MAX_CHARS_PER_CHUNK;
+
+  function* generate(): Generator<ExtractedDocument> {
+    const { text: fullyExtracted, originalLength } =
+      processExtractedText(text, fileType, Number.MAX_SAFE_INTEGER);
+    const capped = fullyExtracted.slice(0, maxChars);
+    const truncated = originalLength > maxChars;
+    const chunks = [...chunkExtractedText(capped, chunkSize)];
+    const totalChunks = chunks.length;
+
+    for (const chunk of chunks) {
+      if (options?.chunkIndex !== undefined && options.chunkIndex !== chunk.chunkIndex) {
+        continue;
+      }
+      yield buildChunkedDocument(
+        chunk.text,
+        sourceName,
+        fileType,
+        chunk.chunkIndex,
+        totalChunks,
+        truncated,
+        originalLength,
+      );
+    }
+  }
+
+  return generate();
+}
+
+/** 辅助：构建分片 ExtractedDocument */
+function buildChunkedDocument(
+  chunkText: string,
+  sourceName: string,
+  fileType: DocumentFileType,
+  chunkIndex: number,
+  totalChunks: number,
+  truncated: boolean,
+  originalLength: number,
+): ExtractedDocument {
+  const warnings = validateExtractedText(chunkText, fileType);
+  if (truncated) {
+    warnings.push(`提取结果超过 ${MAX_CHARS.toLocaleString()} 字，超出部分未导入`);
+  }
+  return {
+    sourceName: `${sourceName}#chunk${chunkIndex}`,
+    fileType,
+    text: chunkText,
+    charCount: chunkText.length,
+    textHash: computeTextHash(chunkText),
+    warnings,
+    truncated,
+    originalLength,
+    totalChunks,
+    chunkIndex,
+  };
+}
+
 function extractFromCode(text: string): string {
   const results: string[] = [];
 
@@ -438,7 +571,7 @@ function processExtractedText(
   text: string,
   fileType: DocumentFileType,
   maxChars: number,
-): string {
+): { text: string; truncated: boolean; originalLength: number } {
   let processed = text;
 
   switch (fileType) {
@@ -465,11 +598,12 @@ function processExtractedText(
       break;
   }
 
+  const originalLength = processed.length;
   if (processed.length > maxChars) {
     processed = processed.slice(0, maxChars);
+    return { text: processed, truncated: true, originalLength };
   }
-
-  return processed;
+  return { text: processed, truncated: false, originalLength };
 }
 
 export async function extractDocument(
@@ -482,16 +616,21 @@ export async function extractDocument(
   const fileType = detectFileType(filePath);
 
   const raw = await readFile(filePath, "utf-8");
-  const text = processExtractedText(raw, fileType, maxChars);
-  const warnings = validateExtractedText(text, fileType);
+  const { text: cleaned, truncated, originalLength } = processExtractedText(raw, fileType, maxChars);
+  const warnings = validateExtractedText(cleaned, fileType);
+  const totalChunks = truncated ? estimateTotalChunks(originalLength, maxChars) : 1;
 
   return {
     sourceName,
     fileType,
-    text,
-    charCount: text.length,
-    textHash: computeTextHash(text),
+    text: cleaned,
+    charCount: cleaned.length,
+    textHash: computeTextHash(cleaned),
     warnings,
+    truncated,
+    originalLength: truncated ? originalLength : undefined,
+    totalChunks,
+    chunkIndex: 0,
   };
 }
 
@@ -503,8 +642,9 @@ export function extractDocumentFromText(
 ): ExtractedDocument {
   const maxChars = options?.maxChars ?? MAX_CHARS;
 
-  const cleaned = processExtractedText(text, fileType, maxChars);
+  const { text: cleaned, truncated, originalLength } = processExtractedText(text, fileType, maxChars);
   const warnings = validateExtractedText(cleaned, fileType);
+  const totalChunks = truncated ? estimateTotalChunks(originalLength, maxChars) : 1;
 
   return {
     sourceName,
@@ -513,5 +653,9 @@ export function extractDocumentFromText(
     charCount: cleaned.length,
     textHash: computeTextHash(cleaned),
     warnings,
+    truncated,
+    originalLength: truncated ? originalLength : undefined,
+    totalChunks,
+    chunkIndex: 0,
   };
 }

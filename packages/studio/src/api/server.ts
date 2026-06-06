@@ -56,6 +56,12 @@ import {
   deleteAuthorProfile,
   deleteStyleSource,
   extractDocumentFromText,
+  extractDocumentChunked,
+  MAX_CHARS,
+  buildFoundationSourceBundle,
+  isDocumentFileType,
+  isFoundationSourcePurpose,
+  persistFoundationSourceBundle,
   buildAuthorProfile,
   planChapterImport,
   loadChapterGoals,
@@ -84,14 +90,18 @@ import {
   sendWebhook,
   analyzeStyleFingerprint,
   type StyleFingerprint,
+  type ArchitectOutput,
+  type FoundationSourceBundle,
+  type FoundationSourceInput,
 } from "@actalk/inkos-core";
+import { randomUUID } from "node:crypto";
 import { access, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { isIP } from "node:net";
 import { isSafeBookId } from "./safety.js";
 import { ApiError } from "./errors.js";
-import { buildStudioBookConfig } from "./book-create.js";
+import { buildStudioBookConfig, type StudioCreateBookBody } from "./book-create.js";
 
 // -- Pipeline stage definitions per agent type --
 
@@ -240,7 +250,11 @@ function extractHtmlTitle(html: string): string | null {
 async function readStyleImportBody(response: Response, maxBytes: number): Promise<string> {
   const body = response.body;
   if (!body) {
-    return (await response.text()).slice(0, maxBytes);
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      throw new Error(`URL response is too large (max ${Math.floor(maxBytes / 1_000_000)}MB)`);
+    }
+    return text;
   }
 
   const reader = body.getReader();
@@ -256,17 +270,15 @@ async function readStyleImportBody(response: Response, maxBytes: number): Promis
       const remaining = maxBytes - bytesRead;
       if (remaining <= 0) {
         await reader.cancel();
-        break;
+        throw new Error(`URL response is too large (max ${Math.floor(maxBytes / 1_000_000)}MB)`);
       }
-
-      const chunk = value.byteLength > remaining ? value.slice(0, remaining) : value;
-      text += decoder.decode(chunk, { stream: true });
-      bytesRead += chunk.byteLength;
 
       if (value.byteLength > remaining) {
         await reader.cancel();
-        break;
+        throw new Error(`URL response is too large (max ${Math.floor(maxBytes / 1_000_000)}MB)`);
       }
+      text += decoder.decode(value, { stream: true });
+      bytesRead += value.byteLength;
     }
   } finally {
     reader.releaseLock();
@@ -1440,6 +1452,14 @@ async function probeServiceCapabilities(args: {
 
 export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   const app = new Hono();
+  const foundationPlans = new Map<string, {
+    readonly bookId: string;
+    readonly mode: "supplement" | "rebuild";
+    readonly proposed: ArchitectOutput;
+    readonly foundationRevision: string;
+    readonly sourceBundle: FoundationSourceBundle;
+    readonly expiresAt: number;
+  }>();
   const state = new StateManager(root);
   let cachedConfig = initialConfig;
 
@@ -1586,15 +1606,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Book Create ---
 
   app.post("/api/v1/books/create", async (c) => {
-    const body = await c.req.json<{
-      title: string;
-      genre: string;
-      language?: string;
-      platform?: string;
-      chapterWordCount?: number;
-      targetChapters?: number;
-      blurb?: string;
-    }>();
+    const body = await c.req.json<StudioCreateBookBody>();
+    let sourceBundle: FoundationSourceBundle | undefined;
+    try {
+      sourceBundle = body.foundationSources?.length
+        ? buildFoundationSourceBundle(body.foundationSources)
+        : undefined;
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
 
     const now = new Date().toISOString();
     const bookConfig = buildStudioBookConfig(body, now);
@@ -1624,7 +1644,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         platform: body.platform,
         chapterWordCount: body.chapterWordCount,
         targetChapters: body.targetChapters,
-        blurb: body.blurb,
+        blurb: [body.blurb?.trim(), sourceBundle?.contextBlock.trim()].filter(Boolean).join("\n\n"),
       },
       tools,
     }).then(
@@ -1633,6 +1653,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         readonly details?: Readonly<Record<string, unknown>>;
       }) => {
         const createdBookId = (result.details?.bookId as string | undefined) ?? result.session.activeBookId ?? bookId;
+        if (sourceBundle) {
+          await persistFoundationSourceBundle(state.bookDir(createdBookId), sourceBundle, "create");
+        }
         const book = await loadStudioBookListSummary(state, createdBookId).catch(() => undefined);
         bookCreateStatus.delete(createdBookId);
         broadcast("book:created", { bookId: createdBookId, ...(book ? { book } : {}) });
@@ -1862,7 +1885,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const allowed =
       TRUTH_FLAT_FILES.includes(file)
       || TRUTH_OUTLINE_FILES.includes(file)
-      || /^roles\/(主要角色|次要角色|major|minor)\/[^/]+\.md$/.test(file);
+      || /^roles\/(核心角色|主要角色|重要角色|次要角色|功能角色|core|major|minor|functional)\/[^/]+\.md$/.test(file);
 
     if (!allowed) return null;
 
@@ -2737,16 +2760,26 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       // English-locale equivalents so en-language books are visible.
       const majorRolesZh = (await listDir("roles/主要角色")).map((f) => `roles/主要角色/${f}`);
       const minorRolesZh = (await listDir("roles/次要角色")).map((f) => `roles/次要角色/${f}`);
+      const coreRolesZh = (await listDir("roles/核心角色")).map((f) => `roles/核心角色/${f}`);
+      const functionalRolesZh = (await listDir("roles/功能角色")).map((f) => `roles/功能角色/${f}`);
+      const importantRolesZh = (await listDir("roles/重要角色")).map((f) => `roles/重要角色/${f}`);
       const majorRolesEn = (await listDir("roles/major")).map((f) => `roles/major/${f}`);
       const minorRolesEn = (await listDir("roles/minor")).map((f) => `roles/minor/${f}`);
+      const coreRolesEn = (await listDir("roles/core")).map((f) => `roles/core/${f}`);
+      const functionalRolesEn = (await listDir("roles/functional")).map((f) => `roles/functional/${f}`);
 
       const all = [
         ...flatFiles,
         ...outlineFiles,
+        ...coreRolesZh,
         ...majorRolesZh,
+        ...importantRolesZh,
         ...minorRolesZh,
+        ...functionalRolesZh,
+        ...coreRolesEn,
         ...majorRolesEn,
         ...minorRolesEn,
+        ...functionalRolesEn,
       ];
       const described = await Promise.all(all.map(describe));
       const result = described.filter((x): x is NonNullable<typeof x> => x !== null);
@@ -4602,13 +4635,39 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Style Library (Plus) ---
 
   app.post("/api/v1/style/extract-text", async (c) => {
-    const { text, sourceName, fileType } = await c.req.json<{ text: string; sourceName: string; fileType?: "md" | "txt" | "jsonl" | "json" | "ts" | "js" | "html" | "css" }>();
+    const { text, sourceName, fileType, maxChars, chunk } = await c.req.json<{
+      text: string;
+      sourceName: string;
+      fileType?: "md" | "txt" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
+      maxChars?: number;
+      chunk?: number;
+    }>();
     if (!text?.trim()) return c.json({ error: "text is required" }, 400);
     if (fileType !== undefined && !isTextStyleFileType(fileType)) {
       return c.json({ error: "fileType must be md, txt, jsonl, json, ts, js, html or css" }, 400);
     }
+
+    const effectiveMaxChars = typeof maxChars === "number" && Number.isFinite(maxChars)
+      ? Math.min(Math.max(maxChars, 1000), MAX_CHARS)
+      : MAX_CHARS;
+
     try {
-      const extracted = extractDocumentFromText(text, sourceName ?? "sample", fileType ?? "txt");
+      // 如果请求了指定分片，使用分片提取器
+      if (typeof chunk === "number" && chunk >= 0) {
+        const gen = extractDocumentChunked(text, sourceName ?? "sample", fileType ?? "txt", {
+          maxChars: effectiveMaxChars,
+        });
+        let index = 0;
+        for (const doc of gen) {
+          if (index === chunk) return c.json(doc);
+          index++;
+        }
+        return c.json({ error: `chunk ${chunk} out of range (total ${index})` }, 404);
+      }
+
+      const extracted = extractDocumentFromText(text, sourceName ?? "sample", fileType ?? "txt", {
+        maxChars: effectiveMaxChars,
+      });
       return c.json(extracted);
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -4635,7 +4694,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
             "Accept": "text/html, text/plain, text/markdown, application/json;q=0.8, */*;q=0.2",
           },
           redirect: "manual",
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(60000),
         });
 
         if (![301, 302, 303, 307, 308].includes(response.status)) {
@@ -4660,12 +4719,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       }
 
       const contentLength = Number(response.headers.get("content-length") ?? "0");
-      if (contentLength > 5_000_000) {
-        return c.json({ error: "URL response is too large" }, 413);
+      if (contentLength > 50_000_000) {
+        return c.json({ error: "URL response is too large (max 50MB)" }, 413);
       }
 
       const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-      const raw = await readStyleImportBody(response, 2_000_000);
+      const raw = await readStyleImportBody(response, 50_000_000);
       const fileType =
         contentType.includes("html")
           ? "html"
@@ -4678,8 +4737,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const sourceName = title ? `${title} - ${currentUrl.hostname}` : currentUrl.toString();
       const extracted = extractDocumentFromText(raw, sourceName, fileType, {
         maxChars: typeof maxChars === "number" && Number.isFinite(maxChars)
-          ? Math.min(Math.max(maxChars, 1000), 500_000)
-          : 500_000,
+          ? Math.min(Math.max(maxChars, 1000), MAX_CHARS)
+          : MAX_CHARS,
       });
 
       return c.json({
@@ -4689,7 +4748,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         sourceName,
       });
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ error: message }, message.includes("too large") ? 413 : 502);
     }
   });
 
@@ -4864,6 +4924,20 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Style Input Inspection ---
+
+  app.post("/api/v1/style/preprocess/inspect", async (c) => {
+    const { text, checks } = await c.req.json<{ text: string; checks?: string[] }>();
+    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { inspectText: runInspect } = await import("./style-preprocess-adapter.js");
+      const result = runInspect(text, checks as any);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // --- Import Chapters ---
 
   // Step 1: Preview / plan import (no filesystem changes)
@@ -4940,6 +5014,109 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const pipeline = new PipelineRunner(await buildPipelineConfig());
       await pipeline.importCanon(id, fromBookId);
       broadcast("import:complete", { bookId: id, type: "canon" });
+      return c.json({ ok: true });
+    } catch (e) {
+      broadcast("import:error", { bookId: id, error: String(e) });
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Foundation Import (plan / commit) ---
+
+  app.post("/api/v1/books/:id/import/foundation/plan", async (c) => {
+    const id = c.req.param("id");
+    const { sources, mode, instruction } = await c.req.json<{
+      sources: Array<{ sourceName: string; fileType: string; text: string; purpose?: string }>;
+      mode?: "supplement" | "rebuild";
+      instruction?: string;
+    }>();
+    if (!sources?.length) return c.json({ error: "sources is required" }, 400);
+    if (mode !== undefined && mode !== "supplement" && mode !== "rebuild") {
+      return c.json({ error: "mode must be supplement or rebuild" }, 400);
+    }
+
+    try {
+      const inputs: FoundationSourceInput[] = [];
+      for (const source of sources) {
+        if (
+          !source
+          || typeof source.sourceName !== "string"
+          || typeof source.text !== "string"
+          || !isDocumentFileType(source.fileType)
+          || (source.purpose !== undefined && !isFoundationSourcePurpose(source.purpose))
+        ) {
+          return c.json({ error: "invalid foundation source" }, 400);
+        }
+        inputs.push({
+          sourceName: source.sourceName,
+          fileType: source.fileType,
+          text: source.text,
+          purpose: source.purpose,
+        });
+      }
+      const pipeline = new PipelineRunner(await buildPipelineConfig());
+      const result = await pipeline.planFoundationImport(id, inputs, { mode, instruction });
+
+      if (result.proposed && result.roleChanges && result.foundationRevision) {
+        const sourceBundle = buildFoundationSourceBundle(
+          result.bundle.sources
+            .filter((source) => source.purpose !== "chapter" && source.purpose !== "style")
+            .map((source) => ({
+              sourceName: source.sourceName,
+              fileType: source.fileType,
+              text: source.text,
+              purpose: source.purpose,
+              normalized: true,
+            })),
+        );
+        const planId = randomUUID();
+        foundationPlans.set(planId, {
+          bookId: id,
+          mode: mode ?? "supplement",
+          proposed: result.proposed,
+          foundationRevision: result.foundationRevision,
+          sourceBundle,
+          expiresAt: Date.now() + 30 * 60 * 1000,
+        });
+        return c.json({
+          planId,
+          bundle: result.bundle,
+          proposed: result.proposed,
+          warnings: result.warnings,
+          roleChanges: result.roleChanges,
+        });
+      }
+
+      return c.json({
+        bundle: result.bundle,
+        warnings: result.warnings,
+        proposed: null,
+      });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/books/:id/import/foundation/commit", async (c) => {
+    const id = c.req.param("id");
+    const { planId } = await c.req.json<{ planId?: string }>();
+    if (!planId) return c.json({ error: "planId is required" }, 400);
+    const plan = foundationPlans.get(planId);
+    if (!plan || plan.bookId !== id || plan.expiresAt < Date.now()) {
+      foundationPlans.delete(planId);
+      return c.json({ error: "foundation plan is missing or expired; generate a new preview" }, 409);
+    }
+
+    broadcast("import:start", { bookId: id, type: "foundation" });
+    try {
+      const pipeline = new PipelineRunner(await buildPipelineConfig());
+      await pipeline.commitFoundationImport(id, plan.proposed, {
+        mode: plan.mode,
+        expectedRevision: plan.foundationRevision,
+        sourceBundle: plan.sourceBundle,
+      });
+      foundationPlans.delete(planId);
+      broadcast("import:complete", { bookId: id, type: "foundation" });
       return c.json({ ok: true });
     } catch (e) {
       broadcast("import:error", { bookId: id, error: String(e) });

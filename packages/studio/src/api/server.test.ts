@@ -517,6 +517,20 @@ describe("createStudioServer daemon lifecycle", () => {
     expect(isSafeBookId("demo/book")).toBe(false);
   }, 10_000);
 
+  it("rejects foundation commits that are not bound to a server-side plan", async () => {
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const response = await app.request("http://localhost/api/v1/books/demo-book/import/foundation/commit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposed: { storyBible: "client-controlled" } }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "planId is required" });
+  });
+
   it("returns from /api/daemon/start before the first write cycle finishes", async () => {
     let resolveStart: (() => void) | undefined;
     schedulerStartMock.mockImplementation(

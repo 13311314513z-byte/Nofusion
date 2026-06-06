@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractDocument, extractDocumentFromText } from "../utils/document-reader.js";
+import {
+  extractDocument,
+  extractDocumentChunked,
+  extractDocumentFromText,
+} from "../utils/document-reader.js";
 
 describe("extractDocumentFromText", () => {
   describe("jsonl", () => {
@@ -185,6 +189,39 @@ describe("extractDocumentFromText", () => {
         "html",
       );
       expect(doc.text).toBe("可见文字");
+    });
+  });
+
+  describe("chunked extraction", () => {
+    it("returns every text chunk up to the total hard limit", () => {
+      const input = "甲".repeat(1_200_000);
+      const chunks = [...extractDocumentChunked(input, "large.txt", "txt", {
+        maxChars: 1_000_000,
+        chunkSize: 200_000,
+      })];
+
+      expect(chunks).toHaveLength(5);
+      expect(chunks.map((chunk) => chunk.text).join("")).toBe("甲".repeat(1_000_000));
+      expect(chunks.every((chunk) => chunk.totalChunks === 5)).toBe(true);
+      expect(chunks.every((chunk) => chunk.truncated)).toBe(true);
+      expect(chunks[0]?.originalLength).toBe(1_200_000);
+    });
+
+    it("does not parse normalized JSONL chunks a second time", () => {
+      const input = Array.from({ length: 4 }, (_, index) => (
+        JSON.stringify({ content: `第${index}段：${"内容".repeat(60_000)}` })
+      )).join("\n");
+      const chunks = [...extractDocumentChunked(input, "large.jsonl", "jsonl", {
+        maxChars: 1_000_000,
+        chunkSize: 150_000,
+      })];
+      const combined = chunks.map((chunk) => chunk.text).join("");
+
+      expect(chunks.length).toBeGreaterThan(1);
+      expect(chunks.every((chunk) => chunk.charCount > 0)).toBe(true);
+      expect(combined).toContain("第0段");
+      expect(combined).toContain("第3段");
+      expect(combined).not.toContain('{"content"');
     });
   });
 });

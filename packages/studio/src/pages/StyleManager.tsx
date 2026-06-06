@@ -3,7 +3,9 @@ import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link } from "lucide-react";
+import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
+import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
 
 
 interface PunctuationRhythm {
@@ -160,6 +162,10 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [fileType, setFileType] = useState<LocalStyleFileType>("txt");
   const [extractedDoc, setExtractedDoc] = useState<ExtractedDoc | null>(null);
 
+  // --- Four-stage preprocess state ---
+  const [activePreset, setActivePreset] = useState<PresetId>("fidelity");
+  const [analysisStage, setAnalysisStage] = useState<"extracted" | "cleaned" | "relayouted">("extracted");
+
   // Preprocess state
   const [preprocessedText, setPreprocessedText] = useState("");
   const [preprocessActions, setPreprocessActions] = useState<ReadonlyArray<string>>([]);
@@ -173,6 +179,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [filterTimestamps, setFilterTimestamps] = useState(true);
   const [filterIds, setFilterIds] = useState(true);
   const [filterNoiseMarkers, setFilterNoiseMarkers] = useState(true);
+  const [minLineLength, setMinLineLength] = useState(0);
 
   // Relayout state
   const [relayoutedText, setRelayoutedText] = useState("");
@@ -180,6 +187,11 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [mergeShortParagraphs, setMergeShortParagraphs] = useState(true);
   const [formatDialogue, setFormatDialogue] = useState(true);
   const [normalizeQuotes, setNormalizeQuotes] = useState(true);
+
+  // Inspection & risk state
+  const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>(null);
+  const [showRiskConfirm, setShowRiskConfirm] = useState(false);
+  const [pendingRiskAction, setPendingRiskAction] = useState<(() => void) | null>(null);
 
   // Export state
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -387,6 +399,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     setPreprocessedText("");
     setPreprocessActions([]);
     setRelayoutedText("");
+    setInspectionResult(null);
     setAnalyzeStatus("");
     try {
       const doc = await fetchJson<ExtractedDoc>("/style/extract-text", {
@@ -395,6 +408,16 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         body: JSON.stringify({ text: fileText, sourceName: fileSourceName || "sample", fileType }),
       });
       setExtractedDoc(doc);
+      // Run input inspection
+      try {
+        const inspect = await fetchJson<InspectionResult>("/style/preprocess/inspect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: doc.text }),
+        });
+        setInspectionResult(inspect);
+      } catch { /* inspection is optional */ }
+      // Auto-run preprocess with current preset if panel is visible
       if (showPreprocessPanel && doc.text) {
         await runPreprocess(doc.text);
       }
@@ -405,9 +428,9 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     setLoading(false);
   };
 
-  const runPreprocess = async (sourceText: string) => {
+  const runPreprocess = async (sourceText: string, skipRelayout = false) => {
     try {
-      const result = await fetchJson<{ text: string; actions: string[] }>("/style/preprocess", {
+      const result = await fetchJson<{ text: string; actions: string[]; removedChars: number }>("/style/preprocess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -418,6 +441,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
             filterUrls,
             filterStructuredData,
             stripMarkdown,
+            minLineLength: minLineLength > 0 ? minLineLength : undefined,
             deduplicateParagraphs,
             filterTimestamps,
             filterIds,
@@ -427,8 +451,10 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
       });
       setPreprocessedText(result.text);
       setPreprocessActions(result.actions);
-      if (showRelayoutPanel) {
+      if (!skipRelayout && showRelayoutPanel && result.text) {
         await runRelayout(result.text);
+      } else {
+        setRelayoutedText("");
       }
       setAnalyzeStatus(t("style.preprocessDone"));
     } catch (e) {
@@ -457,18 +483,29 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     }
   };
 
+  const getStageText = (): string => {
+    if (analysisStage === "relayouted" && relayoutedText) return relayoutedText;
+    if (analysisStage === "cleaned" && preprocessedText) return preprocessedText;
+    return extractedDoc?.text || fileText;
+  };
+
+  const setAnalysisToExtracted = () => setAnalysisStage("extracted");
+  const setAnalysisToCleaned = () => setAnalysisStage("cleaned");
+  const setAnalysisToRelayouted = () => setAnalysisStage("relayouted");
+
   const handleImportProcessedToTextAnalysis = () => {
-    const textToAnalyze = relayoutedText || preprocessedText || extractedDoc?.text || fileText;
+    const textToAnalyze = getStageText();
     if (!textToAnalyze.trim()) return;
     setText(textToAnalyze);
     setSourceName(fileSourceName || "preprocessed-sample");
     setProfile(null);
-    setAnalyzeStatus(t("style.importedToTextAnalysis"));
+    const stageKey = analysisStage === "extracted" ? "style.stage.extracted" : analysisStage === "cleaned" ? "style.stage.cleaned" : "style.stage.relayouted";
+    setAnalyzeStatus(`已使用「${t(stageKey as any)}」版本`);
     setActiveTab("text");
   };
 
   const handleExport = () => {
-    const textToExport = relayoutedText || preprocessedText || extractedDoc?.text || fileText;
+    const textToExport = getStageText();
     if (!textToExport.trim()) return;
     try {
       const safeTitle = (fileSourceName || "export").replace(/[^\w\u4e00-\u9fa5._-]/g, "_");
@@ -1010,7 +1047,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
               </button>
               <button
                 onClick={handleImportProcessedToTextAnalysis}
-                disabled={!(relayoutedText || preprocessedText || extractedDoc?.text || fileText).trim()}
+                disabled={!getStageText().trim()}
                 className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
               >
                 <BarChart3 size={14} />
@@ -1041,44 +1078,106 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
               </div>
               {showPreprocessPanel && (
                 <div className="space-y-2">
+                  {/* Preset selector */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => {
+                          setActivePreset(preset.id);
+                          setFilterCode(preset.preprocess.filterCode ?? true);
+                          setFilterRepeatedPrompts(preset.preprocess.filterRepeatedPrompts ?? true);
+                          setFilterUrls(preset.preprocess.filterUrls ?? true);
+                          setFilterStructuredData(preset.preprocess.filterStructuredData ?? true);
+                          setStripMarkdown(preset.preprocess.stripMarkdown ?? true);
+                          setDeduplicateParagraphs(preset.preprocess.deduplicateParagraphs ?? true);
+                          setFilterTimestamps(preset.preprocess.filterTimestamps ?? true);
+                          setFilterIds(preset.preprocess.filterIds ?? true);
+                          setFilterNoiseMarkers(preset.preprocess.filterNoiseMarkers ?? true);
+                          setMinLineLength(preset.preprocess.minLineLength ?? 0);
+                        }}
+                        className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                          activePreset === preset.id
+                            ? `${c.btnPrimary} border-transparent`
+                            : `${c.btnSecondary} border-border hover:opacity-80`
+                        } ${preset.risk === "high" ? "text-amber-600" : ""}`}
+                        title={t(preset.descriptionKey as any)}
+                      >
+                        {t(preset.labelKey as any)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Options grid */}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterCode} onChange={(e) => setFilterCode(e.target.checked)} />
+                      <input type="checkbox" checked={filterCode} onChange={(e) => { setFilterCode(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.filterCode")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterRepeatedPrompts} onChange={(e) => setFilterRepeatedPrompts(e.target.checked)} />
-                      <span>{t("style.filterRepeatedPrompts")}</span>
+                      <input type="checkbox" checked={filterRepeatedPrompts} onChange={(e) => { setFilterRepeatedPrompts(e.target.checked); setActivePreset("custom" as any); }} />
+                      <span className={filterRepeatedPrompts ? "text-amber-600" : ""}>{t("style.filterRepeatedPrompts")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterUrls} onChange={(e) => setFilterUrls(e.target.checked)} />
+                      <input type="checkbox" checked={filterUrls} onChange={(e) => { setFilterUrls(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.filterUrls")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterStructuredData} onChange={(e) => setFilterStructuredData(e.target.checked)} />
-                      <span>{t("style.filterStructuredData")}</span>
+                      <input type="checkbox" checked={filterStructuredData} onChange={(e) => { setFilterStructuredData(e.target.checked); setActivePreset("custom" as any); }} />
+                      <span className="text-amber-600">{t("style.filterStructuredData")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={stripMarkdown} onChange={(e) => setStripMarkdown(e.target.checked)} />
+                      <input type="checkbox" checked={stripMarkdown} onChange={(e) => { setStripMarkdown(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.stripMarkdown")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={deduplicateParagraphs} onChange={(e) => setDeduplicateParagraphs(e.target.checked)} />
+                      <input type="checkbox" checked={deduplicateParagraphs} onChange={(e) => { setDeduplicateParagraphs(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.deduplicateParagraphs")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterTimestamps} onChange={(e) => setFilterTimestamps(e.target.checked)} />
+                      <input type="checkbox" checked={filterTimestamps} onChange={(e) => { setFilterTimestamps(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.filterTimestamps")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterIds} onChange={(e) => setFilterIds(e.target.checked)} />
+                      <input type="checkbox" checked={filterIds} onChange={(e) => { setFilterIds(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.filterIds")}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterNoiseMarkers} onChange={(e) => setFilterNoiseMarkers(e.target.checked)} />
+                      <input type="checkbox" checked={filterNoiseMarkers} onChange={(e) => { setFilterNoiseMarkers(e.target.checked); setActivePreset("custom" as any); }} />
                       <span>{t("style.filterNoiseMarkers")}</span>
                     </label>
                   </div>
+
+                  {/* Numeric threshold */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span>{t("style.minLineLength")}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={minLineLength}
+                      onChange={(e) => { setMinLineLength(Math.max(0, Math.min(100, Number(e.target.value) || 0))); setActivePreset("custom" as any); }}
+                      className="w-16 px-1.5 py-0.5 rounded border border-border bg-background text-xs text-right"
+                    />
+                    <span className="text-muted-foreground">(0 = {t("common.off")})</span>
+                  </div>
+
+                  {/* Inspection results */}
+                  {inspectionResult && inspectionResult.findings.length > 0 && (
+                    <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {t("style.inspect.title")}（{inspectionResult.findings.length}）
+                      </div>
+                      {inspectionResult.findings.map((f, i) => (
+                        <div key={i} className="text-xs text-amber-600 dark:text-amber-500">
+                          {f.count > 1 ? `${t(f.messageKey as any)}（${f.count} 处）` : t(f.messageKey as any)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Actions log */}
                   {preprocessActions.length > 0 && (
                     <div className="space-y-1">
                       {preprocessActions.map((a, i) => (
@@ -1086,18 +1185,58 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                       ))}
                     </div>
                   )}
-                  <button
-                    onClick={() => runPreprocess(extractedDoc?.text || fileText)}
-                    disabled={!(extractedDoc?.text || fileText).trim() || loading}
-                    className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
-                  >
-                    {t("style.runPreprocess")}
-                  </button>
+
+                  {/* Run button with risk warning */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => runPreprocess(extractedDoc?.text || fileText)}
+                      disabled={!(extractedDoc?.text || fileText).trim() || loading}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
+                    >
+                      {t("style.runPreprocess")}
+                    </button>
+                    {preprocessedText && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{t("style.removalRate")}: {((extractedDoc?.text.length ?? 1 - preprocessedText.length) / (extractedDoc?.text.length ?? 1) * 100).toFixed(1)}%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Analysis stage selector */}
+                  {preprocessedText && (
+                    <div className="flex flex-wrap items-center gap-2 p-2 rounded bg-primary/5 border border-primary/20">
+                      <span className="text-xs font-medium">{t("style.stage.analysisSource")}:</span>
+                      <button
+                        onClick={setAnalysisToExtracted}
+                        className={`text-xs px-2 py-0.5 rounded ${analysisStage === "extracted" ? c.btnPrimary : c.btnSecondary}`}
+                      >
+                        {t("style.stage.extracted")}（{extractedDoc?.text.length.toLocaleString()}）
+                      </button>
+                      <button
+                        onClick={setAnalysisToCleaned}
+                        className={`text-xs px-2 py-0.5 rounded ${analysisStage === "cleaned" ? c.btnPrimary : c.btnSecondary}`}
+                      >
+                        {t("style.stage.cleaned")}（{preprocessedText.length.toLocaleString()}）
+                      </button>
+                      {relayoutedText && (
+                        <button
+                          onClick={setAnalysisToRelayouted}
+                          className={`text-xs px-2 py-0.5 rounded ${analysisStage === "relayouted" ? c.btnPrimary : c.btnSecondary}`}
+                        >
+                          {t("style.stage.relayouted")}（{relayoutedText.length.toLocaleString()}）
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Preview */}
                   {preprocessedText && (
                     <div>
-                      <div className="text-xs text-muted-foreground mb-1">{t("style.preprocessed")}（{preprocessedText.length} {t("truth.chars")}）</div>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        {t("style.preprocessed")}（{getStageText().length.toLocaleString()} {t("truth.chars")}）
+                      </div>
                       <textarea
-                        value={preprocessedText}
+                        value={getStageText()}
                         readOnly
                         rows={4}
                         className="w-full px-2 py-1 rounded bg-secondary/20 border border-border text-xs font-mono resize-none"
@@ -1193,7 +1332,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           </div>
 
           <div className="space-y-4">
-            {(relayoutedText || preprocessedText || extractedDoc?.text) ? (
+            {(preprocessedText || extractedDoc?.text) ? (
               <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.preprocessResult")}</h3>
@@ -1212,11 +1351,11 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                   </div>
                   <div className="bg-secondary/30 rounded-lg p-3">
                     <div className="text-muted-foreground text-xs">{t("style.finalChars")}</div>
-                    <div className="text-xl font-bold">{(relayoutedText || preprocessedText || extractedDoc?.text || "").length.toLocaleString()}</div>
+                    <div className="text-xl font-bold">{getStageText().length.toLocaleString()}</div>
                   </div>
                 </div>
                 <textarea
-                  value={relayoutedText || preprocessedText || extractedDoc?.text || ""}
+                  value={getStageText()}
                   readOnly
                   rows={18}
                   className="w-full px-3 py-2 rounded-lg bg-secondary/20 border border-border text-xs focus:outline-none resize-none font-mono"

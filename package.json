@@ -32,5 +32,9 @@
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.5.2",
+  "dependencies": {
+    "pnpm": "^11.5.2"
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BookCreationDraft } from "@actalk/inkos-core";
+import type { BookCreationDraft, FoundationSourceInput } from "@actalk/inkos-core";
 import { BookPlus, CheckCircle2, RotateCcw, Sparkles } from "lucide-react";
 import { fetchJson, useApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
@@ -38,6 +38,7 @@ export interface BookCreatePayload {
   readonly targetChapters: number;
   readonly chapterWordCount: number;
   readonly blurb: string;
+  readonly foundationSources?: ReadonlyArray<FoundationSourceInput>;
 }
 
 export interface DraftSummaryRow {
@@ -463,6 +464,7 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [bookCreateSessionId, setBookCreateSessionIdState] = useState<string | null>(null);
+  const [foundationSources, setFoundationSources] = useState<FoundationSourceInput[]>([]);
 
   const summaryRows = useMemo(
     () => (draft ? buildCreationDraftSummary(draft, projectLang) : []),
@@ -484,6 +486,27 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
 
   const updateForm = (patch: Partial<BookCreateFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
+  };
+
+  const handleFoundationFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const sources = await Promise.all([...files].map(async (file): Promise<FoundationSourceInput> => {
+      const lower = file.name.toLowerCase();
+      const fileType = lower.endsWith(".jsonl") || lower.endsWith(".jsonl.md")
+        ? "jsonl"
+        : lower.endsWith(".json") || lower.endsWith(".json.md")
+          ? "json"
+          : lower.endsWith(".md") || lower.endsWith(".markdown")
+            ? "md"
+            : "txt";
+      return {
+        sourceName: file.name,
+        fileType,
+        text: await file.text(),
+        purpose: "auto",
+      };
+    }));
+    setFoundationSources((current) => [...current, ...sources]);
   };
 
   const applyDraftToForm = () => {
@@ -605,7 +628,10 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
     setError(null);
     setStatus(copy.creationStatus);
     try {
-      const payload = buildBookCreatePayload(form, projectLang);
+      const payload: BookCreatePayload = {
+        ...buildBookCreatePayload(form, projectLang),
+        ...(foundationSources.length > 0 ? { foundationSources } : {}),
+      };
       const data = await fetchJson<{ status?: string; bookId?: string }>("/books/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -763,6 +789,38 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
               className={`w-full ${c.input} rounded-md px-3 py-3 focus:outline-none text-sm leading-7 resize-y`}
               placeholder={copy.briefPlaceholder}
             />
+          </label>
+
+          <label className="block rounded-md border border-dashed border-border px-4 py-3 text-sm">
+            <span className="font-medium">
+              {projectLang === "zh" ? "附加架构资料" : "Foundation source files"}
+            </span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {projectLang === "zh" ? "支持 txt、md、jsonl、json，可多选" : "txt, md, jsonl, json; multiple files allowed"}
+            </span>
+            <input
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.jsonl,.json,.jsonl.md,.json.md"
+              onChange={(event) => void handleFoundationFiles(event.target.files)}
+              className="mt-3 block w-full text-xs text-muted-foreground"
+            />
+            {foundationSources.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {foundationSources.map((source, index) => (
+                  <div key={`${source.sourceName}-${index}`} className="flex items-center justify-between gap-3 rounded bg-secondary/30 px-2 py-1.5 text-xs">
+                    <span className="truncate">{source.sourceName} ({source.text.length.toLocaleString()})</span>
+                    <button
+                      type="button"
+                      onClick={() => setFoundationSources((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      {projectLang === "zh" ? "移除" : "Remove"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </label>
 
           {creating && (

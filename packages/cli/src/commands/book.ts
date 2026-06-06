@@ -1,8 +1,17 @@
 import { Command } from "commander";
-import { access, readFile, rename, rm } from "node:fs/promises";
+import { access, rename, rm } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { join, resolve } from "node:path";
-import { deriveBookIdFromTitle, normalizePlatformOrOther, PipelineRunner, StateManager, type BookConfig } from "@actalk/inkos-core";
+import {
+  buildFoundationSourceBundle,
+  deriveBookIdFromTitle,
+  extractDocument,
+  normalizePlatformOrOther,
+  PipelineRunner,
+  StateManager,
+  type BookConfig,
+  type FoundationSourceInput,
+} from "@actalk/inkos-core";
 import {
   formatBookCreateCreated,
   formatBookCreateCreating,
@@ -25,6 +34,7 @@ bookCommand
   .option("--target-chapters <n>", "Target chapter count", "200")
   .option("--chapter-words <n>", "Words per chapter", "3000")
   .option("--brief <path>", "Path to creative brief file (.md/.txt) — Architect builds from your ideas instead of generating from scratch")
+  .option("--source <paths...>", "Foundation source files (.txt/.md/.jsonl/.json)")
   .option("--lang <language>", "Writing language: zh (Chinese) or en (English). Defaults from genre.")
   .option("--json", "Output JSON")
   .action(async (opts) => {
@@ -68,12 +78,27 @@ bookCommand
       if (!opts.json) log(formatBookCreateCreating(language, book.title, book.genre, book.platform));
 
       const brief = opts.brief
-        ? await readFile(resolve(opts.brief), "utf-8")
+        ? (await extractDocument(resolve(opts.brief))).text
+        : undefined;
+      const sourceInputs: FoundationSourceInput[] = await Promise.all(
+        ((opts.source as string[] | undefined) ?? []).map(async (sourcePath) => {
+          const document = await extractDocument(resolve(sourcePath));
+          return {
+            sourceName: document.sourceName,
+            fileType: document.fileType,
+            text: document.text,
+            purpose: "auto",
+            normalized: true,
+          };
+        }),
+      );
+      const sourceBundle = sourceInputs.length > 0
+        ? buildFoundationSourceBundle(sourceInputs)
         : undefined;
 
-      const pipeline = new PipelineRunner(buildPipelineConfig(config, root, { externalContext: brief }));
+      const pipeline = new PipelineRunner(buildPipelineConfig(config, root));
 
-      await pipeline.initBook(book);
+      await pipeline.initBook(book, { externalContext: brief, sourceBundle });
 
       if (opts.json) {
         log(JSON.stringify({

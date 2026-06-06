@@ -80,6 +80,36 @@ describe("outline-paths", () => {
     expect(context).toContain("沉静的观察者");
   });
 
+  it("maps core and functional role-card directories into writing context", async () => {
+    const coreDir = join(bookDir, "story", "roles", "核心角色");
+    const functionalDir = join(bookDir, "story", "roles", "功能角色");
+    await mkdir(coreDir, { recursive: true });
+    await mkdir(functionalDir, { recursive: true });
+    await writeFile(join(coreDir, "主角甲.md"), "# 主角甲\n核心人物设定", "utf-8");
+    await writeFile(join(functionalDir, "门卫乙.md"), "# 门卫乙\n功能人物设定", "utf-8");
+
+    const context = await readCharacterContext(bookDir);
+
+    expect(context).toContain("主角甲");
+    expect(context).toContain("核心人物设定");
+    expect(context).toContain("门卫乙");
+    expect(context).toContain("功能人物设定");
+  });
+
+  it("prefers core role cards when an alias directory contains the same name", async () => {
+    const coreDir = join(bookDir, "story", "roles", "核心角色");
+    const majorDir = join(bookDir, "story", "roles", "主要角色");
+    await mkdir(coreDir, { recursive: true });
+    await mkdir(majorDir, { recursive: true });
+    await writeFile(join(coreDir, "林辞.md"), "核心版本", "utf-8");
+    await writeFile(join(majorDir, "林辞.md"), "旧主要版本", "utf-8");
+
+    const context = await readCharacterContext(bookDir);
+
+    expect(context).toContain("核心版本");
+    expect(context).not.toContain("旧主要版本");
+  });
+
   it("falls back to legacy character_matrix.md when no role cards exist", async () => {
     await writeFile(join(bookDir, "story", "character_matrix.md"), "legacy matrix table", "utf-8");
 

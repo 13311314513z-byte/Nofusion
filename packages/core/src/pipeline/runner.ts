@@ -5,7 +5,14 @@ import type { BookConfig, FanficMode } from "../models/book.js";
 import type { ChapterMeta } from "../models/chapter.js";
 import type { NotifyChannel, LLMConfig, AgentLLMOverride, InputGovernanceMode } from "../models/project.js";
 import type { GenreProfile } from "../models/genre-profile.js";
-import { ArchitectAgent, type ArchitectOutput } from "../agents/architect.js";
+import { ArchitectAgent, type ArchitectOutput, type ArchitectRole } from "../agents/architect.js";
+import {
+  assembleFoundationContext,
+  buildFoundationSourceBundle,
+  persistFoundationSourceBundle,
+  type FoundationSourceBundle,
+  type FoundationSourceInput,
+} from "../import/foundation-source.js";
 import { FoundationReviewerAgent } from "../agents/foundation-reviewer.js";
 import { PlannerAgent, type PlanChapterOutput } from "../agents/planner.js";
 import { composeGovernedChapter, type ComposeChapterOutput } from "../agents/composer.js";
@@ -41,6 +48,7 @@ import {
 import { loadNarrativeMemorySeed, loadSnapshotCurrentStateFacts } from "../state/runtime-state-store.js";
 import { rewriteStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
 import { readFile, readdir, writeFile, mkdir, rename, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import {
   parseStateDegradedReviewNote,
@@ -337,6 +345,7 @@ export interface InitBookOptions {
   readonly externalContext?: string;
   readonly authorIntent?: string;
   readonly currentFocus?: string;
+  readonly sourceBundle?: FoundationSourceBundle;
 }
 
 export class PipelineRunner {
@@ -633,7 +642,11 @@ export class PipelineRunner {
       `.tmp-book-create-${book.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     );
     const stageLanguage = await this.resolveBookLanguage(book);
-    const effectiveExternalContext = options.externalContext ?? this.config.externalContext;
+    const baseExternalContext = options.externalContext ?? this.config.externalContext;
+    const effectiveExternalContext = [
+      baseExternalContext?.trim(),
+      options.sourceBundle?.contextBlock.trim(),
+    ].filter(Boolean).join("\n\n") || undefined;
 
     this.logStage(stageLanguage, { zh: "生成基础设定", en: "generating foundation" });
     const { profile: gp } = await this.loadGenreProfile(book.genre);
@@ -666,6 +679,9 @@ export class PipelineRunner {
         const storyDir = join(stagingBookDir, "story");
         await mkdir(storyDir, { recursive: true });
         await writeFile(join(storyDir, "brief.md"), effectiveExternalContext, "utf-8");
+      }
+      if (options.sourceBundle) {
+        await persistFoundationSourceBundle(stagingBookDir, options.sourceBundle, "create");
       }
 
       this.logStage(stageLanguage, { zh: "初始化控制文档", en: "initializing control documents" });
@@ -860,6 +876,297 @@ export class PipelineRunner {
     await writeFile(join(storyDir, "fanfic_canon.md"), result.fullDocument, "utf-8");
 
     return result.fullDocument;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Foundation Import (plan / commit)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Plan a foundation import — build source bundle, call Architect, return
+   * a preview of changes WITHOUT writing anything to disk.
+   */
+  async planFoundationImport(
+    bookId: string,
+    inputs: ReadonlyArray<FoundationSourceInput>,
+    options?: {
+      mode?: "supplement" | "rebuild";
+      instruction?: string;
+    },
+  ): Promise<{
+    bundle: FoundationSourceBundle;
+    proposed?: ArchitectOutput;
+    foundationRevision?: string;
+    warnings: string[];
+    roleChanges?: {
+      added: string[];
+      updated: string[];
+      removed: string[];
+    };
+  }> {
+    const mode = options?.mode ?? "supplement";
+    const warnings: string[] = [];
+
+    // 1. Build & validate bundle
+    const bundle = buildFoundationSourceBundle(inputs);
+    warnings.push(...bundle.warnings);
+
+    if (bundle.sources.length === 0) {
+      return { bundle, warnings: [...warnings, "没有有效的资料可导入"] };
+    }
+
+    // 2. Filter out chapter/style sources (diverted to other pipelines)
+    const foundationSources = bundle.sources.filter((s) => s.purpose !== "chapter" && s.purpose !== "style");
+    if (foundationSources.length === 0) {
+      return { bundle, warnings: [...warnings, "资料用途均为 chapter/style，不走架构导入"] };
+    }
+    const divertedCount = bundle.sources.length - foundationSources.length;
+    if (divertedCount > 0) {
+      warnings.push(`${divertedCount} 份资料被识别为 chapter/style，需通过对应入口导入`);
+    }
+
+    // 3. Build combined context
+    const instructionBlock = options?.instruction
+      ? `\n\n## 用户补充指令\n${options.instruction}\n`
+      : "";
+    const fullContext = assembleFoundationContext(foundationSources) + instructionBlock;
+
+    // 4. Load current book config & existing foundation for revise mode
+    const book = await this.state.loadBookConfig(bookId);
+    const bookDir = this.state.bookDir(bookId);
+    const storyDir = join(bookDir, "story");
+    const foundationRevision = await this.getFoundationRevision(bookId);
+    const isPhase5 = await isNewLayoutBook(bookDir);
+
+    let oldStoryBible = "";
+    let oldVolumeOutline = "";
+    let oldBookRules = "";
+    let oldCharacterMatrix = "";
+
+    if (isPhase5) {
+      [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
+        readStoryFrame(bookDir).catch(() => ""),
+        readVolumeMap(bookDir).catch(() => ""),
+        readCharacterContext(bookDir).catch(() => ""),
+      ]);
+      oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
+    } else {
+      [oldStoryBible, oldVolumeOutline, oldBookRules, oldCharacterMatrix] = await Promise.all([
+        readFile(join(storyDir, "story_bible.md"), "utf-8").catch(() => ""),
+        readFile(join(storyDir, "volume_outline.md"), "utf-8").catch(() => ""),
+        readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => ""),
+        readFile(join(storyDir, "character_matrix.md"), "utf-8").catch(() => ""),
+      ]);
+    }
+
+    // 5. Call Architect
+    const architect = new ArchitectAgent(this.agentCtxFor("architect", bookId));
+    let proposed: ArchitectOutput;
+
+    if (oldStoryBible.trim()) {
+      // Revise mode — pass existing foundation + source bundle as externalContext
+      proposed = await architect.generateFoundation(book, fullContext, undefined, {
+        reviseFrom: {
+          storyBible: oldStoryBible,
+          volumeOutline: oldVolumeOutline,
+          bookRules: oldBookRules,
+          characterMatrix: oldCharacterMatrix,
+          userFeedback: `补充以下资料：${foundationSources.map((s) => s.sourceName).join("、")}`,
+        },
+      });
+    } else {
+      // New foundation — use source bundle as externalContext
+      proposed = await architect.generateFoundation(book, fullContext);
+    }
+
+    // 6. Compute role diff
+    const existingRoles = await this.scanExistingRoles(bookDir);
+    const proposedRoles = proposed.roles ?? [];
+    const roleChanges = this.computeRoleChanges(existingRoles, proposedRoles, mode);
+
+    return { bundle, proposed, foundationRevision, warnings, roleChanges };
+  }
+
+  /**
+   * Commit a previously planned foundation import — backup, then write files.
+   */
+  async commitFoundationImport(
+    bookId: string,
+    proposed: ArchitectOutput,
+    options?: {
+      mode?: "supplement" | "rebuild";
+      expectedRevision?: string;
+      sourceBundle?: FoundationSourceBundle;
+    },
+  ): Promise<void> {
+    const mode = options?.mode ?? "supplement";
+    const bookDir = this.state.bookDir(bookId);
+    const storyDir = join(bookDir, "story");
+    const isPhase5 = await isNewLayoutBook(bookDir);
+    this.assertValidArchitectOutput(proposed);
+
+    if (options?.expectedRevision) {
+      const currentRevision = await this.getFoundationRevision(bookId);
+      if (currentRevision !== options.expectedRevision) {
+        throw new Error("书籍架构在预览后已发生变化，请重新生成导入预览");
+      }
+    }
+
+    // 1. Backup
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupDir = join(storyDir, `.backup-foundation-${timestamp}`);
+    await mkdir(backupDir, { recursive: true });
+
+    const flatFiles = ["story_bible.md", "volume_outline.md", "book_rules.md", "character_matrix.md"];
+    for (const fileName of flatFiles) {
+      try {
+        const content = await readFile(join(storyDir, fileName), "utf-8");
+        await writeFile(join(backupDir, fileName), content, "utf-8");
+      } catch {
+        // File may not exist
+      }
+    }
+
+    if (isPhase5) {
+      await this.copyDirShallow(join(storyDir, "outline"), join(backupDir, "outline"));
+      await this.copyDirRecursive(join(storyDir, "roles"), join(backupDir, "roles"));
+    }
+
+    // 2. Write foundation files
+    const book = await this.state.loadBookConfig(bookId);
+    const { profile: gp } = await this.loadGenreProfile(book.genre);
+
+    const architect = new ArchitectAgent(this.agentCtxFor("architect", bookId));
+    const resolvedLanguage = (book.language ?? gp.language) as "zh" | "en";
+
+    const writeMode = mode === "rebuild" ? "revise" as const : "merge" as const;
+    await architect.writeFoundationFiles(bookDir, proposed, gp.numericalSystem, resolvedLanguage, writeMode);
+
+    if (options?.sourceBundle) {
+      await persistFoundationSourceBundle(bookDir, options.sourceBundle, mode);
+    }
+
+    this.config.logger?.info?.(
+      `[commitFoundationImport] Foundation import complete (mode=${mode})`,
+    );
+  }
+
+  /** Scan existing role files and return their names */
+  private async scanExistingRoles(bookDir: string): Promise<string[]> {
+    const storyDir = join(bookDir, "story");
+    const rolesDirs = [
+      join(storyDir, "roles", "主要角色"),
+      join(storyDir, "roles", "次要角色"),
+      join(storyDir, "roles", "核心角色"),
+      join(storyDir, "roles", "功能角色"),
+      join(storyDir, "roles", "重要角色"),
+      join(storyDir, "roles", "major"),
+      join(storyDir, "roles", "minor"),
+      join(storyDir, "roles", "core"),
+      join(storyDir, "roles", "functional"),
+    ];
+    const names: string[] = [];
+    for (const dir of rolesDirs) {
+      try {
+        const entries = await readdir(dir);
+        for (const entry of entries) {
+          if (entry.endsWith(".md")) {
+            names.push(entry.replace(/\.md$/, ""));
+          }
+        }
+      } catch {
+        // Directory doesn't exist yet
+      }
+    }
+    return names;
+  }
+
+  /** Compute role changes between existing and proposed */
+  private computeRoleChanges(
+    existing: string[],
+    proposed: ReadonlyArray<ArchitectRole>,
+    mode: "supplement" | "rebuild",
+  ): { added: string[]; updated: string[]; removed: string[] } {
+    const proposedNames = new Set(proposed.map((r) => r.name));
+    const existingSet = new Set(existing);
+
+    const added = proposed.filter((r) => !existingSet.has(r.name)).map((r) => r.name);
+    const updated = proposed.filter((r) => existingSet.has(r.name)).map((r) => r.name);
+    const removed = mode === "rebuild"
+      ? existing.filter((name) => !proposedNames.has(name))
+      : []; // supplement mode keeps all existing roles
+
+    return { added, updated, removed };
+  }
+
+  async getFoundationRevision(bookId: string): Promise<string> {
+    const bookDir = this.state.bookDir(bookId);
+    const storyDir = join(bookDir, "story");
+    const files = [
+      join(storyDir, "outline", "story_frame.md"),
+      join(storyDir, "outline", "volume_map.md"),
+      join(storyDir, "story_bible.md"),
+      join(storyDir, "volume_outline.md"),
+      join(storyDir, "book_rules.md"),
+      join(storyDir, "character_matrix.md"),
+    ];
+    const roleDirs = [
+      "主要角色", "次要角色", "核心角色", "功能角色", "重要角色",
+      "major", "minor", "core", "functional",
+    ];
+    for (const dirName of roleDirs) {
+      const dir = join(storyDir, "roles", dirName);
+      const entries = await readdir(dir).catch(() => []);
+      for (const entry of entries.filter((name) => name.endsWith(".md")).sort()) {
+        files.push(join(dir, entry));
+      }
+    }
+
+    const hash = createHash("sha256");
+    for (const file of [...new Set(files)].sort()) {
+      const content = await readFile(file, "utf-8").catch(() => "");
+      hash.update(file.slice(bookDir.length));
+      hash.update("\0");
+      hash.update(content);
+      hash.update("\0");
+    }
+    return hash.digest("hex").slice(0, 24);
+  }
+
+  private assertValidArchitectOutput(output: ArchitectOutput): void {
+    const required = [
+      ["storyBible", output.storyBible],
+      ["volumeOutline", output.volumeOutline],
+      ["bookRules", output.bookRules],
+      ["currentState", output.currentState],
+      ["pendingHooks", output.pendingHooks],
+      ["storyFrame", output.storyFrame],
+      ["volumeMap", output.volumeMap],
+    ] as const;
+    for (const [field, value] of required) {
+      if (typeof value !== "string") {
+        throw new Error(`无效的架构预览：${field} 必须是字符串`);
+      }
+    }
+    if (!output.storyFrame?.trim() || !output.volumeMap?.trim()) {
+      throw new Error("无效的架构预览：缺少 Phase 5 storyFrame 或 volumeMap");
+    }
+    if (output.roles !== undefined) {
+      if (!Array.isArray(output.roles)) {
+        throw new Error("无效的架构预览：roles 必须是数组");
+      }
+      for (const role of output.roles) {
+        if (
+          !role
+          || (role.tier !== "major" && role.tier !== "minor")
+          || typeof role.name !== "string"
+          || !role.name.trim()
+          || typeof role.content !== "string"
+        ) {
+          throw new Error("无效的架构预览：角色数据格式错误");
+        }
+      }
+    }
   }
 
   /** One-step fanfic book creation: create book + import canon + generate foundation */

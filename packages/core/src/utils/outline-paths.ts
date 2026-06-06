@@ -90,17 +90,35 @@ export async function readRoleCards(bookDir: string): Promise<ReadonlyArray<Role
   const rolesRoot = join(bookDir, "story", "roles");
   const majorDirZh = join(rolesRoot, "主要角色");
   const minorDirZh = join(rolesRoot, "次要角色");
+  const coreDirZh = join(rolesRoot, "核心角色");
+  const functionalDirZh = join(rolesRoot, "功能角色");
+  const importantDirZh = join(rolesRoot, "重要角色");
   const majorDirEn = join(rolesRoot, "major");
   const minorDirEn = join(rolesRoot, "minor");
+  const coreDirEn = join(rolesRoot, "core");
+  const functionalDirEn = join(rolesRoot, "functional");
 
   const cards: RoleCard[] = [];
-  await Promise.all([
-    collectRoleDir(majorDirZh, "major", cards),
-    collectRoleDir(minorDirZh, "minor", cards),
-    collectRoleDir(majorDirEn, "major", cards),
-    collectRoleDir(minorDirEn, "minor", cards),
-  ]);
-  return cards;
+  const directories = [
+    [coreDirZh, "major"],
+    [majorDirZh, "major"],
+    [importantDirZh, "major"],
+    [minorDirZh, "minor"],
+    [functionalDirZh, "minor"],
+    [coreDirEn, "major"],
+    [majorDirEn, "major"],
+    [minorDirEn, "minor"],
+    [functionalDirEn, "minor"],
+  ] as const;
+  for (const [dir, tier] of directories) {
+    await collectRoleDir(dir, tier, cards);
+  }
+  const unique = new Map<string, RoleCard>();
+  for (const card of cards) {
+    const key = card.name.trim().toLocaleLowerCase();
+    if (!unique.has(key)) unique.set(key, card);
+  }
+  return [...unique.values()];
 }
 
 async function collectRoleDir(

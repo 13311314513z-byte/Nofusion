@@ -12,8 +12,14 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "outDir": "dist",
-    "rootDir": "src"
+    "noEmit": true,
+    "composite": true
   },
+  "include": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/cli" },
+    { "path": "packages/studio" }
+  ],
   "exclude": ["node_modules", "dist"]
 }

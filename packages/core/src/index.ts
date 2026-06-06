@@ -321,7 +321,23 @@ export {
   type AddStyleSourceInput,
 } from "./style-library/store.js";
 export { mergeStyleProfiles, buildAuthorProfile, buildLibraryIndex } from "./style-library/aggregate.js";
-export { extractDocument, extractDocumentFromText, type ExtractedDocument, type DocumentFileType } from "./utils/document-reader.js";
+export { extractDocument, extractDocumentFromText, extractDocumentChunked, extractFromJsonlChunked, extractFromJsonChunked, MAX_CHARS, MAX_CHARS_PER_CHUNK, type ExtractedDocument, type DocumentFileType } from "./utils/document-reader.js";
+export {
+  assembleFoundationContext,
+  buildFoundationSourceBundle,
+  getPurposeLabel,
+  isDocumentFileType,
+  isFoundationPurpose,
+  isFoundationSourcePurpose,
+  persistFoundationSourceBundle,
+  summariseBundle,
+  MAX_SOURCES_PER_BUNDLE,
+  MAX_BUNDLE_CHARS,
+  type FoundationSourcePurpose,
+  type FoundationSourceInput,
+  type FoundationSource,
+  type FoundationSourceBundle,
+} from "./import/foundation-source.js";
 export { preprocessText, exportPreprocessed, type PreprocessOptions, type PreprocessResult, type PreprocessExportFormat, type PreprocessExportResult } from "./utils/text-preprocessor.js";
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { exportDocument, type ExportFormat, type ExportResult } from "./utils/document-writer.js";

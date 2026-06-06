@@ -1,4 +1,8 @@
-import { normalizePlatformOrOther, type Platform } from "@actalk/inkos-core";
+import {
+  normalizePlatformOrOther,
+  type FoundationSourceInput,
+  type Platform,
+} from "@actalk/inkos-core";
 
 export interface StudioCreateBookBody {
   readonly title: string;
@@ -13,6 +17,7 @@ export interface StudioCreateBookBody {
   readonly keywords?: string[];
   readonly targetAudience?: string;
   readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
+  readonly foundationSources?: ReadonlyArray<FoundationSourceInput>;
 }
 
 export interface StudioBookConfigDraft {

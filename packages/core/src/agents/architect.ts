@@ -759,7 +759,7 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
     output: ArchitectOutput,
     _numericalSystem: boolean = true,
     language: "zh" | "en" = "zh",
-    mode: "init" | "revise" = "init",
+    mode: "init" | "revise" | "merge" = "init",
   ): Promise<void> {
     const storyDir = join(bookDir, "story");
     const outlineDir = join(storyDir, "outline");
@@ -782,7 +782,7 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
     const roles = output.roles ?? [];
     const isPhase5Output = Boolean(output.storyFrame?.trim());
 
-    if (mode === "revise" && !isPhase5Output) {
+    if (mode !== "init" && !isPhase5Output) {
       throw new Error(
         "Architect revise mode produced legacy-format output (storyFrame empty). " +
         "The book's architecture files have NOT been modified.",

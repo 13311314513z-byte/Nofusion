@@ -1,5 +1,13 @@
 import { Command } from "commander";
-import { PipelineRunner, StateManager, splitChapters } from "@actalk/inkos-core";
+import {
+  buildFoundationSourceBundle,
+  extractDocument,
+  PipelineRunner,
+  StateManager,
+  splitChapters,
+  summariseBundle,
+  type FoundationSourceInput,
+} from "@actalk/inkos-core";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadConfig, buildPipelineConfig, findProjectRoot, resolveBookId, log, logError } from "../utils.js";
@@ -52,6 +60,87 @@ importCommand
         log(JSON.stringify({ error: String(e) }));
       } else {
         logError(`Canon import failed: ${e}`);
+      }
+      process.exit(1);
+    }
+  });
+
+importCommand
+  .command("foundation")
+  .description("Import world, character, era, plot, or rule material into an existing book")
+  .argument("[book-id]", "Target book ID (auto-detected if only one book)")
+  .requiredOption("--from <paths...>", "One or more .txt/.md/.jsonl/.json source files")
+  .option("--mode <mode>", "supplement (safe merge) or rebuild", "supplement")
+  .option("--instruction <text>", "Additional merge instruction")
+  .option("--dry-run", "Generate preview without writing files")
+  .option("--yes", "Commit the preview without another prompt")
+  .option("--json", "Output JSON")
+  .action(async (bookIdArg: string | undefined, opts) => {
+    try {
+      const root = findProjectRoot();
+      const bookId = await resolveBookId(bookIdArg, root);
+      const mode = opts.mode === "rebuild" ? "rebuild" : opts.mode === "supplement" ? "supplement" : null;
+      if (!mode) throw new Error("--mode must be supplement or rebuild");
+
+      const inputs: FoundationSourceInput[] = await Promise.all(
+        (opts.from as string[]).map(async (sourcePath) => {
+          const document = await extractDocument(resolve(sourcePath));
+          return {
+            sourceName: document.sourceName,
+            fileType: document.fileType,
+            text: document.text,
+            purpose: "auto",
+            normalized: true,
+          };
+        }),
+      );
+      const bundle = buildFoundationSourceBundle(inputs);
+      const config = await loadConfig();
+      const pipeline = new PipelineRunner(buildPipelineConfig(config, root));
+      const plan = await pipeline.planFoundationImport(bookId, inputs, {
+        mode,
+        instruction: opts.instruction,
+      });
+      if (!plan.proposed || !plan.foundationRevision || !plan.roleChanges) {
+        throw new Error(plan.warnings.join("; ") || "No foundation changes were generated");
+      }
+
+      const preview = {
+        bookId,
+        mode,
+        bundle: {
+          sourceCount: bundle.sources.length,
+          totalChars: bundle.totalChars,
+        },
+        warnings: plan.warnings,
+        roleChanges: plan.roleChanges,
+      };
+      if (opts.json) {
+        log(JSON.stringify(preview, null, 2));
+      } else {
+        log(summariseBundle(bundle));
+        log(`新增角色: ${plan.roleChanges.added.join(", ") || "(none)"}`);
+        log(`更新角色: ${plan.roleChanges.updated.join(", ") || "(none)"}`);
+        log(`移除角色: ${plan.roleChanges.removed.join(", ") || "(none)"}`);
+        for (const warning of plan.warnings) log(`[warn] ${warning}`);
+      }
+
+      if (opts.dryRun) return;
+      if (!opts.yes) {
+        throw new Error("Preview generated. Re-run with --yes to commit, or use --dry-run.");
+      }
+
+      await pipeline.commitFoundationImport(bookId, plan.proposed, {
+        mode,
+        expectedRevision: plan.foundationRevision,
+        sourceBundle: bundle,
+      });
+      if (!opts.json) log(`Foundation import completed for ${bookId}.`);
+    } catch (e) {
+      if (opts.json) {
+        log(JSON.stringify({ error: String(e) }));
+      } else {
+        logError(`Foundation import failed: ${e}`);
       }
       process.exit(1);
     }
