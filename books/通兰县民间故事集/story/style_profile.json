@@ -1,0 +1,21 @@
+{
+  "avgSentenceLength": 17.7,
+  "sentenceLengthStdDev": 13,
+  "avgParagraphLength": 74,
+  "paragraphLengthRange": {
+    "min": 14,
+    "max": 249
+  },
+  "vocabularyDiversity": 0.274,
+  "topPatterns": [
+    "王婆...(12次)",
+    "老馬...(4次)",
+    "深秋...(3次)",
+    "這是...(3次)"
+  ],
+  "rhetoricalFeatures": [
+    "短句节奏(18处)"
+  ],
+  "sourceName": "萧红 生死场",
+  "analyzedAt": "2026-06-01T15:42:29.186Z"
+}

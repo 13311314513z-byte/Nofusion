@@ -1,0 +1,33 @@
+{
+  "chapter": 1,
+  "plannerInputs": [
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\author_intent.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\current_focus.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\outline\\story_frame.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\outline\\volume_map.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\chapter_summaries.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\book_rules.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\current_state.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\pending_hooks.md",
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\memory.db"
+  ],
+  "composerInputs": [
+    "C:\\Users\\white\\AppData\\Roaming\\npm\\books\\通兰县民间故事集\\story\\runtime\\chapter-0001.intent.md"
+  ],
+  "selectedSources": [
+    "runtime/chapter_memo",
+    "story/current_focus.md",
+    "story/current_state.md",
+    "story/outline/story_frame.md",
+    "story/outline/volume_map.md",
+    "story/pending_hooks.md#H001",
+    "story/pending_hooks.md#H002",
+    "story/pending_hooks.md#H004",
+    "story/pending_hooks.md#H006",
+    "story/pending_hooks.md#H009",
+    "story/pending_hooks.md#H011",
+    "story/pending_hooks.md#H013",
+    "story/pending_hooks.md#H016"
+  ],
+  "notes": []
+}

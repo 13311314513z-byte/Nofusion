@@ -1,0 +1,53 @@
+{
+  "chapter": 4,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "曹二泥家（正准备出门上工）",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "确认张记裁缝铺被警察署侦缉股封条封锁（约腊月初十，四周前）；通过磨坊主周老四得知有人收旧布头；与赵德禄完成一次无声对峙，关系升级为互相知牌不翻的冷战；回家发现门锁鼻被换，住处已被渗透；通过加装暗簧恢复对住所的部分控制；处于高度警觉、压抑但冷静的状态",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "弄清里外墙墙下秘密（布条来源确认，但失踪者身份未知；锁鼻被换迫使他提高防御等级）",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "赵德禄已从盯梢升级为布点堵路（馄饨摊堵截）；住所已被渗透（锁鼻被换，换锁人有钥匙）；需要在不引起更大注意的情况下寻找裁缝铺内情",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "敌：赵德禄（保甲所长，持续施压+布点监控）；未知者（换锁鼻的人，可能有钥匙）；警方系统（侦缉股封条）",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "曹二泥试图查明墙下真相 vs. 赵德禄的布点堵截与渗透施压；手中物证（裤子+布条）与锁鼻被换之间的时间线联系待理清",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4
+    }
+  ]
+}

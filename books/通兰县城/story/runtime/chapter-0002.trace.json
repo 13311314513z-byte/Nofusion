@@ -1,0 +1,38 @@
+{
+  "chapter": 2,
+  "plannerInputs": [
+    "D:\\NoFusion\\books\\通兰县城\\story\\author_intent.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\current_focus.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\outline\\story_frame.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\outline\\volume_map.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\chapter_summaries.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\book_rules.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\current_state.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\pending_hooks.md",
+    "D:\\NoFusion\\books\\通兰县城\\story\\memory.db"
+  ],
+  "composerInputs": [
+    "D:\\NoFusion\\books\\通兰县城\\story\\runtime\\chapter-0002.intent.md"
+  ],
+  "selectedSources": [
+    "runtime/chapter_memo",
+    "story/current_focus.md",
+    "story/current_state.md",
+    "story/outline/story_frame.md",
+    "story/outline/volume_map.md",
+    "runtime/hook_debt#H001",
+    "runtime/hook_debt#H002",
+    "story/current_state.md#当前冲突",
+    "story/current_state.md#当前目标",
+    "story/current_state.md#主角状态",
+    "story/current_state.md#当前限制",
+    "story/pending_hooks.md#H001",
+    "story/pending_hooks.md#H002",
+    "story/pending_hooks.md#H005",
+    "story/pending_hooks.md#H007",
+    "story/pending_hooks.md#H008",
+    "story/pending_hooks.md#H009",
+    "story/pending_hooks.md#H010"
+  ],
+  "notes": []
+}
