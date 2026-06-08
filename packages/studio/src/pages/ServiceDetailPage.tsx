@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { fetchJson } from "../hooks/use-api";
 import { useServiceStore } from "../store/service";
-import { Eye, EyeOff, Loader2, ArrowLeft, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ServiceQuickLinks } from "../components/ServiceQuickLinks";
+import { ApiKeyInput } from "../components/ApiKeyInput";
+import { WritingParamPresets } from "../components/WritingParamPresets.js";
 import {
   deleteServiceConfig,
   matchServiceConfigEntryForDetail,
@@ -49,6 +51,7 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
   // -- Local form state --
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [hasStoredKey, setHasStoredKey] = useState(false);
   const [customName, setCustomName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [temperature, setTemperature] = useState("0.7");
@@ -57,6 +60,12 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
   const [detectedModel, setDetectedModel] = useState<string>("");
   const [detectedConfig, setDetectedConfig] = useState<DetectedConfig | null>(null);
   const [verifiedProbe, setVerifiedProbe] = useState<VerifiedProbe | null>(null);
+  // ✅ 写作参数（top_p/核采样 / presence_penalty/主题重复抑制 / frequency_penalty/词汇重复抑制 / seed/随机种子 / repetition_penalty/重复惩罚）
+  const [topP, setTopP] = useState("1.0");
+  const [presencePenalty, setPresencePenalty] = useState("0");
+  const [frequencyPenalty, setFrequencyPenalty] = useState("0");
+  const [seed, setSeed] = useState("");
+  const [repetitionPenalty, setRepetitionPenalty] = useState("1.0");
 
   // -- Unified connection status --
   const [status, setStatus] = useState<ConnectionStatus>({ state: "idle" });
@@ -76,6 +85,15 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
         if (typeof matched.temperature === "number") setTemperature(String(matched.temperature));
         if (matched.apiFormat === "chat" || matched.apiFormat === "responses") setApiFormat(matched.apiFormat);
         if (typeof matched.stream === "boolean") setStream(matched.stream);
+        // ✅ 恢复写作参数
+        const matchedExtra = matched.extra && typeof matched.extra === "object" && !Array.isArray(matched.extra)
+          ? (matched.extra as Record<string, unknown>)
+          : {};
+        if (typeof matchedExtra.top_p === "number") setTopP(String(matchedExtra.top_p));
+        if (typeof matchedExtra.presence_penalty === "number") setPresencePenalty(String(matchedExtra.presence_penalty));
+        if (typeof matchedExtra.frequency_penalty === "number") setFrequencyPenalty(String(matchedExtra.frequency_penalty));
+        if (typeof matchedExtra.seed === "number") setSeed(String(matchedExtra.seed));
+        if (typeof matchedExtra.repetition_penalty === "number") setRepetitionPenalty(String(matchedExtra.repetition_penalty));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -99,6 +117,7 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
       .then((result) => {
         if (cancelled) return;
         setApiKey(result.apiKey);
+        setHasStoredKey(result.hasStoredKey);
         setDetectedModel(result.detectedModel);
         setDetectedConfig(result.detectedConfig);
         setStatus(result.status);
@@ -126,12 +145,13 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
   // -- Derived state --
   const isConnected = Boolean(svc?.connected);
   const models = status.state === "connected" ? status.models : (storeModels ?? []);
+  const selectedModelValue = detectedModel || models[0]?.id || "";
   const isBusy = status.state === "testing" || status.state === "saving";
 
   // -- Handlers --
   const handleTest = async () => {
     const trimmedKey = apiKey.trim();
-    if (!trimmedKey && !isCustom) {
+    if (!trimmedKey && !isCustom && !hasStoredKey) {
       setStatus({ state: "error", message: "请先输入 API Key" });
       return;
     }
@@ -150,13 +170,16 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
       });
       if (result.ok) {
         const models = result.models ?? [];
+        const selectedModel = result.selectedModel && models.some((model) => model.id === result.selectedModel)
+          ? result.selectedModel
+          : models[0]?.id ?? "";
         const verifiedApiFormat = result.detected?.apiFormat ?? apiFormat;
         const verifiedStream = typeof result.detected?.stream === "boolean" ? result.detected.stream : stream;
         const verifiedBaseUrl = isCustom ? (result.detected?.baseUrl ?? baseUrl.trim()) : "";
         if (result.detected?.apiFormat) setApiFormat(result.detected.apiFormat);
         if (typeof result.detected?.stream === "boolean") setStream(result.detected.stream);
         if (isCustom && result.detected?.baseUrl) setBaseUrl(result.detected.baseUrl);
-        setDetectedModel(result.selectedModel ?? "");
+        setDetectedModel(selectedModel);
         setDetectedConfig(result.detected ?? null);
         setVerifiedProbe({
           apiKey: trimmedKey,
@@ -164,7 +187,7 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
           apiFormat: verifiedApiFormat,
           stream: verifiedStream,
           models,
-          selectedModel: result.selectedModel,
+          selectedModel,
           detected: result.detected,
         });
         setStatus({ state: "connected", models });
@@ -206,18 +229,33 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
     }
     setStatus({ state: "saving" });
     try {
+      // ✅ 打包写作参数
+      const extra: Record<string, number> = {};
+      const topPNum = parseFloat(topP);
+      if (!Number.isNaN(topPNum) && topPNum >= 0 && topPNum <= 1) extra.top_p = topPNum;
+      const presNum = parseFloat(presencePenalty);
+      if (!Number.isNaN(presNum) && presNum >= -2 && presNum <= 2) extra.presence_penalty = presNum;
+      const freqNum = parseFloat(frequencyPenalty);
+      if (!Number.isNaN(freqNum) && freqNum >= -2 && freqNum <= 2) extra.frequency_penalty = freqNum;
+      const seedNum = parseInt(seed, 10);
+      if (!Number.isNaN(seedNum)) extra.seed = seedNum;
+      const repNum = parseFloat(repetitionPenalty);
+      if (!Number.isNaN(repNum) && repNum >= 1 && repNum <= 2) extra.repetition_penalty = repNum;
+
       const result = await saveServiceConfig({
         effectiveServiceId,
         serviceId,
         isCustom,
         resolvedCustomName,
         apiKey: trimmedKey,
+        hasStoredKey,
         baseUrl,
         apiFormat,
         stream,
         temperature,
         detectedModel,
         verifiedProbe,
+        extra: Object.keys(extra).length > 0 ? extra : undefined,
       });
       if (result.status.state === "connected") {
         if (result.detectedConfig?.apiFormat) setApiFormat(result.detectedConfig.apiFormat);
@@ -277,17 +315,27 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
 
         {/* API Key */}
         <Field label="API Key">
-          <div className="relative">
-            <input
-              type={showKey ? "text" : "password"} value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..."
-              className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 pr-10 text-sm font-mono"
-            />
-            <button type="button" onClick={() => setShowKey((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <ApiKeyInput
+                value={apiKey}
+                visible={showKey}
+                onChange={setApiKey}
+                onToggleVisible={() => setShowKey((value) => !value)}
+                className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            {hasStoredKey && !apiKey.trim() && (
+              <span className="shrink-0 text-xs text-emerald-500 font-medium px-2 py-1 rounded bg-emerald-500/10">
+                Key 已配置
+              </span>
+            )}
           </div>
+          {hasStoredKey && !apiKey.trim() && (
+            <p className="text-xs text-muted-foreground mt-1">
+              已存储 API Key，留空并使用「测试连接」将使用已有 Key
+            </p>
+          )}
         </Field>
 
         {/* Actions + feedback */}
@@ -355,13 +403,18 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
               可用模型（{models.length}）
             </p>
             {models.length > 0 ? (
-              <div className="flex gap-1.5 flex-wrap">
-                {models.map((m) => (
-                  <span key={m.id} className="text-[11px] px-2.5 py-1 rounded-md bg-emerald-500/[0.06] text-emerald-600 dark:text-emerald-400 border border-emerald-500/15">
-                    {m.name ?? m.id}
-                  </span>
+              <select
+                value={selectedModelValue}
+                onChange={(event) => setDetectedModel(event.target.value)}
+                disabled={isBusy}
+                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-mono disabled:opacity-50"
+              >
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name ?? model.id}
+                  </option>
                 ))}
-              </div>
+              </select>
             ) : (
               <p className="text-xs text-muted-foreground/60">点击“测试连接”查看可用模型</p>
             )}
@@ -374,6 +427,17 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
             高级参数
           </summary>
           <div className="space-y-4 pt-2">
+            {/* 预设选择器：一键应用文风参数组合 */}
+            <WritingParamPresets onApply={(p) => {
+              setTemperature(p.temperature);
+              setTopP(p.topP);
+              setPresencePenalty(p.presencePenalty);
+              setFrequencyPenalty(p.frequencyPenalty);
+              setSeed(p.seed);
+              setRepetitionPenalty(p.repetitionPenalty);
+            }} />
+
+            {/* 温度（temperature） */}
             <Field label="temperature">
               <div className="flex items-center gap-3">
                 <input type="range" min="0" max="2" step="0.05" value={temperature}
@@ -381,6 +445,58 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
                 <input type="number" value={temperature} onChange={(e) => setTemperature(e.target.value)}
                   min="0" max="2" step="0.05" className="w-16 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-right font-mono" />
               </div>
+            </Field>
+
+            {/* ✅ top_p（核采样）：截断尾部低概率 token，0.85–0.95 适合叙事 */}
+            <Field label="top_p（核采样）">
+              <div className="flex items-center gap-3">
+                <input type="range" min="0" max="1" step="0.05" value={topP}
+                  onChange={(e) => setTopP(e.target.value)} className="flex-1 accent-primary h-1" />
+                <input type="number" value={topP} onChange={(e) => setTopP(e.target.value)}
+                  min="0" max="1" step="0.05" className="w-16 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-right font-mono" />
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">限制低概率 token，0.85–0.95 适合叙事类写作</p>
+            </Field>
+
+            {/* ✅ presence_penalty（主题重复抑制）：抑制已出现的主题，0–0.3 适合长文本 */}
+            <Field label="presence_penalty（主题重复抑制）">
+              <div className="flex items-center gap-3">
+                <input type="range" min="-2" max="2" step="0.1" value={presencePenalty}
+                  onChange={(e) => setPresencePenalty(e.target.value)} className="flex-1 accent-primary h-1" />
+                <input type="number" value={presencePenalty} onChange={(e) => setPresencePenalty(e.target.value)}
+                  min="-2" max="2" step="0.1" className="w-16 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-right font-mono" />
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">抑制已出现的主题/词汇，避免内容来回绕，0–0.3 适合长章节</p>
+            </Field>
+
+            {/* ✅ frequency_penalty（词汇重复抑制）：按频次惩罚高频词，0–0.3 增加词汇多样性 */}
+            <Field label="frequency_penalty（词汇重复抑制）">
+              <div className="flex items-center gap-3">
+                <input type="range" min="-2" max="2" step="0.1" value={frequencyPenalty}
+                  onChange={(e) => setFrequencyPenalty(e.target.value)} className="flex-1 accent-primary h-1" />
+                <input type="number" value={frequencyPenalty} onChange={(e) => setFrequencyPenalty(e.target.value)}
+                  min="-2" max="2" step="0.1" className="w-16 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-right font-mono" />
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">按出现频次惩罚高频词，0–0.3 增加描写词汇多样性</p>
+            </Field>
+
+            {/* ✅ seed（随机种子）：固定种子可复现输出，方便 A/B 对比调试 */}
+            <Field label="seed（随机种子）">
+              <input type="number" value={seed} onChange={(e) => setSeed(e.target.value)}
+                placeholder="留空表示随机"
+                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-mono" />
+              <p className="text-[10px] text-muted-foreground/60 mt-1">固定种子可复现输出，相同 seed + 相同 prompt 输出完全一致，适合 A/B 调试</p>
+            </Field>
+
+            {/* ✅ repetition_penalty（重复惩罚）：1.0 无惩罚，1.05–1.15 抑制 AI 痕迹 */}
+            <Field label="repetition_penalty（重复惩罚）">
+              <div className="flex items-center gap-3">
+                <input type="range" min="1" max="2" step="0.05" value={repetitionPenalty}
+                  onChange={(e) => setRepetitionPenalty(e.target.value)} className="flex-1 accent-primary h-1" />
+                <input type="number" value={repetitionPenalty} onChange={(e) => setRepetitionPenalty(e.target.value)}
+                  min="1" max="2" step="0.05" className="w-16 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-right font-mono" />
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">1.0 表示无惩罚，1.05–1.15 适合抑制 AI 痕迹</p>
             </Field>
           </div>
         </details>

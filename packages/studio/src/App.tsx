@@ -19,6 +19,7 @@ import { RadarView } from "./pages/RadarView";
 import { DoctorView } from "./pages/DoctorView";
 import { AuditView } from "./pages/AuditView";
 import { AutomationGuide } from "./pages/AutomationGuide";
+import { CoverConfigPage } from "./pages/CoverConfigPage";
 import { LanguageSelector } from "./pages/LanguageSelector";
 
 import { BookWorkspace } from "./pages/book-workspace/BookWorkspace";
@@ -305,6 +306,11 @@ export function App() {
           {route.page === "automation" && (
             <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
               <AutomationGuide nav={nav} theme={theme} t={t} />
+            </div>
+          )}
+          {route.page === "cover-config" && (
+            <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
+              <CoverConfigPage t={t as unknown as (key: string) => string} />
             </div>
           )}
         </main>

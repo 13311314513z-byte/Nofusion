@@ -19,7 +19,8 @@ export type HashRoute =
   | { page: "radar" }
   | { page: "doctor" }
   | { page: "audit" }
-  | { page: "automation" };
+  | { page: "automation" }
+  | { page: "cover-config" };
 
 function parseHash(hash: string): HashRoute {
   const path = hash.replace(/^#\/?/, "");
@@ -47,6 +48,23 @@ function parseHash(hash: string): HashRoute {
     };
   }
 
+  // Routes without dynamic parameters
+  const staticRoutes: Record<string, HashRoute> = {
+    "daemon": { page: "daemon" },
+    "logs": { page: "logs" },
+    "genres": { page: "genres" },
+    "style": { page: "style" },
+    "import": { page: "import" },
+    "radar": { page: "radar" },
+    "doctor": { page: "doctor" },
+    "diagnostics": { page: "doctor" },
+    "audit": { page: "audit" },
+    "automation": { page: "automation" },
+    "cover-config": { page: "cover-config" },
+    cover: { page: "cover-config" },
+  };
+  if (staticRoutes[path]) return staticRoutes[path];
+
   return { page: "dashboard" };
 }
 
@@ -62,13 +80,23 @@ function routeToHash(route: HashRoute): string {
     case "book-create": return "#/book/new";
     case "services": return "#/services";
     case "service-detail": return `#/services/${encodeURIComponent(route.serviceId)}`;
+    case "daemon": return "#/daemon";
+    case "logs": return "#/logs";
+    case "genres": return "#/genres";
+    case "style": return "#/style";
+    case "import": return "#/import";
+    case "radar": return "#/radar";
+    case "doctor": return "#/doctor";
+    case "audit": return "#/audit";
+    case "automation": return "#/automation";
+    case "cover-config": return "#/cover-config";
     default: return "";
   }
 }
 
 export { parseHash, routeToHash }; // for testing
 
-const HASH_PAGES = new Set(["dashboard", "chat", "book", "book-settings", "book-create", "services", "service-detail", "audit"]);
+const HASH_PAGES = new Set(["dashboard", "chat", "book", "book-settings", "book-create", "services", "service-detail", "audit", "daemon", "logs", "genres", "style", "import", "radar", "doctor", "automation", "cover-config"]);
 
 export function useHashRoute() {
   const [route, setRouteState] = useState<HashRoute>(() => parseHash(window.location.hash));

@@ -1,0 +1,44 @@
+{
+  "hooks": [
+    {
+      "hookId": "mission-quest-林渡在公审前-完成部署-活过午时并激",
+      "startChapter": 2,
+      "type": "mission/quest",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "林渡在公审前完成部署、活过午时并激活“铁嘴术”能力",
+      "payoffTiming": "immediate",
+      "notes": "系统任务激活：活过明日午时公审，倒计时13小时47分，隐藏奖励“铁嘴术”（公堂对质+30%说服力）"
+    },
+    {
+      "hookId": "mystery-查明谁在陷害-林渡以及-有人等不及了",
+      "startChapter": 2,
+      "type": "mystery",
+      "status": "progressing",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "确认青衫男人（佩戴火焰纹玉佩）是否就是周禄；揭示周禄与死者张屠户之间的债务冲突（催债杀人动机）",
+      "payoffTiming": "near-term",
+      "notes": "回溯画面中青衫男人杀张屠户；周禄手帕火焰纹与玉佩纹样一致；林渡记忆显示周禄与肉铺账目往来、先提货后付钱，张屠户可能因催债被杀"
+    },
+    {
+      "hookId": "relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
+      "startChapter": 2,
+      "type": "relationship_foreshadowing",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "林渡与周禄正面对峙结局，林渡公开翻盘或周禄反扑",
+      "payoffTiming": "near-term",
+      "notes": "公堂交锋中林渡暂时隐藏，内心宣告“三日内让周禄跪着求他”，形成强烈的反转预期"
+    },
+    {
+      "hookId": "system-mechanic-揭示-回溯之眼-的来源",
+      "startChapter": 2,
+      "type": "system_mechanic",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "揭示“回溯之眼”的来源、代价、完全机制；帮助林渡获得更多物证信息",
+      "payoffTiming": "slow-burn",
+      "notes": "本章首次触发并使用了“回溯之眼”（接触死者遗物+消耗每日1次），使用后林渡太阳穴剧痛。系统能力体系尚未完全展开"
+    }
+  ]
+}

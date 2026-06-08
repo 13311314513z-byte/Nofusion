@@ -1,0 +1,74 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "前台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 1,
+      "type": "前台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "3",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 2,
+      "type": "后台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 2,
+      "type": "前台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "4",
+      "payoffTiming": "near-term",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 3,
+      "type": "后台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 3,
+      "type": "前台",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 1,
+      "type": "情感",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "hooks": [
+    {
+      "hookId": "system-mechanic-揭示-回溯之眼-的来源",
+      "startChapter": 2,
+      "type": "system_mechanic",
+      "status": "open",
+      "lastAdvancedChapter": 2,
+      "expectedPayoff": "揭示“回溯之眼”的来源、代价、完全机制；帮助林渡获得更多物证信息",
+      "payoffTiming": "slow-burn",
+      "notes": "本章首次触发并使用了“回溯之眼”（接触死者遗物+消耗每日1次），使用后林渡太阳穴剧痛。系统能力体系尚未完全展开"
+    },
+    {
+      "hookId": "mission-quest-林渡在公审前-完成部署-活过午时并激",
+      "startChapter": 2,
+      "type": "mission/quest",
+      "status": "resolved",
+      "lastAdvancedChapter": 3,
+      "expectedPayoff": "已兑现：林渡成功在公审中激活铁嘴术，获得三天调查窗口",
+      "payoffTiming": "immediate",
+      "notes": "本章公堂对质中林渡利用铁嘴术效果（逻辑推理+反驳供状）迫使县令改判三日期限，任务目标达成。"
+    },
+    {
+      "hookId": "relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
+      "startChapter": 2,
+      "type": "relationship_foreshadowing",
+      "status": "progressing",
+      "lastAdvancedChapter": 3,
+      "expectedPayoff": "林渡与周禄正面对峙结局，林渡公开翻盘或周禄反扑",
+      "payoffTiming": "near-term",
+      "notes": "本章公堂完成公开对立，林渡指控周禄沾血，周禄反击未果，陈汝霖中立。对峙升级，但结局未定。"
+    },
+    {
+      "hookId": "mystery-查明谁在陷害-林渡以及-有人等不及了",
+      "startChapter": 2,
+      "type": "mystery",
+      "status": "progressing",
+      "lastAdvancedChapter": 4,
+      "expectedPayoff": "揭示字条‘求先生家人平安——周老三’的来源和真实意图（警告还是陷阱？周老三是谁？）",
+      "payoffTiming": "near-term",
+      "notes": "本章林渡从周禄密集布置监视网推断周禄‘确实在怕什么’，强化了周禄涉案的嫌疑；张德贵的警告‘我爹的事别查了’侧面证实案件有隐情"
+    },
+    {
+      "hookId": "threat-林渡找到家人-并确认安全-或揭露周禄挟",
+      "startChapter": 3,
+      "type": "threat",
+      "status": "progressing",
+      "lastAdvancedChapter": 4,
+      "expectedPayoff": "确认周禄的监视网规模及反制方式（县学眼线、后巷二狗子、街上三人组）",
+      "payoffTiming": "near-term",
+      "notes": "本章揭露周禄在县学（厢房窗台脚印）、家后墙（二狗子）、街上（灰布衫商人+短褐汉子+卖面小贩联动）均安插了眼线，形成一张监视网"
+    }
+  ]
+}

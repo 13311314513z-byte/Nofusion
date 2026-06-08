@@ -200,14 +200,18 @@ async function applyProjectServiceConfig(
   const serviceKey = selectedEntry ? serviceEntryKey(selectedEntry) : stringValue(llm.service);
   const secretApiKey = serviceKey ? await getStudioServiceApiKey(projectRoot, serviceKey) : "";
   const cliApiKey = options.cli?.apiKeyEnv ? options.env?.[options.cli.apiKeyEnv] ?? "" : "";
-  const apiKey = cliApiKey || options.envApiKey || secretApiKey || "";
+  // Priority: CLI > service-specific secret > generic env fallback
+  // This ensures a Kimi/Moonshot key saved via the Services page is not
+  // overridden by the global INKOS_LLM_API_KEY (which likely belongs to a
+  // different provider like DeepSeek).
+  const apiKey = cliApiKey || secretApiKey || options.envApiKey || "";
   llm.apiKey = apiKey;
   diagnostics.apiKeySource = cliApiKey
     ? "cli"
-    : options.envApiKey
-      ? "env"
-      : secretApiKey
-        ? "studio-secret"
+    : secretApiKey
+      ? "studio-secret"
+      : options.envApiKey
+        ? "env"
         : "project";
 
 }

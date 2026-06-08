@@ -1,0 +1,94 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "主线（后台）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 1,
+      "type": "角色",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "2",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 1,
+      "type": "环境",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "4",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 2,
+      "type": "主线（后台）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 3,
+      "type": "主线（前台）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "4",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 3,
+      "type": "角色",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "4",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 4,
+      "type": "主线（后台）",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "near-term",
+      "notes": "[H004, H005]"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 1,
+      "type": "角色",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "5",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H009",
+      "startChapter": 1,
+      "type": "环境",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "3",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    }
+  ]
+}

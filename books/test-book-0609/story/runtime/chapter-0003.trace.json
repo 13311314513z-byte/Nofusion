@@ -1,0 +1,34 @@
+{
+  "chapter": 3,
+  "plannerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\author_intent.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\current_focus.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\outline\\story_frame.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\outline\\volume_map.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\chapter_summaries.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\book_rules.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\current_state.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\pending_hooks.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\memory.db"
+  ],
+  "composerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\runtime\\chapter-0003.intent.md"
+  ],
+  "selectedSources": [
+    "runtime/chapter_memo",
+    "story/current_focus.md",
+    "story/audit_drift.md",
+    "story/current_state.md",
+    "story/story_bible.md",
+    "story/current_state.md#当前冲突",
+    "story/current_state.md#当前目标",
+    "story/current_state.md#主角状态",
+    "story/current_state.md#当前限制",
+    "story/chapter_summaries.md#2",
+    "story/pending_hooks.md#mission-quest-林渡在公审前-完成部署-活过午时并激",
+    "story/pending_hooks.md#mystery-查明谁在陷害-林渡以及-有人等不及了",
+    "story/pending_hooks.md#relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
+    "story/pending_hooks.md#system-mechanic-揭示-回溯之眼-的来源"
+  ],
+  "notes": []
+}

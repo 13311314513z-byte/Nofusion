@@ -7,10 +7,10 @@ import {
 } from "./service-detail-state";
 
 describe("rehydrateServiceConnectionStatus", () => {
-  it("loads saved key without probing models on page load", async () => {
+  it("loads saved-key status without exposing the full key on page load", async () => {
     const fetchJsonImpl = vi.fn(async (path: string) => {
       if (path === "/services/openai/secret") {
-        return { apiKey: "sk-live" };
+        return { hasApiKey: true, keyPreview: "sk..." };
       }
       throw new Error(`unexpected path: ${path}`);
     });
@@ -28,7 +28,8 @@ describe("rehydrateServiceConnectionStatus", () => {
     expect(fetchJsonImpl).toHaveBeenCalledTimes(1);
     expect(fetchJsonImpl).toHaveBeenCalledWith("/services/openai/secret");
     expect(result).toMatchObject({
-      apiKey: "sk-live",
+      apiKey: "",
+      hasStoredKey: true,
       detectedModel: "",
       detectedConfig: null,
       status: { state: "idle" },
@@ -183,6 +184,45 @@ describe("saveServiceConfig", () => {
       detectedConfig: { apiFormat: "chat", stream: true },
       status: { state: "connected", models: [{ id: "gpt-5.5" }] },
     });
+  });
+
+  it("persists the model selected from the available-model dropdown", async () => {
+    const bodies: unknown[] = [];
+    const fetchJsonImpl = vi.fn(async (path: string, init?: { body?: string }) => {
+      if (init?.body) bodies.push(JSON.parse(init.body));
+      if (path === "/services/moonshot/secret") return { ok: true };
+      if (path === "/services/config") return { ok: true };
+      throw new Error(`unexpected path: ${path}`);
+    });
+
+    const result = await saveServiceConfig({
+      effectiveServiceId: "moonshot",
+      serviceId: "moonshot",
+      isCustom: false,
+      resolvedCustomName: "",
+      apiKey: "sk-live",
+      baseUrl: "",
+      apiFormat: "chat",
+      stream: true,
+      temperature: "1",
+      detectedModel: "kimi-k2.5",
+      verifiedProbe: {
+        apiKey: "sk-live",
+        baseUrl: "",
+        apiFormat: "chat",
+        stream: true,
+        models: [{ id: "kimi-k2.6" }, { id: "kimi-k2.5" }],
+        selectedModel: "kimi-k2.6",
+        detected: { apiFormat: "chat", stream: true },
+      },
+      fetchJsonImpl: fetchJsonImpl as never,
+    });
+
+    expect(bodies[1]).toMatchObject({
+      service: "moonshot",
+      defaultModel: "kimi-k2.5",
+    });
+    expect(result.detectedModel).toBe("kimi-k2.5");
   });
 
   it("does not persist secrets/config when validation fails", async () => {

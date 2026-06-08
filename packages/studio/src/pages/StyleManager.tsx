@@ -5,104 +5,16 @@ import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
 import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link, ChevronDown, ChevronRight, AlertTriangle, Stethoscope, User } from "lucide-react";
 import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel.js";
+import { AITellsPanel } from "../components/style/AITellsPanel.js";
 import { AdjustmentSuggestionsPanel } from "./style-manager/AdjustmentSuggestionsPanel.js";
 import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
+import { StyleTextTab } from "./StyleTextTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
+import type { CoreStyleProfile, AuthorIndexItem, AuthorDetail, ExtractedDoc, BookSummary } from "./style-types.js";
 
-
-interface PunctuationRhythm {
-  readonly commaRatio: number;
-  readonly periodRatio: number;
-  readonly questionRatio: number;
-  readonly exclamationRatio: number;
-  readonly ellipsisRatio: number;
-  readonly semicolonRatio: number;
-}
-
-interface StyleFingerprint {
-  readonly dialogueRatio: number;
-  readonly actionDensity: number;
-  readonly psychologicalRatio: number;
-  readonly sensoryDensity: number;
-  readonly colloquialismScore: number;
-  readonly rhetoricDensity: number;
-  readonly punctuationRhythm: PunctuationRhythm;
-  readonly aiTellRisk: number;
-  readonly sensoryBreakdown: {
-    readonly visual: number;
-    readonly auditory: number;
-    readonly tactile: number;
-    readonly olfactory: number;
-    readonly gustatory: number;
-  };
-}
-
-interface CoreStyleProfile {
-  readonly sourceName: string;
-  readonly avgSentenceLength: number;
-  readonly sentenceLengthStdDev: number;
-  readonly avgParagraphLength: number;
-  readonly vocabularyDiversity: number;
-  readonly topPatterns: ReadonlyArray<string>;
-  readonly rhetoricalFeatures: ReadonlyArray<string>;
-  readonly fingerprint: StyleFingerprint;
-}
-
-interface AuthorIndexItem {
-  readonly id: string;
-  readonly name: string;
-  readonly language: "zh" | "en";
-  readonly tags: ReadonlyArray<string>;
-  readonly sourceCount: number;
-  readonly updatedAt: string;
-}
-
-interface AuthorProfile {
-  readonly id: string;
-  readonly name: string;
-  readonly language: "zh" | "en";
-  readonly tags: ReadonlyArray<string>;
-  readonly sampleStats: { readonly sourceCount: number; readonly totalChars: number; readonly avgCharsPerSource: number };
-  readonly aggregateProfile: CoreStyleProfile;
-}
-
-interface AuthorDetail {
-  readonly profile: AuthorProfile;
-  readonly sources: ReadonlyArray<{
-    readonly id: string;
-    readonly fileName: string;
-    readonly fileType: string;
-    readonly charCount: number;
-    readonly status: string;
-    readonly error?: string;
-  }>;
-}
-
-interface BookSummary {
-  readonly id: string;
-  readonly title: string;
-}
-
-interface ExtractedDoc {
-  readonly sourceName?: string;
-  readonly text: string;
-  readonly charCount: number;
-  readonly warnings: ReadonlyArray<string>;
-  /** Whether the extracted text was truncated due to maxChars limit. */
-  readonly truncated?: boolean;
-  /** Total number of chunks available (only when text was chunked). */
-  readonly totalChunks?: number;
-  /** Index of this chunk (0-based). */
-  readonly chunkIndex?: number;
-  /** Original full length before truncation. */
-  readonly originalLength?: number;
-  /** Size per chunk in characters. */
-  readonly chunkSize?: number;
-}
-
-type StyleTab = "text" | "files" | "library" | "apply";
+type StyleTab = "text" | "files" | "library" | "apply" | "detection";
 type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
 
 interface Nav { toDashboard: () => void }
@@ -163,8 +75,23 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const authorSampleInputRef = useRef<HTMLInputElement | null>(null);
 
   // Text analysis state
-  const [text, setText] = useState("");
-  const [sourceName, setSourceName] = useState("");
+  const [text, setText] = useState(() => {
+    // Restore chapter text passed from BookChaptersSection via sessionStorage
+    const saved = sessionStorage.getItem("style-chapter-text");
+    if (saved) {
+      sessionStorage.removeItem("style-chapter-text");
+      return saved;
+    }
+    return "";
+  });
+  const [sourceName, setSourceName] = useState(() => {
+    const saved = sessionStorage.getItem("style-chapter-source");
+    if (saved) {
+      sessionStorage.removeItem("style-chapter-source");
+      return saved;
+    }
+    return "";
+  });
   const [urlSource, setUrlSource] = useState("");
   const [profile, setProfile] = useState<CoreStyleProfile | null>(null);
   const [diagnostics, setDiagnostics] = useState<FullStyleDiagnostics | null>(null);
@@ -1007,6 +934,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           { key: "files", label: t("style.tabs.files") },
           { key: "library", label: t("style.tabs.library") },
           { key: "apply", label: t("style.tabs.apply") },
+          { key: "detection", label: "AI痕迹" },
         ] as const).map((tab) => (
           <button
             key={tab.key}
@@ -1024,128 +952,33 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
       {/* Tab: Text Analysis */}
       {activeTab === "text" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.sourceName")}</label>
-              <input
-                type="text"
-                value={sourceName}
-                onChange={(e) => setSourceName(e.target.value)}
-                placeholder={t("style.sourceExample")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.urlSource")}</label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={urlSource}
-                  onChange={(e) => setUrlSource(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void handleImportUrl();
-                    }
-                  }}
-                  placeholder={t("style.urlPlaceholder")}
-                  className="min-w-0 flex-1 px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
-                />
-                <button
-                  onClick={handleImportUrl}
-                  disabled={!urlSource.trim() || loading}
-                  className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-                >
-                  <Link size={14} />
-                  {t("style.importUrl")}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={12}
-                placeholder={t("style.pasteHint")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary resize-none font-mono"
-              />
-            </div>
-            <div className="flex gap-3">
-              <input
-                ref={textFileInputRef}
-                type="file"
-                accept=".txt,.md,.markdown,text/plain,text/markdown"
-                className="hidden"
-                onChange={handleTextLocalFile}
-              />
-              <button
-                onClick={() => textFileInputRef.current?.click()}
-                disabled={loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <Upload size={14} />
-                {t("style.importLocalFile")}
-              </button>
-              <button
-                onClick={handleAnalyze}
-                disabled={!text.trim() || loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnPrimary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <BarChart3 size={14} />
-                {loading ? t("style.analyzing") : t("style.analyze")}
-              </button>
-              <button
-                onClick={handleDiagnostics}
-                disabled={!text.trim() || loadingDiagnostics}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <Stethoscope size={14} />
-                {loadingDiagnostics ? "诊断中…" : "文风诊断"}
-              </button>
-            </div>
+        <StyleTextTab
+          text={text}
+          setText={setText}
+          sourceName={sourceName}
+          setSourceName={setSourceName}
+          urlSource={urlSource}
+          setUrlSource={setUrlSource}
+          profile={profile}
+          diagnostics={diagnostics}
+          loading={loading}
+          loadingDiagnostics={loadingDiagnostics}
+          textFileInputRef={textFileInputRef}
+          libraryData={libraryData}
+          c={c}
+          t={t as unknown as (key: string) => string}
+          handleTextLocalFile={handleTextLocalFile}
+          handleImportUrl={handleImportUrl}
+          handleAnalyze={handleAnalyze}
+          handleDiagnostics={handleDiagnostics}
+          renderProfileCard={renderProfileCard}
+        />
+      )}
 
-            {/* Adjustment suggestions */}
-            <div className={`border ${c.cardStatic} rounded-lg p-4`}>
-              <AdjustmentSuggestionsPanel
-                text={text}
-                onTextChange={setText}
-                diagnostics={diagnostics}
-                t={t as unknown as (key: string) => string}
-              />
-            </div>
-          </div>
-          <div className="space-y-4">
-            {renderProfileCard(profile, true)}
-            {diagnostics && (
-              <div className={`border ${c.cardStatic} rounded-lg p-5`}>
-                <StyleDiagnosticsPanel
-                  diagnostics={diagnostics}
-                  authors={libraryData?.authors.map((a) => ({ id: a.id, name: a.name })) ?? []}
-                  t={t}
-                />
-              </div>
-            )}
-            {diagnostics && (
-              <div className={`border ${c.cardStatic} rounded-lg p-5`}>
-                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <User size={14} />
-                  {t("style.authorComparison")}
-                </h3>
-                <AuthorStyleComparison
-                  text={text}
-                  onComparisonResult={() => {}}
-                  t={t as unknown as (key: string) => string}
-                />
-              </div>
-            )}
-            {!profile && !diagnostics && !loading && !loadingDiagnostics && (
-              <div className={`border border-dashed ${c.cardStatic} rounded-lg p-8 text-center text-muted-foreground text-sm italic`}>
-                {t("style.emptyHint")}
-              </div>
-            )}
-          </div>
+      {/* Tab: AI-Tells Detection */}
+      {activeTab === "detection" && (
+        <div className="max-w-2xl mx-auto py-4">
+          <AITellsPanel t={t as unknown as (key: string) => string} />
         </div>
       )}
 

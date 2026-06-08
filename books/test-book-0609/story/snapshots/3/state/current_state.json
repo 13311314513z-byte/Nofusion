@@ -1,0 +1,53 @@
+{
+  "chapter": 3,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "与县丞周禄公开对立，周禄背后有省城日军背景；家人安全受威胁",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "陈汝霖（县令）暂时中立但给予机会；县衙部分衙役可能同情",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "在三日内找到周禄杀张屠户的铁证，同时确保家人安全",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "县衙门口（正朝县学方向移动）",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "三日期限（倒计时开始）；周禄背后有省城日军势力；家人可能被挟持",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "手腕镣铐磨伤渗血，左膝磕伤；愤怒但保持冷静；已获得三天调查自由的待查嫌疑人",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3
+    }
+  ]
+}

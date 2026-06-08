@@ -1,0 +1,94 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "前台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "17-20",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "后台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "35-40",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "后台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "53-58",
+      "payoffTiming": "endgame",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 1,
+      "type": "前台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "15-18",
+      "payoffTiming": "immediate",
+      "notes": "无"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 2,
+      "type": "前台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "30-35",
+      "payoffTiming": "near-term",
+      "notes": "[H004]"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 3,
+      "type": "前台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "42-45",
+      "payoffTiming": "near-term",
+      "notes": "[H005]"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 3,
+      "type": "后台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "48-52",
+      "payoffTiming": "slow-burn",
+      "notes": "[H002, H005]"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 4,
+      "type": "前台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "60-63",
+      "payoffTiming": "immediate",
+      "notes": "[H006]"
+    },
+    {
+      "hookId": "H009",
+      "startChapter": 0,
+      "type": "后台钩子",
+      "status": "progressing",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "32-36",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    }
+  ]
+}

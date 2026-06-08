@@ -1,0 +1,53 @@
+{
+  "chapter": 5,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "与周禄对峙升级为收网倒计时；第三方势力（提前动案卷的人、翻家者）浮出水面",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "无变化",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "前往城西乱葬岗第三排找刘麻子坟墓，查证家眷住址（刘家沟）",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "城西方向（往乱葬岗）",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "三日期限剩余约一天半；周禄收网提前到天亮前（推测）；家人被软禁位置未变但屋内被翻；监视网收缩但核心威胁升级",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "紧张但冷静；裤子破损，膝盖轻伤；后背出汗黏糊；煤渣灌鞋已抖掉",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5
+    }
+  ]
+}

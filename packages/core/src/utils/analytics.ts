@@ -24,7 +24,7 @@ export function computeAnalytics(
     readonly number: number;
     readonly status: string;
     readonly wordCount: number;
-    readonly auditIssues: ReadonlyArray<string>;
+    readonly auditIssues?: ReadonlyArray<string>;
     readonly tokenUsage?: {
       readonly promptTokens: number;
       readonly completionTokens: number;
@@ -47,7 +47,7 @@ export function computeAnalytics(
 
   const categoryCounts = new Map<string, number>();
   for (const ch of chapters) {
-    for (const issue of ch.auditIssues) {
+    for (const issue of ch.auditIssues ?? []) {
       const catMatch = issue.match(/\[(?:critical|warning|info)\]\s*(.+?)[:：]/);
       const category = catMatch?.[1] ?? "未分类";
       categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
@@ -59,10 +59,10 @@ export function computeAnalytics(
     .map(([category, count]) => ({ category, count }));
 
   const chaptersWithMostIssues = [...chapters]
-    .filter((ch) => ch.auditIssues.length > 0)
-    .sort((a, b) => b.auditIssues.length - a.auditIssues.length)
+    .filter((ch) => (ch.auditIssues?.length ?? 0) > 0)
+    .sort((a, b) => (b.auditIssues?.length ?? 0) - (a.auditIssues?.length ?? 0))
     .slice(0, 5)
-    .map((ch) => ({ chapter: ch.number, issueCount: ch.auditIssues.length }));
+    .map((ch) => ({ chapter: ch.number, issueCount: ch.auditIssues?.length ?? 0 }));
 
   const statusDistribution: Record<string, number> = {};
   for (const ch of chapters) {

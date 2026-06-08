@@ -1,0 +1,104 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "人物设定",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷卷末",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "物品道具",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷终章前",
+      "payoffTiming": "endgame",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "人物关系",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第一卷中段",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 1,
+      "type": "人物设定",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 0,
+      "type": "场景地点",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷初",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 0,
+      "type": "体制/时代",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "全卷",
+      "payoffTiming": "endgame",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 5,
+      "type": "物品/信函",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷中段",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 0,
+      "type": "人物关系",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷中",
+      "payoffTiming": "mid-arc",
+      "notes": "[H007]"
+    },
+    {
+      "hookId": "H009",
+      "startChapter": 0,
+      "type": "事件背景",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第二卷末",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H010",
+      "startChapter": 0,
+      "type": "人物背景",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "第三卷中段",
+      "payoffTiming": "endgame",
+      "notes": "[H002, H007]"
+    }
+  ]
+}

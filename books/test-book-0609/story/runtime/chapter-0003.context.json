@@ -1,0 +1,75 @@
+{
+  "chapter": 3,
+  "selectedContext": [
+    {
+      "source": "runtime/chapter_memo",
+      "reason": "Carry the planner's chapter memo into governed writing.",
+      "excerpt": "goal=在公堂对质中让主角锁定“三日内让县丞认罪”的短期目标，并为日军逼近背景埋下第一笔 | golden-opening=true | ## 当前任务\n林渡在午时公审中，通过系统提示的“让关键证据开口”策略，利用县丞擦帕子细节和玉片位置信息，迫使县令将判决暂缓三日，换取调查权限。\n\n## 读者此刻在等什么\n1) 读者期待公堂上主角与县丞的正面斗智，想知道他如何从死囚翻转。\n2) 本章部分兑现——林渡没有无罪释放，但制造更强缺口：县丞当场露出破绽，背后势力第一次浮出水面，主角获得三天行动窗口。\n\n## 该兑现的 / 暂不掀的\n- 该兑现：公审对质场面 → 兑现到林渡利用铁嘴术+证据推理迫使县令改判“暂缓处置，三日内查清”。\n- 暂不掀：县丞背后的真正主使（可能是县衙里另一股势力或省城某官）→ 先压住，留到第5章通过周禄失踪线索揭开。\n\n## 日常/过渡承担什么任务\n不适用 - 本章是公堂冲突章节，无日常过渡。\n\n## 关键抉择过三连问\n- 主角本章最关键的一次选择：林渡在公堂上选择当众指出县丞衣襟上“落满灰的帕子”与血迹命案的时间矛盾，而不是直接辩解自身清白。\n  - 为什么这么做？系统提示“让关键证据‘开口’”，且主动出击能打乱县丞节奏。\n  - 符合当前利益吗？符合，不主动揭穿就会被按罪名定罪。\n  - 符合他的人设吗？符合，林渡是普通教师，但被逼到绝境，加上系统加成，冒险一搏。\n- 对手/配角本章最关键的一次选择：县丞选择矢口否认，并暗示自己“身后有人”，试图用官威压服县令。\n  - 为什么这么做？他以为林渡必死，没想到林渡当众质疑，他只能死撑并威胁。\n  - 符合当前利益吗？符合，承认就等于丢官下狱。\n  - 符合他的人设吗？符合，他是一个靠攀附上位的贪婪小吏。\n\n## 章尾必须发生的改变\n- 信息改变：林渡确认县丞帕子沾血与某桩旧案有关，县令知道县丞有猫腻但忌惮背后势力；堂下百姓议论日军将至、衙门外有带枪的“省城来客”闪过。\n- 关系改变：林渡与县丞从单方面迫害变为公开对立；县令暂时中立但倾向给林渡三天时间；林渡与周禄之间出现“失踪”悬念。\n- 权力改变：林渡从死囚变为有三天行动自由的“待查嫌疑人”（可出狱但有人监视）。\n\n## 本章 hook 账\nopen:\n- [new] 县丞背后某“大人物”派人送来一封密信，被林渡瞥见信封上的火漆印记（暗示与省城驻军有关）|| 理由：公审未翻盘，引出更大反派，同时带出日军逼近背景下地方势力勾结。\n- [new] 公审结束后，周禄没有出现，林渡在牢门口发现字条“去求先生家人平安——周老三”，笔迹仓促|| 理由：推动下一章主角走出监狱寻找周禄，牵涉到学生家庭安危，落实brief中“保护学生和家庭”的设定。\n\n## 不要做\n- 不要在公堂上让林渡直接翻盘洗清所有罪名（保留悬念和短期目标）\n- 不要引入超过3个有台词的角色（林渡、县丞、县令已够；其他衙役、百姓仅用作背景反应）\n- 不要忽略日军逼近背景，在县丞施压或县令犹豫的段落至少通过一次环境描写或百姓插话体现（如“东洋人要打过来了，县里还敢折腾冤案”“听说省城来人就是来催军粮的”）\n- 不要让系统语言显性出现（“铁嘴术”效果应通过林渡的逻辑、语气、节奏变化体现，不出现蓝色面板字样）"
+    },
+    {
+      "source": "story/current_focus.md",
+      "reason": "Current task focus for this chapter.",
+      "excerpt": "建立主角的日常生活和县城氛围。"
+    },
+    {
+      "source": "story/audit_drift.md",
+      "reason": "Carry forward audit drift guidance from the previous chapter without polluting hard state facts.",
+      "excerpt": "> 第2章审计发现以下问题，下一章写作时必须避免："
+    },
+    {
+      "source": "story/current_state.md",
+      "reason": "Preserve hard state facts referenced by the active chapter brief or hard constraints.",
+      "excerpt": "故事刚开始，主角尚未做出关键选择。"
+    },
+    {
+      "source": "story/story_bible.md",
+      "reason": "Preserve canon constraints referenced by the active chapter brief or hard constraints.",
+      "excerpt": "1931年的中国北方县城，日军逼近前夕。"
+    },
+    {
+      "source": "story/current_state.md#当前冲突",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前冲突 | 与县丞周禄的生死对立——周禄急于冤枉林渡为杀张屠户的凶手，林渡已通过回溯画面和玉佩碎片锁定周禄为真凶，但不可公开揭发"
+    },
+    {
+      "source": "story/current_state.md#当前目标",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前目标 | 活过明日午时公审，并找到翻案证据让周禄伏法（三日计划）"
+    },
+    {
+      "source": "story/current_state.md#主角状态",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "主角状态 | 刚动用“回溯之眼”，太阳穴剧痛；藏有玉佩碎片，内心已建立翻案计划，但表面屈从；银镣铐磨伤手腕"
+    },
+    {
+      "source": "story/current_state.md#当前限制",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前限制 | 身在监狱，周禄掌管司法力量；公审定于明日午时（倒计时13小时47分）；系统能力“回溯之眼”每日限用一次；仅拥有玉佩碎片一块初步证据"
+    },
+    {
+      "source": "story/chapter_summaries.md#2",
+      "reason": "Relevant episodic memory retrieved for the current chapter goal.",
+      "excerpt": "腰带扣环 | 林渡在牢中接触死者遗物触发“回溯之眼”查看张屠户死前最后画面，发现玉佩碎片真凶线索；被押至公堂，周禄连夜提审逼供；林渡藏住底牌、画圈替签字，内心确立三日翻案计划 | 林渡获得玉佩碎片并藏入衣袖；消耗“回溯之眼”1次；与周禄从疑似敌对转为明确对立但隐忍于表；系统面板恢复并下发任务 | 新埋6条线索：重生机制、被陷害者、火焰纹玉佩杀人者身份、回溯之眼来源与代价、公堂终局对峙悬念、系统公审任务"
+    },
+    {
+      "source": "story/pending_hooks.md#mission-quest-林渡在公审前-完成部署-活过午时并激",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "mission/quest | open | 林渡在公审前完成部署、活过午时并激活“铁嘴术”能力 | immediate | 系统任务激活：活过明日午时公审，倒计时13小时47分，隐藏奖励“铁嘴术”（公堂对质+30%说服力）"
+    },
+    {
+      "source": "story/pending_hooks.md#mystery-查明谁在陷害-林渡以及-有人等不及了",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "mystery | progressing | 确认青衫男人（佩戴火焰纹玉佩）是否就是周禄；揭示周禄与死者张屠户之间的债务冲突（催债杀人动机） | near-term | 回溯画面中青衫男人杀张屠户；周禄手帕火焰纹与玉佩纹样一致；林渡记忆显示周禄与肉铺账目往来、先提货后付钱，张屠户可能因催债被杀"
+    },
+    {
+      "source": "story/pending_hooks.md#relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "relationship_foreshadowing | open | 林渡与周禄正面对峙结局，林渡公开翻盘或周禄反扑 | near-term | 公堂交锋中林渡暂时隐藏，内心宣告“三日内让周禄跪着求他”，形成强烈的反转预期"
+    },
+    {
+      "source": "story/pending_hooks.md#system-mechanic-揭示-回溯之眼-的来源",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "system_mechanic | open | 揭示“回溯之眼”的来源、代价、完全机制；帮助林渡获得更多物证信息 | slow-burn | 本章首次触发并使用了“回溯之眼”（接触死者遗物+消耗每日1次），使用后林渡太阳穴剧痛。系统能力体系尚未完全展开"
+    }
+  ]
+}

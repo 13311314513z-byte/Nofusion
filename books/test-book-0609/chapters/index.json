@@ -1,0 +1,145 @@
+[
+  {
+    "number": 1,
+    "title": "第一章",
+    "filename": "0001_第一章.md",
+    "status": "drafted",
+    "wordCount": 89
+  },
+  {
+    "number": 2,
+    "title": "腰带扣环",
+    "status": "ready-for-review",
+    "wordCount": 2720,
+    "createdAt": "2026-06-08T11:33:36.644Z",
+    "updatedAt": "2026-06-08T11:33:36.644Z",
+    "auditIssues": [
+      "[info] 文末连续两次使用“三日”（“三日之内”、“三日”），与标配高频词“三天”形成微弱的词汇疲劳，但属可接受范围。",
+      "[warning] 本章新开了 4 个伏笔，但没有回收任何旧债。",
+      "[warning] 103个段落里有75个不足35字，段落被切得过碎。",
+      "[warning] 连续出现9个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 2720,
+      "postWriterNormalizeCount": 2720,
+      "postReviseCount": 0,
+      "finalCount": 2720,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 20830,
+      "completionTokens": 6307,
+      "totalTokens": 27137
+    }
+  },
+  {
+    "number": 3,
+    "title": "污渍",
+    "status": "ready-for-review",
+    "wordCount": 3143,
+    "createdAt": "2026-06-08T11:38:16.432Z",
+    "updatedAt": "2026-06-08T11:38:16.432Z",
+    "auditIssues": [
+      "[warning] 本章出现两次“猛地”（“他猛地想起”“周禄猛地站起来”），按全章约2000字计算，密度为1次/1000字，超过每3000字1次的阈值，属AI标记词高频使用。",
+      "[warning] 章节备忘“不要做”中明确要求“不要引入超过3个有台词的角色（林渡、县丞、县令已够；其他衙役、百姓仅用作背景反应）”，但本章中百姓有两句台词（“东洋人都打到锦州了，县里还有心思折腾这冤案……”“嘘！”），衙役也有一句台词（“省城来的那位，昨晚还来过一趟，给了周县丞一封信，然后就走了”），导致有台词角色超过3人，与备忘约束冲突。",
+      "[info] 本章出现“像被浇了一盆冰水”“像被踩到尾巴的毒蛇”等比喻，且“像……的”结构出现3次，建议优化避免重复。",
+      "[warning] 90个段落里有61个不足35字，段落被切得过碎。",
+      "[warning] 连续出现8个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 3143,
+      "postWriterNormalizeCount": 3143,
+      "postReviseCount": 0,
+      "finalCount": 3143,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 29358,
+      "completionTokens": 9967,
+      "totalTokens": 39325
+    }
+  },
+  {
+    "number": 4,
+    "title": "隔窗",
+    "status": "ready-for-review",
+    "wordCount": 4361,
+    "createdAt": "2026-06-08T11:41:43.515Z",
+    "updatedAt": "2026-06-08T11:41:43.515Z",
+    "auditIssues": [
+      "[info] 第4章出现一次“深吸一口气”，属于高疲劳词列表中的短语，但全章3000字内仅此一次，未达到每3000字超过1次的warning阈值。",
+      "[info] system-mechanic-回溯之眼来源伏笔本章仅提及其使用后余痛（太阳穴跳着疼），未推进揭示机制或代价，符合defer规划。",
+      "[warning] 最近3章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘（近期，可回收）。",
+      "[warning] 连续出现4个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 4361,
+      "postWriterNormalizeCount": 4361,
+      "postReviseCount": 0,
+      "finalCount": 4361,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 37127,
+      "completionTokens": 9842,
+      "totalTokens": 46969
+    }
+  },
+  {
+    "number": 5,
+    "title": "死囚录",
+    "status": "ready-for-review",
+    "wordCount": 4029,
+    "createdAt": "2026-06-08T11:48:29.924Z",
+    "updatedAt": "2026-06-08T11:48:29.924Z",
+    "auditIssues": [
+      "[warning] 章尾必须发生的改变中，物理改变要求出现'半枚鞋印'，但成稿改为'锁具划痕'，虽功能等价但形式不符；信息改变中'此人生前与周禄有利益冲突'未明确点出，仅通过'周老三'关联暗示，信息升级不够直接。",
+      "[info] threat-林渡找到家人-并确认安全-或揭露周禄挟: 状态从progressing推进到advanced（家人被转移、收网时间推断），但未resolve。该伏笔非升级伏笔（升级列为空），无critical风险，仍处于正常推进中。",
+      "[info] 最近4章（第2-5章）均为推进章，未出现高潮/爆发章，节奏偏线性。但本章结尾制造了'周禄天亮收网'的新缺口，为后续爆发积蓄势能，结构上合理。",
+      "[warning] 最近4章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘（近期，可回收）。",
+      "[warning] 连续出现3个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 4029,
+      "postWriterNormalizeCount": 4029,
+      "postReviseCount": 0,
+      "finalCount": 4029,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 41893,
+      "completionTokens": 12774,
+      "totalTokens": 54667
+    }
+  }
+]

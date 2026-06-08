@@ -1,0 +1,12 @@
+{
+  "id": "test-create-book-api",
+  "title": "test-create-book-api",
+  "platform": "other",
+  "genre": "urban",
+  "status": "outlining",
+  "targetChapters": 5,
+  "chapterWordCount": 2000,
+  "language": "zh",
+  "createdAt": "2026-06-08T14:21:00.093Z",
+  "updatedAt": "2026-06-08T14:21:00.093Z"
+}

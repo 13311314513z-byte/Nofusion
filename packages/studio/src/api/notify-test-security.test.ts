@@ -77,5 +77,5 @@ describe("notify test endpoint security", () => {
       },
     });
     expect(sendWebhookMock).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 });

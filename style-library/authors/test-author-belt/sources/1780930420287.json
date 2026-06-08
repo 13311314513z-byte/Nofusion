@@ -1,0 +1,54 @@
+{
+  "id": "1780930420287",
+  "authorId": "test-author-belt",
+  "fileName": "test-author-belt-buckle",
+  "fileType": "txt",
+  "textHash": "ed8dbd1ea20d039e",
+  "charCount": 2000,
+  "profile": {
+    "avgSentenceLength": 17,
+    "sentenceLengthStdDev": 12.9,
+    "avgParagraphLength": 29,
+    "paragraphLengthRange": {
+      "min": 2,
+      "max": 104
+    },
+    "vocabularyDiversity": 0.345,
+    "topPatterns": [
+      "林渡...(11次)",
+      "“林...(3次)",
+      "周禄...(3次)"
+    ],
+    "rhetoricalFeatures": [
+      "短句节奏(10处)"
+    ],
+    "fingerprint": {
+      "dialogueRatio": 0,
+      "actionDensity": 0.18,
+      "psychologicalRatio": 0.02,
+      "sensoryDensity": 0.32,
+      "colloquialismScore": 0.29,
+      "rhetoricDensity": 0.01,
+      "punctuationRhythm": {
+        "commaRatio": 0.55,
+        "periodRatio": 0.38,
+        "questionRatio": 0.05,
+        "exclamationRatio": 0.01,
+        "ellipsisRatio": 0.01,
+        "semicolonRatio": 0
+      },
+      "aiTellRisk": 0,
+      "sensoryBreakdown": {
+        "visual": 0.47,
+        "auditory": 0.18,
+        "tactile": 0.24,
+        "olfactory": 0.06,
+        "gustatory": 0.06
+      }
+    },
+    "sourceName": "test-author-belt-buckle",
+    "analyzedAt": "2026-06-08T14:53:40.294Z"
+  },
+  "status": "ready",
+  "extractedAt": "2026-06-08T14:53:40.294Z"
+}

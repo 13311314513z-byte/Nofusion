@@ -354,24 +354,56 @@ export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics, t 
             </button>
           </div>
 
-          {/* Diff preview modal */}
+        {/* Diff preview + Chapter save */}
           {showPreview && (
-            <AdjustmentDiffPreview
-              text={text}
-              plan={state.plan}
-              targetAuthorId={targetAuthorId}
-              authorProfileVersion={state.plan.authorProfileVersion ?? 0}
-              selectedSuggestionIds={selectedIds}
-              onAccept={(adjustedText) => {
-                actions.pushUndo(text, "Accept preview");
-                onTextChange(adjustedText);
-                actions.setPlan(null);
-                setShowPreview(false);
-                setSelectedIds([]);
-              }}
-              onCancel={() => setShowPreview(false)}
-              t={t}
-            />
+            <>
+              <AdjustmentDiffPreview
+                text={text}
+                plan={state.plan}
+                targetAuthorId={targetAuthorId}
+                authorProfileVersion={state.plan.authorProfileVersion ?? 0}
+                selectedSuggestionIds={selectedIds}
+                onAccept={(adjustedText) => {
+                  actions.pushUndo(text, "Accept preview");
+                  onTextChange(adjustedText);
+                  actions.setPlan(null);
+                  setShowPreview(false);
+                  setSelectedIds([]);
+                }}
+                onCancel={() => setShowPreview(false)}
+                t={t}
+              />
+              {/* Save-to-chapter button when coming from a book chapter */}
+              {(() => {
+                const bookId = sessionStorage.getItem("style-book-id");
+                const chNum = sessionStorage.getItem("style-chapter-number");
+                if (!bookId || !chNum) return null;
+                return (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetchJson(`/books/${bookId}/chapters/${chNum}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ content: text }),
+                        });
+                        sessionStorage.removeItem("style-book-id");
+                        sessionStorage.removeItem("style-chapter-number");
+                        actions.setError(null);
+                        // Navigate back to chapter
+                        window.location.hash = `#/book/${bookId}/chapters`;
+                      } catch (e) {
+                        actions.setError(`保存失败: ${e instanceof Error ? e.message : String(e)}`);
+                      }
+                    }}
+                    className="w-full text-xs px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-500 flex items-center justify-center gap-1 mt-2"
+                  >
+                    <CheckCircle size={14} />
+                    保存到章节 #{chNum}
+                  </button>
+                );
+              })()}
+            </>
           )}
         </>
       )}

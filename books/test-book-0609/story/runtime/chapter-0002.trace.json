@@ -1,0 +1,22 @@
+{
+  "chapter": 2,
+  "plannerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\author_intent.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\current_focus.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\outline\\story_frame.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\outline\\volume_map.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\chapter_summaries.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\book_rules.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\current_state.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\pending_hooks.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\memory.db"
+  ],
+  "composerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\test-book-0609\\story\\runtime\\chapter-0002.intent.md"
+  ],
+  "selectedSources": [
+    "runtime/chapter_memo",
+    "story/current_focus.md"
+  ],
+  "notes": []
+}

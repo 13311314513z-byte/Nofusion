@@ -449,6 +449,40 @@ describe("chatCompletion via pi-ai", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses proxy-aware native transport for OpenAI service probes when proxyUrl is configured", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "proxied-openai" } }],
+        usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = makeClient(0.7, {
+      service: "openai",
+      stream: false,
+      proxyUrl: "http://127.0.0.1:9910",
+      _piModel: {
+        ...MOCK_PI_MODEL,
+        provider: "openai",
+        baseUrl: "https://api.openai.com/v1",
+      },
+    });
+    const result = await chatCompletion(client, "gpt-4o-mini", [{ role: "user", content: "hi" }]);
+
+    expect(result.content).toBe("proxied-openai");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/chat/completions");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      dispatcher: expect.any(Object),
+    });
+    expect(mockCompleteSimple).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
   it("uses reasoning_content for custom openai-compatible non-stream responses that omit content", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

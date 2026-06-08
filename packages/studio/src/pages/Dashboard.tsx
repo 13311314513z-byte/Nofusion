@@ -357,8 +357,9 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
           <div className="space-y-2 font-mono text-xs bg-black/5 dark:bg-black/20 p-6 rounded-xl border border-border/50 max-h-[200px] overflow-y-auto scrollbar-thin">
             {logEvents.map((msg, i) => {
               const d = msg.data as { tag?: string; message?: string };
+              const eventKey = d.tag ? `${d.tag}-${i}` : `log-${i}`;
               return (
-                <div key={i} className="flex gap-3 leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
+                <div key={eventKey} className="flex gap-3 leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
                   <span className="text-primary/60 font-bold shrink-0">[{d.tag}]</span>
                   <span className="text-muted-foreground">{d.message}</span>
                 </div>

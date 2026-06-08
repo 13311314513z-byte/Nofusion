@@ -1,3 +1,15 @@
 {
-  "authors": []
+  "authors": [
+    {
+      "id": "test-author-belt",
+      "name": "测试作者腰带",
+      "language": "zh",
+      "tags": [
+        "测试",
+        "历史"
+      ],
+      "sourceCount": 1,
+      "updatedAt": "2026-06-08T14:53:40.297Z"
+    }
+  ]
 }

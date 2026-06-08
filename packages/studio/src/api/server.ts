@@ -32,6 +32,7 @@ import {
   resolveServiceModel,
   loadSecrets,
   saveSecrets,
+  setServiceApiKey,
   listModelsForService,
   isApiKeyOptionalForEndpoint,
   getAllEndpoints,
@@ -111,6 +112,7 @@ import { isIP } from "node:net";
 import { isSafeBookId } from "./safety.js";
 import { ApiError } from "./errors.js";
 import { buildStudioBookConfig, type StudioCreateBookBody } from "./book-create.js";
+
 import {
   PreprocessRequestSchema,
   RelayoutRequestSchema,
@@ -353,6 +355,11 @@ const NON_TEXT_MODEL_ID_PARTS = [
   "speech",
   "audio",
   "moderation",
+  "whisper",
+  "transcribe",
+  "sora",
+  "realtime",
+  "computer-use",
 ] as const;
 
 const SERVICE_MODELS_PROBE_TIMEOUT_MS = 4_000;
@@ -725,11 +732,80 @@ interface StudioBookListSummary {
   readonly [key: string]: unknown;
 }
 
+function normalizeStudioBookConfig(
+  bookId: string,
+  book: Record<string, unknown>,
+): Record<string, unknown> & { id: string; title: string; genre: string; status: string } {
+  const title =
+    typeof book.title === "string" && book.title.trim()
+      ? book.title
+      : typeof book.name === "string" && book.name.trim()
+        ? book.name
+        : bookId;
+  const genre =
+    typeof book.genre === "string" && book.genre.trim()
+      ? book.genre
+      : typeof book.genreProfileId === "string" && book.genreProfileId.trim()
+        ? book.genreProfileId
+        : "other";
+
+  return {
+    ...book,
+    id: bookId,
+    title,
+    genre,
+    status: typeof book.status === "string" && book.status.trim() ? book.status : "active",
+  };
+}
+
+// --- withPipeline —— 自动管理 PipelineRunner 生命周期 ---
+
+/**
+ * 创建 PipelineRunner，在 promise 完成/失败后自动 dispose。
+ * 兼容测试环境（MockPipelineRunner 可能无 dispose 或 globalRegistry 被 mock）。
+ */
+async function withPipeline<T>(
+  label: string,
+  config: PipelineConfig,
+  fn: (pipeline: PipelineRunner) => Promise<T>,
+  _ttlMs = 5 * 60_000,
+): Promise<T> {
+  const pipeline = new PipelineRunner(config);
+
+  try {
+    const result = await fn(pipeline);
+    return result;
+  } finally {
+    if (typeof (pipeline as any).dispose === "function") {
+      (pipeline as any).dispose();
+    }
+  }
+}
+
 // --- Event bus for SSE ---
 
 type EventHandler = (event: string, data: unknown) => void;
 const subscribers = new Set<EventHandler>();
-const bookCreateStatus = new Map<string, { status: "creating" | "error"; error?: string }>();
+const bookCreateStatus = new Map<string, {
+  status: "creating" | "error" | "completed";
+  error?: string;
+  phase?: string;
+  createdAt: number;
+  /** 完成/失败后保留状态的时长（ms） */
+  ttlMs: number;
+}>();
+const BOOK_CREATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟超时
+const BOOK_CREATE_TTL_MS = 60 * 1000; // 完成后保留 60 秒
+
+// 定期清理过期状态
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, st] of bookCreateStatus) {
+    if (now - st.createdAt > st.ttlMs) {
+      bookCreateStatus.delete(id);
+    }
+  }
+}, 30_000);
 
 // 内存缓存：service -> 模型列表 + 更新时间戳；避免每次 sidebar 挂载时都打真实 LLM /models
 const modelListCache = new Map<string, { models: Array<{ id: string; name: string }>; at: number }>();
@@ -741,6 +817,8 @@ interface ServiceConfigEntry {
   temperature?: number;
   apiFormat?: "chat" | "responses";
   stream?: boolean;
+  /** 写作参数透传（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty） */
+  extra?: Record<string, unknown>;
 }
 
 type LLMConfigSource = "env" | "studio";
@@ -816,7 +894,7 @@ async function loadStudioBookListSummary(
   state: StateManager,
   bookId: string,
 ): Promise<StudioBookListSummary> {
-  const book = await state.loadBookConfig(bookId);
+  const book = normalizeStudioBookConfig(bookId, await state.loadBookConfig(bookId) as Record<string, unknown>);
   const nextChapter = await state.getNextChapterNumber(bookId);
   return { ...book, chaptersWritten: nextChapter - 1 };
 }
@@ -830,6 +908,12 @@ function serviceConfigKey(entry: ServiceConfigEntry): string {
 }
 
 function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>): ServiceConfigEntry {
+  // 通用 extra 提取：透传写作参数（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+  const extra = value.extra && typeof value.extra === "object" && !Array.isArray(value.extra)
+    ? (value.extra as Record<string, unknown>)
+    : undefined;
+  const extraSpread = extra && Object.keys(extra).length > 0 ? { extra } : {};
+
   if (serviceId.startsWith("custom:")) {
     return {
       service: "custom",
@@ -838,6 +922,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
       ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
       ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
       ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+      ...extraSpread,
     };
   }
 
@@ -849,6 +934,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
       ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
       ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
       ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+      ...extraSpread,
     };
   }
 
@@ -857,6 +943,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
     ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
     ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
     ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+    ...extraSpread,
   };
 }
 
@@ -875,6 +962,10 @@ function normalizeServiceConfig(raw: unknown): ServiceConfigEntry[] {
         ...(typeof entry.temperature === "number" ? { temperature: entry.temperature } : {}),
         ...(entry.apiFormat === "chat" || entry.apiFormat === "responses" ? { apiFormat: entry.apiFormat } : {}),
         ...(typeof entry.stream === "boolean" ? { stream: entry.stream } : {}),
+        // ✅ 写作参数透传（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+        ...(entry.extra && typeof entry.extra === "object" && !Array.isArray(entry.extra)
+          ? { extra: entry.extra as Record<string, unknown> }
+          : {}),
       }));
   }
 
@@ -926,6 +1017,13 @@ function syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
   if (selectedEntry.temperature !== undefined) llm.temperature = selectedEntry.temperature;
   if (selectedEntry.apiFormat !== undefined) llm.apiFormat = selectedEntry.apiFormat;
   if (selectedEntry.stream !== undefined) llm.stream = selectedEntry.stream;
+  // ✅ 同步写作参数到顶层（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+  if (selectedEntry.extra !== undefined && typeof selectedEntry.extra === "object") {
+    const existingExtra = llm.extra && typeof llm.extra === "object" && !Array.isArray(llm.extra)
+      ? (llm.extra as Record<string, unknown>)
+      : {};
+    llm.extra = { ...existingExtra, ...selectedEntry.extra };
+  }
 }
 
 async function loadRawConfig(root: string): Promise<Record<string, unknown>> {
@@ -1277,6 +1375,13 @@ async function fetchModelsFromServiceBaseUrl(
     }, proxyUrl);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (serviceId === "moonshot") {
+        return {
+          models: [],
+          error: formatMoonshotAuthenticationError(res.status, body),
+          authFailed: res.status === 401 || res.status === 403,
+        };
+      }
       return {
         models: [],
         error: `服务商返回 ${res.status}: ${body.slice(0, 200)}`,
@@ -1293,6 +1398,17 @@ async function fetchModelsFromServiceBaseUrl(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function formatMoonshotAuthenticationError(status: number, body: string): string {
+  const detail = body.trim().slice(0, 500);
+  return [
+    `Moonshot/Kimi 认证失败（HTTP ${status}）。`,
+    "请使用 Moonshot 开放平台生成的 API Key，不要使用 kimi.com 网页登录 token、Cookie 或会员兑换码。",
+    "请打开 https://platform.moonshot.cn/console/api-keys，登录后创建或复制有效的 API Key，并且只粘贴原始密钥。",
+    "项目预设 Base URL：https://api.moonshot.cn/v1",
+    detail ? `服务商原始返回：${detail}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function buildBearerAuthHeaders(apiKey: string | undefined): Record<string, string> {
@@ -1332,17 +1448,17 @@ async function probeServiceCapabilities(args: {
       error: modelsResponse.error ?? "API Key 无效或无权访问模型列表。",
     };
   }
-  const discoveredModels = modelsResponse.models;
+  const discoveredModels = filterTextChatModels(modelsResponse.models);
   const endpoint = getAllEndpoints().find((ep) => ep.id === baseService);
   const preset = resolveServicePreset(baseService);
   const discoveredFirstModel =
     discoveredModels.find((model) => isTextChatModelId(model.id))?.id
     ?? discoveredModels[0]?.id;
-  if (discoveredModels.length > 0) {
+  if (modelsResponse.models.length > 0) {
     if (!discoveredFirstModel || !isTextChatModelId(discoveredFirstModel)) {
       return {
         ok: false,
-        models: discoveredModels,
+        models: [],
         error: "模型列表可访问，但没有发现可用于文本对话的模型。",
       };
     }
@@ -1595,7 +1711,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.get("/api/v1/books/:id", async (c) => {
     const id = c.req.param("id");
     try {
-      const book = await state.loadBookConfig(id);
+      const book = normalizeStudioBookConfig(id, await state.loadBookConfig(id) as Record<string, unknown>);
       const chapters = await state.loadChapterIndex(id);
       const nextChapter = await state.getNextChapterNumber(id);
       return c.json({ book, chapters, nextChapter });
@@ -1649,42 +1765,55 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
 
     broadcast("book:creating", { bookId, title: body.title });
-    bookCreateStatus.set(bookId, { status: "creating" });
+    bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
 
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    const tools = createInteractionToolsFromDeps(pipeline, state);
-    processProjectInteractionRequest({
-      projectRoot: root,
-      request: {
-        intent: "create_book",
-        title: body.title,
-        genre: body.genre,
-        language: body.language === "en" ? "en" : body.language === "zh" ? "zh" : undefined,
-        platform: body.platform,
-        chapterWordCount: body.chapterWordCount,
-        targetChapters: body.targetChapters,
-        blurb: [body.blurb?.trim(), sourceBundle?.contextBlock.trim()].filter(Boolean).join("\n\n"),
-      },
-      tools,
-    }).then(
-      async (result: {
-        readonly session: { readonly activeBookId?: string };
-        readonly details?: Readonly<Record<string, unknown>>;
-      }) => {
-        const createdBookId = (result.details?.bookId as string | undefined) ?? result.session.activeBookId ?? bookId;
+    const blurb = [body.blurb?.trim(), sourceBundle?.contextBlock.trim()]
+      .filter((part): part is string => Boolean(part))
+      .join("\n\n");
+
+    // 使用 withPipeline 自动管理生命周期
+    withPipeline("create-book", await buildPipelineConfig(), async (pipeline) => {
+      const tools = createInteractionToolsFromDeps(pipeline, state);
+
+      // 带超时的创建任务
+      const creationPromise = processProjectInteractionRequest({
+        projectRoot: root,
+        request: {
+          intent: "create_book",
+          title: body.title,
+          genre: body.genre,
+          language: body.language === "en" ? "en" : body.language === "zh" ? "zh" : undefined,
+          platform: body.platform,
+          chapterWordCount: body.chapterWordCount,
+          targetChapters: body.targetChapters,
+          ...(blurb ? { blurb } : {}),
+        },
+        tools,
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("书籍创建超时（10 分钟）")), BOOK_CREATE_TIMEOUT_MS);
+      });
+
+      try {
+        const result = await Promise.race([creationPromise, timeoutPromise]);
+        const r = result as {
+          readonly session: { readonly activeBookId?: string };
+          readonly details?: Readonly<Record<string, unknown>>;
+        };
+        const createdBookId = (r.details?.bookId as string | undefined) ?? r.session.activeBookId ?? bookId;
         if (sourceBundle) {
           await persistFoundationSourceBundle(state.bookDir(createdBookId), sourceBundle, "create");
         }
         const book = await loadStudioBookListSummary(state, createdBookId).catch(() => undefined);
-        bookCreateStatus.delete(createdBookId);
+        bookCreateStatus.set(bookId, { status: "completed", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
         broadcast("book:created", { bookId: createdBookId, ...(book ? { book } : {}) });
-      },
-      (e: unknown) => {
+      } catch (e: unknown) {
         const error = e instanceof Error ? e.message : String(e);
-        bookCreateStatus.set(bookId, { status: "error", error });
+        bookCreateStatus.set(bookId, { status: "error", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
         broadcast("book:error", { bookId, error });
-      },
-    );
+      }
+    }).catch(() => { /* fire-and-forget 的异常已被内部 catch 处理 */ });
 
     return c.json({ status: "creating", bookId });
   });
@@ -1695,7 +1824,16 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     if (!status) {
       return c.json({ status: "missing" }, 404);
     }
-    return c.json(status);
+    const elapsed = Date.now() - status.createdAt;
+    const remaining = Math.max(0, BOOK_CREATE_TIMEOUT_MS - elapsed);
+    return c.json({
+      status: status.status,
+      error: status.error,
+      phase: status.phase,
+      elapsedMs: elapsed,
+      remainingMs: remaining,
+      createdAt: status.createdAt,
+    });
   });
 
   // --- Chapters ---
@@ -2298,15 +2436,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     broadcast("write:start", { bookId: id });
 
     // Fire and forget — progress/completion/errors pushed via SSE
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    pipeline.writeNextChapter(id, body.wordCount).then(
-      (result) => {
-        broadcast("write:complete", { bookId: id, chapterNumber: result.chapterNumber, status: result.status, title: result.title, wordCount: result.wordCount });
-      },
-      (e) => {
-        broadcast("write:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
-      },
-    );
+    withPipeline("write-next", await buildPipelineConfig(), async (pipeline) => {
+      const result = await pipeline.writeNextChapter(id, body.wordCount);
+      broadcast("write:complete", { bookId: id, chapterNumber: result.chapterNumber, status: result.status, title: result.title, wordCount: result.wordCount });
+    }).catch((e) => {
+      broadcast("write:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    });
 
     return c.json({ status: "writing", bookId: id });
   });
@@ -2318,15 +2453,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("draft:start", { bookId: id });
 
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    pipeline.writeDraft(id, body.context, body.wordCount).then(
-      (result) => {
-        broadcast("draft:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
-      },
-      (e) => {
-        broadcast("draft:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
-      },
-    );
+    withPipeline("draft", await buildPipelineConfig(), async (pipeline) => {
+      const result = await pipeline.writeDraft(id, body.context, body.wordCount);
+      broadcast("draft:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
+    }).catch((e) => {
+      broadcast("draft:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    });
 
     return c.json({ status: "drafting", bookId: id });
   });
@@ -2522,7 +2654,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: "Unsupported cover service" }, 400);
     }
     const secrets = await loadSecrets(root);
-    return c.json({ apiKey: secrets.services[coverSecretKey(service)]?.apiKey ?? "" });
+    const fullKey = secrets.services[coverSecretKey(service)]?.apiKey ?? "";
+    const hasApiKey = fullKey.length > 0;
+    const keyPreview = hasApiKey
+      ? fullKey.length > 8
+        ? fullKey.slice(0, 4) + "..." + fullKey.slice(-4)
+        : fullKey.slice(0, 2) + "..."
+      : "";
+    return c.json({ hasApiKey, keyPreview });
   });
 
   app.put("/api/v1/cover/secret/:service", async (c) => {
@@ -2536,14 +2675,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: "API Key 包含不能放入 HTTP Authorization header 的字符，请只粘贴原始密钥。" }, 400);
     }
 
-    const secrets = await loadSecrets(root);
     const key = coverSecretKey(service);
-    if (trimmedKey) {
-      secrets.services[key] = { apiKey: trimmedKey };
-    } else {
-      delete secrets.services[key];
-    }
-    await saveSecrets(root, secrets);
+    await setServiceApiKey(root, key, trimmedKey);
     return c.json({ ok: true, service });
   });
 
@@ -2589,7 +2722,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       provider: resolveServiceProviderFamily(baseService) ?? "openai",
       baseUrl: resolvedBaseUrl,
     });
-    if (!apiKey?.trim() && !apiKeyOptional) {
+    // 如果前端未传入 API Key，尝试从 secrets 中读取已存储的 Key
+    let resolvedApiKey = apiKey?.trim() ?? "";
+    if (!resolvedApiKey && !apiKeyOptional) {
+      const secrets = await loadSecrets(root);
+      resolvedApiKey = secrets.services[service]?.apiKey?.trim() ?? "";
+    }
+    if (!resolvedApiKey && !apiKeyOptional) {
       return c.json({
         ok: false,
         error: "API Key 不能为空",
@@ -2601,7 +2740,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const probe = await probeServiceCapabilities({
       root,
       service,
-      apiKey: apiKey?.trim() ?? "",
+      apiKey: resolvedApiKey,
       baseUrl: resolvedBaseUrl,
       preferredApiFormat: apiFormat,
       preferredStream: stream,
@@ -2644,7 +2783,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.put("/api/v1/services/:service/secret", async (c) => {
     const service = c.req.param("service");
     const { apiKey } = await c.req.json<{ apiKey: string }>();
-    const secrets = await loadSecrets(root);
     const trimmedKey = apiKey?.trim() ?? "";
     if (trimmedKey) {
       if (!isHeaderSafeApiKey(trimmedKey)) {
@@ -2653,20 +2791,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           error: "API Key 只能包含可放进 HTTP Authorization header 的非空白 ASCII 字符；请不要粘贴连接失败提示或诊断文本。",
         }, 400);
       }
-      secrets.services[service] = { apiKey: trimmedKey };
-    } else {
-      delete secrets.services[service];
     }
-    await saveSecrets(root, secrets);
+    await setServiceApiKey(root, service, trimmedKey);
     return c.json({ ok: true });
   });
 
   app.get("/api/v1/services/:service/secret", async (c) => {
     const service = c.req.param("service");
     const secrets = await loadSecrets(root);
-    return c.json({
-      apiKey: secrets.services[service]?.apiKey ?? "",
-    });
+    const fullKey = secrets.services[service]?.apiKey ?? "";
+    const hasApiKey = fullKey.length > 0;
+    const keyPreview = hasApiKey
+      ? fullKey.length > 8
+        ? fullKey.slice(0, 4) + "..." + fullKey.slice(-4)
+        : fullKey.slice(0, 2) + "..."
+      : "";
+    return c.json({ hasApiKey, keyPreview });
   });
 
   app.get("/api/v1/services/models", async (c) => {
@@ -3243,6 +3383,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         currentConfig: config,
         sessionIdForSSE: bookSession.sessionId,
       }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ensure dispose in all paths
+      const disposePipeline = () => {
+        if (typeof (pipeline as any).dispose === "function") {
+          (pipeline as any).dispose();
+        }
+      };
 
       if (agentBookId && isWriteNextInstruction(instruction)) {
         const toolCallId = `direct-writer-${Date.now().toString(36)}`;
@@ -3318,6 +3464,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
             isError: true,
           });
           broadcast("agent:error", { instruction, activeBookId: agentBookId, sessionId: bookSession.sessionId, error: message });
+          disposePipeline();
           return c.json({
             error: { code: "AGENT_ACTION_FAILED", message },
             response: message,
@@ -3373,7 +3520,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
                   const title = typeof args?.title === "string" && args.title.trim()
                     ? args.title.trim()
                     : bookId;
-                  bookCreateStatus.set(bookId, { status: "creating" });
+                  bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
                   broadcast("book:creating", { bookId, title, sessionId: streamSessionId });
                 }
               }
@@ -3411,7 +3558,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
                   const bookId = resolveArchitectBookIdFromArgs(exec.args);
                   if (bookId) {
                     const error = exec.error ?? "Book creation failed";
-                    bookCreateStatus.set(bookId, { status: "error", error });
+                    bookCreateStatus.set(bookId, { status: "error", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
                     broadcast("book:error", { bookId, sessionId: streamSessionId, error });
                   }
                 }
@@ -3588,6 +3735,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       await finalizeCreatedBook();
 
       broadcast("agent:complete", { instruction, activeBookId, sessionId: bookSession.sessionId });
+      disposePipeline();
 
       return c.json({
         response: result.responseText,
@@ -4171,15 +4319,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
       if (!match) return c.json({ error: "Chapter not found" }, 404);
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
+      const pipelineConfig = await buildPipelineConfig({ externalContext: body.brief });
       const normalizedMode = body.mode ?? "spot-fix";
-      const result = await pipeline.reviseDraft(
-        id,
-        chapterNum,
-        normalizedMode as "polish" | "rewrite" | "rework" | "spot-fix" | "anti-detect",
-      );
+      const result = await withPipeline("revise-draft", pipelineConfig, async (pipeline) => {
+        return pipeline.reviseDraft(
+          id,
+          chapterNum,
+          normalizedMode as "polish" | "rewrite" | "rework" | "spot-fix" | "anti-detect",
+        );
+      });
       broadcast("revise:complete", { bookId: id, chapter: chapterNum });
       return c.json(result);
     } catch (e) {
@@ -4222,28 +4370,30 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const fmt = format ?? "txt";
 
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const tools = createInteractionToolsFromDeps(pipeline, state);
-      const bookDir = state.bookDir(id);
-      const outputPath = join(bookDir, `${id}.${fmt === "epub" ? "epub" : fmt}`);
-      const result = await processProjectInteractionRequest({
-        projectRoot: root,
-        request: {
-          intent: "export_book",
-          bookId: id,
-          format: fmt as "txt" | "md" | "epub",
-          approvedOnly,
-          outputPath,
-        },
-        tools,
-        activeBookId: id,
+      const result = await withPipeline("export-save", await buildPipelineConfig(), async (pipeline) => {
+        const tools = createInteractionToolsFromDeps(pipeline, state);
+        const bookDir = state.bookDir(id);
+        const outputPath = join(bookDir, `${id}.${fmt === "epub" ? "epub" : fmt}`);
+        const r = await processProjectInteractionRequest({
+          projectRoot: root,
+          request: {
+            intent: "export_book",
+            bookId: id,
+            format: fmt as "txt" | "md" | "epub",
+            approvedOnly,
+            outputPath,
+          },
+          tools,
+          activeBookId: id,
+        });
+        return {
+          ok: true,
+          path: (r.details?.outputPath as string | undefined) ?? outputPath,
+          format: fmt,
+          chapters: (r.details?.chaptersExported as number | undefined) ?? 0,
+        };
       });
-      return c.json({
-        ok: true,
-        path: (result.details?.outputPath as string | undefined) ?? outputPath,
-        format: fmt,
-        chapters: (result.details?.chaptersExported as number | undefined) ?? 0,
-      });
+      return c.json(result);
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -4536,11 +4686,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     try {
       const rollbackTarget = chapterNum - 1;
       const discarded = await state.rollbackToChapter(id, rollbackTarget);
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
-      pipeline.writeNextChapter(id).then(
-        (result) => broadcast("rewrite:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount }),
+      const pipelineConfig = await buildPipelineConfig({ externalContext: body.brief });
+      withPipeline("rewrite-next", pipelineConfig, async (pipeline) => {
+        const result = await pipeline.writeNextChapter(id);
+        broadcast("rewrite:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
+      }).catch(
         (e) => broadcast("rewrite:error", { bookId: id, error: e instanceof Error ? e.message : String(e) }),
       );
       return c.json({ status: "rewriting", bookId: id, chapter: chapterNum, rolledBackTo: rollbackTarget, discarded });
@@ -4559,10 +4709,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       .catch(() => ({}));
 
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
-      const result = await pipeline.resyncChapterArtifacts(id, chapterNum);
+      const result = await withPipeline("resync-chapter", await buildPipelineConfig({ externalContext: body.brief }), async (pipeline) => {
+        return pipeline.resyncChapterArtifacts(id, chapterNum);
+      });
       return c.json(result);
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -4725,7 +4874,20 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Pre-flight: check that @actalk/inkos-core is built before any style endpoint ---
+  async function ensureCoreBuilt(): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await import("@actalk/inkos-core");
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "@actalk/inkos-core is not built. Run `pnpm --filter @actalk/inkos-core exec tsc` first." };
+    }
+  }
+
   app.post("/api/v1/style/diagnostics", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
     const raw = await c.req.json().catch(() => null);
     const parsed = DiagnosticsRequestSchema.safeParse(raw);
     if (!parsed.success) {
@@ -4743,9 +4905,29 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- AI-Tells analysis for arbitrary text (standalone, not chapter-bound) ---
+
+  app.post("/api/v1/style/ai-tells", async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    if (!raw || typeof raw.text !== "string" || !raw.text.trim()) {
+      return c.json({ error: "text is required" }, 400);
+    }
+    const { text, language } = raw as { text: string; language?: string };
+    try {
+      const { analyzeAITells } = await import("@actalk/inkos-core");
+      const result = analyzeAITells(text, language === "en" ? "en" : "zh");
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // --- Style Comparison & Adjustment Plan ---
 
   app.post("/api/v1/style/compare", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
     const raw = await c.req.json().catch(() => null);
     const parsed = CompareRequestSchema.safeParse(raw);
     if (!parsed.success) {
@@ -4770,6 +4952,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   app.post("/api/v1/style/adjustments/plan", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
     const raw = await c.req.json().catch(() => null);
     const parsed = AdjustmentPlanRequestSchema.safeParse(raw);
     if (!parsed.success) {
@@ -4851,6 +5036,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         return c.json({ error: "LLM provider not configured; please check your API settings" }, 503);
       }
       const client = createLLMClient(freshConfig.llm);
+      if (!client._apiKey) {
+        return c.json({ error: "API key not configured; please set INKOS_LLM_API_KEY in project .env or global ~/.inkos/.env" }, 503);
+      }
       const model = freshConfig.llm.model ?? "deepseek-v4-flash";
 
       const result = await rewriteWithAuthorProfile({
@@ -4881,8 +5069,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("style:start", { bookId: id });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.generateStyleGuide(id, text, sourceName ?? "unknown");
+      const result = await withPipeline("style-guide", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.generateStyleGuide(id, text, sourceName ?? "unknown");
+      });
       broadcast("style:complete", { bookId: id });
       return c.json({ ok: true, result });
     } catch (e) {
@@ -5295,8 +5484,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         content: ch.content,
       }));
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.importChapters({ bookId: id, chapters });
+      const result = await withPipeline("import-chapters", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.importChapters({ bookId: id, chapters });
+      });
       broadcast("import:complete", { bookId: id, type: "chapters", count: result.importedCount });
       return c.json(result);
     } catch (e) {
@@ -5316,8 +5506,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const { splitChapters } = await import("@actalk/inkos-core");
       const chapters = [...splitChapters(text, splitRegex)];
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.importChapters({ bookId: id, chapters });
+      const result = await withPipeline("import-chapters-legacy", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.importChapters({ bookId: id, chapters });
+      });
       broadcast("import:complete", { bookId: id, type: "chapters", count: result.importedCount });
       return c.json(result);
     } catch (e) {
@@ -5335,8 +5526,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("import:start", { bookId: id, type: "canon" });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.importCanon(id, fromBookId);
+      await withPipeline("import-canon", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.importCanon(id, fromBookId);
+      });
       broadcast("import:complete", { bookId: id, type: "canon" });
       return c.json({ ok: true });
     } catch (e) {
@@ -5378,8 +5570,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           purpose: source.purpose,
         });
       }
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.planFoundationImport(id, inputs, { mode, instruction });
+      const result = await withPipeline("plan-foundation", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.planFoundationImport(id, inputs, { mode, instruction });
+      });
 
       if (result.proposed && result.roleChanges && result.foundationRevision) {
         const sourceBundle = buildFoundationSourceBundle(
@@ -5433,13 +5626,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("import:start", { bookId: id, type: "foundation" });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.commitFoundationImport(id, plan.proposed, {
-        mode: plan.mode,
-        expectedRevision: plan.foundationRevision,
-        sourceBundle: plan.sourceBundle,
+      await withPipeline("commit-foundation-plan", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.commitFoundationImport(id, plan.proposed, {
+          mode: plan.mode,
+          expectedRevision: plan.foundationRevision,
+          sourceBundle: plan.sourceBundle,
+        });
+        foundationPlans.delete(planId);
       });
-      foundationPlans.delete(planId);
       broadcast("import:complete", { bookId: id, type: "foundation" });
       return c.json({ ok: true });
     } catch (e) {
@@ -5621,8 +5815,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("fanfic:start", { bookId, title: body.title });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.initFanficBook(bookConfig, body.sourceText, body.sourceName ?? "source", (body.mode ?? "canon") as "canon");
+      await withPipeline("fanfic-init", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.initFanficBook(bookConfig, body.sourceText, body.sourceName ?? "source", (body.mode ?? "canon") as "canon");
+      });
       broadcast("fanfic:complete", { bookId });
       return c.json({ ok: true, bookId });
     } catch (e) {
@@ -5655,8 +5850,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     broadcast("fanfic:refresh:start", { bookId: id });
     try {
       const book = await state.loadBookConfig(id);
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.importFanficCanon(id, sourceText, sourceName ?? "source", (book.fanficMode ?? "canon") as "canon");
+      await withPipeline("fanfic-import-canon", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.importFanficCanon(id, sourceText, sourceName ?? "source", (book.fanficMode ?? "canon") as "canon");
+      });
       broadcast("fanfic:refresh:complete", { bookId: id });
       return c.json({ ok: true });
     } catch (e) {
@@ -5670,9 +5866,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.post("/api/v1/radar/scan", async (c) => {
     broadcast("radar:start", {});
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.runRadar();
-      await saveRadarScan(root, result);
+      const result = await withPipeline("radar-scan", await buildPipelineConfig(), async (pipeline) => {
+        const r = await pipeline.runRadar();
+        await saveRadarScan(root, r);
+        return r;
+      });
       broadcast("radar:complete", { result });
       return c.json(result);
     } catch (e) {

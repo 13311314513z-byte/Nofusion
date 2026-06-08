@@ -25,6 +25,7 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  Stethoscope,
 } from "lucide-react";
 
 interface ChapterMeta {
@@ -421,6 +422,17 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
     } finally {
       setRewritingChapters((prev) => prev.filter((n) => n !== chapterNumber));
     }
+  };
+
+  const handleStyleDiagnostics = async (chapterNumber: number, title: string) => {
+    try {
+      const content = await fetchJson<{ content: string }>(`/books/${bookId}/chapters/${chapterNumber}/content`);
+      sessionStorage.setItem("style-chapter-text", content.content);
+      sessionStorage.setItem("style-chapter-source", `${title} (#${chapterNumber})`);
+      sessionStorage.setItem("style-book-id", bookId);
+      sessionStorage.setItem("style-chapter-number", String(chapterNumber));
+    } catch { /* ignore, will navigate without pre-fill */ }
+    window.location.hash = "#/style";
   };
 
   const handleSync = async (chapterNumber: number) => {
@@ -1018,6 +1030,13 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
                           {syncingChapters.includes(ch.number)
                             ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground/20 border-t-muted-foreground rounded-full animate-spin" />
                             : <RefreshCw size={14} />}
+                        </button>
+                        <button
+                          onClick={() => handleStyleDiagnostics(ch.number, ch.title)}
+                          className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm"
+                          title="文风诊断"
+                        >
+                          <Stethoscope size={14} />
                         </button>
                       </div>
                     </td>

@@ -85,6 +85,7 @@ export {
 } from "./utils/proxy-fetch.js";
 export { assertSafeBookId, deriveBookIdFromTitle, isSafeBookId } from "./utils/book-id.js";
 export { safeChildPath } from "./utils/path-safety.js";
+export { ResourceRegistry, globalRegistry, type Resource } from "./utils/resource-registry.js";
 export {
   AutomationModeSchema,
   type AutomationMode,
@@ -271,7 +272,7 @@ export {
   type ModelInfo,
 } from "./llm/service-presets.js";
 export { resolveServiceModel, type ResolvedModel } from "./llm/service-resolver.js";
-export { loadSecrets, saveSecrets, getServiceApiKey, type SecretsFile } from "./llm/secrets.js";
+export { loadSecrets, saveSecrets, setServiceApiKey, getServiceApiKey, type SecretsFile } from "./llm/secrets.js";
 export {
   COVER_PROVIDER_PRESETS,
   coverSecretKey,

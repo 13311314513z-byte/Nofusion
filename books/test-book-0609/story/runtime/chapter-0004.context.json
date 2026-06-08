@@ -1,0 +1,95 @@
+{
+  "chapter": 4,
+  "selectedContext": [
+    {
+      "source": "runtime/chapter_memo",
+      "reason": "Carry the planner's chapter memo into governed writing.",
+      "excerpt": "goal=林渡确认家人被软禁的现状并留下未知救赎可能，初步接触关键证人张家儿子 | ## 当前任务\n林渡离开县衙后，立即前往县学验证家人安危，同时设法找到张屠户的儿子张某进行沟通。\n\n## 读者此刻在等什么\n1. 读者期待看到林渡的家人是否安全，字条上“求先生家人平安”是确有其事还是障眼法。\n2. 本章部分兑现家人威胁——确认家人被软禁，但林渡无法直接解救，留下“不明原因”的悬念，制造更强缺口。\n\n## 该兑现的 / 暂不掀的\n- 该兑现：家人被周禄手下的地痞控制在家，但并非直接绑架，而是“监视”，林渡只能通过暗号/暗示与家人短暂接触 → 兑现至“家人被软禁，但暂无性命之忧”程度\n- 暂不掀：周禄的真正动机和火焰纹玉佩详情 → 暂不掀，留到第6-7章通过物证和张屠户儿子的证词逐步揭露\n\n## 日常/过渡承担什么任务\n- [林渡从衙门跑向县学途中] → 【伏笔布设】：街景细节暗示日军临近的局势（南撤的卡车、囤积米粮的商贩），为后续日军线做铺垫\n- [林渡进入县学] → 【人设塑造与关系建立】：通过与留守学生的互动展现林渡教师身份的责任感与孩子们对他的信任，同时埋下“学生中有人在替周禄打探”的隐线\n- [林渡与家人短暂相见（隔窗对话）] → 【制造+强化钩子】：通过暗语确认家人安全，但妻子紧张地暗示“有人在盯”，林渡被迫离开，强化“被迫妥协”的情绪基调\n- [林渡前往张家儿子住处] → 【过渡与情报准备】：借由路人问路、房屋外观等细节，铺垫张家儿子的落魄处境，暗示他与张屠户关系紧张（可能是突破点）\n\n## 关键抉择过三连问\n- 主角本章最关键的一次选择：林渡决定先赴县学确认家人安全，而非立即去找张家儿子。\n  - 为什么这么做？字条内容远超预期——家人安全是硬底线，必须亲眼确认；且只有确认了家人状况，才能调整后续对抗周禄的策略。\n  - 符合当前利益吗？符合。家人是他的命门，不确认任何反击都没有意义；但短暂停留可能导致周禄的人跟踪他去找张家儿子，增加风险。\n  - 符合他的人设吗？符合。他是一个教师、一个丈夫、一个父亲——被逼入绝境时，保护家人的本能先于复仇或翻案，符合性格底色。\n- 对手/配角本章最关键的一次选择：张家儿子选择不与林渡直接见面，而是隔着门缝递出一句话：“我爹的事，别查了，小心。”\n  - 为什么这么做？他亲眼看到父亲被杀当晚的一些细节，但害怕被周禄报复；同时他隐约觉得林渡是被冤枉的，内心矛盾，不敢正面协助但也不忍心看他送死。\n  - 符合当前利益吗？符合。透露太多会被灭口，不透露又良心不安，给予模糊警告是退缩但最小风险的选择。\n  - 符合他的人设吗？符合。张屠户的儿子在设定中是懦弱的底层小贩，胆小自私但良心未泯，这种“给一半隐蔽线索”的行为贴合其性格。\n\n## 章尾必须发生的改变\n1. 信息改变：林渡确认家人被软禁，但同时获得“张家儿子可能知道关键线索”的新信息。\n2. 物理改变：林渡从被动等待转为主动调查，但行动范围受到周禄眼线的监视。\n3. 关系改变：与学生短暂的互动强化了林渡“必须活下来保护孩子们”的决心；与张家儿子建立初步的“单向知道身份”联系，为后续联手埋下伏笔。\n\n## 本章 hook 账\nopen:\n- [new] 张家儿子藏有张屠户生前最后见过的物件/信物（未明确是什么） || 理由：本章只通过隔门警告铺垫，使线索自然连接但不点破，为第5-6章揭晓提供新猎物\n- [new] 县学中一名学生“小六子”在暗处观察林渡与家人的接触，神情异样 || 理由：为周禄安插眼线做伏笔，但本章不揭示其身份，只通过细节暗示\n- [new] 林渡发现街上有名穿灰布衫的商人一直在尾随他，疑似周禄的人但也可能是其他势力 || 理由：叠加监视复杂度，为后续势力多方涉入埋引线\n\nadvance:\n- H003 \"家人安全确认\" → 林渡从字条揣测（open）升级为亲眼确认家人被监视软禁（pressured）\n- H004 \"张家儿子是关键证人\" → 从字条暗示张屠户债务冲突（open）升级为林渡尝试接触但对方拒绝正面回应（advancing）\n\nresolve:\n- S004 \"周禄的监视网络\" → 本章通过家人被软禁确认周禄拥有地痞网络（advancing → resolved, 但留后续反制空间）\n\ndefer:\n- H009 \"火焰纹玉佩真相\" → 本章不动，理由：物理物证未出现，只能等物证收集或张家儿子开口，最快第6章揭示\n\n## 不要做\n1. 不要让林渡直接见到家人被严刑拷打或重创——这章的压力要维持在中度可控的“软禁”层级，不能过早把家人推到极致危险，否则后续叙事空间会缩窄。\n2. 不要写林渡与张家儿子有长达数章的正面合作——第一次接触必须保持半隐蔽+抗拒态度，过早结盟会让悬疑感下降。\n3. 不要让林渡在这一章就直接找到关键物证或逆转证据——这章的目标是铺线索，不是翻盘。\n4. 不要写周禄在这一章出现或直接对峙——保持他在暗处的压迫感，让读者通过监视网和海量伏笔感受他的阴影。"
+    },
+    {
+      "source": "story/current_focus.md",
+      "reason": "Current task focus for this chapter.",
+      "excerpt": "建立主角的日常生活和县城氛围。"
+    },
+    {
+      "source": "story/audit_drift.md",
+      "reason": "Carry forward audit drift guidance from the previous chapter without polluting hard state facts.",
+      "excerpt": "> 第3章审计发现以下问题，下一章写作时必须避免："
+    },
+    {
+      "source": "story/current_state.md",
+      "reason": "Preserve hard state facts referenced by the active chapter brief or hard constraints.",
+      "excerpt": "| 字段 | 值 |"
+    },
+    {
+      "source": "story/story_bible.md",
+      "reason": "Preserve canon constraints referenced by the active chapter brief or hard constraints.",
+      "excerpt": "1931年的中国北方县城，日军逼近前夕。"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_titles",
+      "reason": "Keep recent title history visible to avoid repetitive chapter naming.",
+      "excerpt": "3: 污渍 | 2: 腰带扣环"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_mood_type_trail",
+      "reason": "Keep recent mood and chapter-type cadence visible before writing the next chapter.",
+      "excerpt": "3: 紧张、愤怒、紧迫 / 推进章 | 2: 紧绷中暗涌 / 推进章"
+    },
+    {
+      "source": "story/chapters#recent_endings",
+      "reason": "Show how recent chapters ended so the writer avoids structural repetition (e.g. 3 consecutive collapse endings).",
+      "excerpt": "ch1: 他转身走回桌前，拿起杯子喝了一口已经凉透的茶。 | ch2: 林渡没睁眼，但他知道，这个夜，才刚刚开始。 | ch3: 他把字条攥进掌心，转身朝县学方向跑出去。身后看热闹的人还在议论纷纷，没人注意到这个刚逃过死罪的教书先生，脚步踉跄得..."
+    },
+    {
+      "source": "story/current_state.md#当前限制",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前限制 | 三日期限（倒计时开始）；周禄背后有省城日军势力；家人可能被挟持"
+    },
+    {
+      "source": "story/current_state.md#当前冲突",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前冲突 | 与县丞周禄公开对立，周禄背后有省城日军背景；家人安全受威胁"
+    },
+    {
+      "source": "story/current_state.md#当前敌我",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前敌我 | 陈汝霖（县令）暂时中立但给予机会；县衙部分衙役可能同情"
+    },
+    {
+      "source": "story/current_state.md#当前目标",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前目标 | 在三日内找到周禄杀张屠户的铁证，同时确保家人安全"
+    },
+    {
+      "source": "story/chapter_summaries.md#2",
+      "reason": "Relevant episodic memory retrieved for the current chapter goal.",
+      "excerpt": "腰带扣环 | 林渡在牢中接触死者遗物触发“回溯之眼”查看张屠户死前最后画面，发现玉佩碎片真凶线索；被押至公堂，周禄连夜提审逼供；林渡藏住底牌、画圈替签字，内心确立三日翻案计划 | 林渡获得玉佩碎片并藏入衣袖；消耗“回溯之眼”1次；与周禄从疑似敌对转为明确对立但隐忍于表；系统面板恢复并下发任务 | 新埋6条线索：重生机制、被陷害者、火焰纹玉佩杀人者身份、回溯之眼来源与代价、公堂终局对峙悬念、系统公审任务"
+    },
+    {
+      "source": "story/chapter_summaries.md#3",
+      "reason": "Relevant episodic memory retrieved for the current chapter goal.",
+      "excerpt": "污渍 | 公堂对质：林渡利用帕子干湿矛盾指控周禄沾血，迫使县令陈汝霖给予三日期限；散衙后林渡在旗杆下发现字条，得知家人被挟持。 | 林渡从死囚变为有三天自由的待查嫌疑人；与周禄公开对立；家人安全成为新威胁。 | mission-quest resolved; mystery advanced; relationship foreshadowing advanced; new mystery (日军勾结) and threat (家人安全) seeded."
+    },
+    {
+      "source": "story/pending_hooks.md#threat-林渡找到家人-并确认安全-或揭露周禄挟",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "threat | open | 林渡找到家人并确认安全，或揭露周禄挟持家人以胁迫 | near-term | 本章结尾林渡发现字条‘快去求先生家人平安——周老三’，推断家人已被周禄控制或威胁。这是新的紧迫威胁。"
+    },
+    {
+      "source": "story/pending_hooks.md#mystery-查明谁在陷害-林渡以及-有人等不及了",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "mystery | progressing | 确认青衫男人（佩戴火焰纹玉佩）是否就是周禄；揭示周禄与死者张屠户之间债务冲突 | mid-arc | 本章林渡当众指出周禄帕子为干帕，推断原帕沾血；周禄年少时帮屠户五年刀，作案能力吻合。火焰纹玉佩未直接出现，但周禄与案件关联被强化。"
+    },
+    {
+      "source": "story/pending_hooks.md#relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "relationship_foreshadowing | progressing | 林渡与周禄正面对峙结局，林渡公开翻盘或周禄反扑 | near-term | 本章公堂完成公开对立，林渡指控周禄沾血，周禄反击未果，陈汝霖中立。对峙升级，但结局未定。"
+    },
+    {
+      "source": "story/pending_hooks.md#system-mechanic-揭示-回溯之眼-的来源",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "system_mechanic | open | 揭示“回溯之眼”的来源、代价、完全机制；帮助林渡获得更多物证信息 | slow-burn | 本章首次触发并使用了“回溯之眼”（接触死者遗物+消耗每日1次），使用后林渡太阳穴剧痛。系统能力体系尚未完全展开"
+    }
+  ]
+}

@@ -6,6 +6,11 @@ interface ServiceQuickLink {
 }
 
 const SERVICE_QUICK_LINKS: Record<string, ReadonlyArray<ServiceQuickLink>> = {
+  moonshot: [
+    { label: "登录并获取 API Key", href: "https://platform.moonshot.cn/console/api-keys" },
+    { label: "API 文档", href: "https://platform.kimi.com/docs/api/overview" },
+    { label: "模型说明", href: "https://platform.kimi.com/docs/guide/models" },
+  ],
   kkaiapi: [
     { label: "官网", href: "https://kkaiapi.com/" },
     { label: "API 文档", href: "https://kkaiapi.com/docs" },
