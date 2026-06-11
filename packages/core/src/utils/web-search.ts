@@ -69,9 +69,27 @@ export async function fetchUrl(url: string, maxChars = 8000): Promise<string> {
   const text = await res.text();
 
   if (contentType.includes("html")) {
-    return text
+    // Step 1: Strip script/style tags
+    const cleaned = text
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<aside[\s\S]*?<\/aside>/gi, "");
+
+    // Step 2: Try semantic tag extraction (article/main/content)
+    const articleMatch = cleaned.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+    const mainMatch = cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+    const contentMatch = cleaned.match(/<div[^>]*(?:class|id)\s*=\s*["'](?:content|post|entry|article|main-text|chapter-text)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+
+    let bodyHtml = cleaned;
+    if (articleMatch) bodyHtml = articleMatch[1];
+    else if (mainMatch) bodyHtml = mainMatch[1];
+    else if (contentMatch) bodyHtml = contentMatch[1];
+
+    // Step 3: Strip remaining HTML tags
+    return bodyHtml
       .replace(/<[^>]*>/g, " ")
       .replace(/\s+/g, " ")
       .trim()

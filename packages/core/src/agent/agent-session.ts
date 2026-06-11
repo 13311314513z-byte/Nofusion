@@ -576,7 +576,8 @@ async function runAgentSessionUnlocked(
       },
       transformContext: createBookContextTransform(bookId, projectRoot),
       convertToLlm: (messages) => convertAgentMessagesForModel(messages, model),
-      streamFn: streamSimple,
+      streamFn: (model: Model<Api>, context: any, options: any) =>
+        streamSimple(model, context, { ...options, maxTokens: model.maxTokens }),
       getApiKey: (provider: string) => {
         if (config.apiKey) return config.apiKey;
         return getEnvApiKey(provider);

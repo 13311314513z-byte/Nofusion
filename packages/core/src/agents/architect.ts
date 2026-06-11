@@ -151,6 +151,14 @@ export class ArchitectAgent extends BaseAgent {
       { role: "user", content: userMessage },
     ], { temperature: 0.8 });
 
+    if (response.stopReason === "length") {
+      this.log?.warn(
+        resolvedLanguage === "en"
+          ? `Architect response was truncated (stopReason=length). Foundation may be incomplete.`
+          : `架构师响应被截断（stopReason=length），基础设定可能不完整。`,
+      );
+    }
+
     return this.parseSections(response.content, resolvedLanguage);
   }
 
@@ -659,6 +667,17 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
     }
 
     const roles = this.parseRoles(rolesRaw);
+
+    // 检查 roles 段末尾是否可能被截断：如果最后一个 ---ROLE--- 没有对应的
+    // ---CONTENT---，说明输出被截断，最后一个角色卡不完整。
+    const lastRoleBlock = rolesRaw.split(/^---ROLE---$/m).filter(Boolean).pop()?.trim();
+    if (lastRoleBlock && !lastRoleBlock.includes("---CONTENT---")) {
+      this.log?.warn(
+        language === "en"
+          ? "Roles section appears truncated: last ROLE block is missing CONTENT."
+          : "角色卡段可能被截断：最后一个 ---ROLE--- 缺少 ---CONTENT---。",
+      );
+    }
     const pendingHooks = this.normalizePendingHooksSection(
       this.stripTrailingAssistantCoda(pendingHooksRaw!),
       effectiveVolumeMap,

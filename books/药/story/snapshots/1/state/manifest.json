@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "language": "zh",
+  "lastAppliedChapter": 1,
+  "projectionVersion": 1,
+  "migrationWarnings": [
+    "H001:status normalized from \"初始\" to \"open\"",
+    "H002:status normalized from \"初始\" to \"open\"",
+    "H003:status normalized from \"初始\" to \"open\"",
+    "H004:status normalized from \"初始\" to \"open\"",
+    "H005:status normalized from \"0\" to \"open\"",
+    "H006:status normalized from \"0\" to \"open\"",
+    "H007:status normalized from \"0\" to \"open\"",
+    "H008:status normalized from \"初始\" to \"open\""
+  ]
+}

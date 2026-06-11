@@ -23,6 +23,25 @@ interface AnalyticsData {
   readonly chaptersWithMostIssues: ReadonlyArray<{ readonly chapter: number; readonly issueCount: number }>;
 }
 
+interface AuditSummaryRow {
+  readonly chapterNumber: number;
+  readonly title: string;
+  readonly status: string;
+  readonly wordCount: number;
+  readonly lastScore?: number;
+  readonly issueCount: number;
+  readonly criticalCount: number;
+  readonly warningCount: number;
+  readonly infoCount: number;
+  readonly topCategories: ReadonlyArray<string>;
+}
+
+interface AuditSummaryResponse {
+  readonly rows: ReadonlyArray<AuditSummaryRow>;
+  readonly auditedCount: number;
+  readonly passedCount: number;
+}
+
 interface Nav {
   toBook: (id: string) => void;
   toDashboard: () => void;
@@ -31,6 +50,7 @@ interface Nav {
 export function Analytics({ bookId, nav, theme, t }: { bookId: string; nav: Nav; theme: Theme; t: TFunction }) {
   const c = useColors(theme);
   const { data, loading, error } = useApi<AnalyticsData>(`/books/${bookId}/analytics`);
+  const { data: auditSummary } = useApi<AuditSummaryResponse>(`/audit/books/${bookId}/summary`);
 
   if (loading) return <div className={c.muted}>{t("common.loading")}</div>;
   if (error) return <div className="text-red-400">{t("common.error")}: {error}</div>;
@@ -105,6 +125,47 @@ export function Analytics({ bookId, nav, theme, t }: { bookId: string; nav: Nav;
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Audit trend chart */}
+      {auditSummary && auditSummary.rows.filter((r) => r.lastScore != null).length > 0 && (
+        <div className={`border ${c.cardStatic} rounded-lg p-5`}>
+          <h2 className={`text-sm font-medium ${c.subtle} mb-4`}>{t("analytics.auditTrend") ?? "审计趋势"}</h2>
+          <div className="overflow-x-auto">
+            <div className="flex items-end gap-2 min-w-[400px]" style={{ height: 160 }}>
+              {auditSummary.rows
+                .filter((r) => r.lastScore != null)
+                .slice(-20)
+                .map((r) => {
+                  const h = `${Math.max(4, r.lastScore ?? 0)}%`;
+                  return (
+                    <div key={r.chapterNumber} className="flex-1 flex flex-col items-center gap-1 group relative">
+                      <div
+                        className={`w-full rounded-t cursor-pointer transition-all ${
+                          (r.lastScore ?? 0) >= 80 ? "bg-emerald-400" : (r.lastScore ?? 0) >= 60 ? "bg-amber-400" : "bg-red-400"
+                        }`}
+                        style={{ height: h }}
+                        title={`Ch${r.chapterNumber}: ${r.lastScore}分 | ${r.issueCount}问题`}
+                      />
+                      <span className="text-[10px] text-muted-foreground">{r.chapterNumber}</span>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full mb-1 hidden group-hover:block bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg z-10">
+                        Ch{r.chapterNumber} · {r.lastScore}分 · {r.issueCount}问题
+                        {r.criticalCount > 0 && ` · 🔴${r.criticalCount}`}
+                        {r.warningCount > 0 && ` · 🟠${r.warningCount}`}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-400 inline-block" /> ≥80 分</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> 60-79 分</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400 inline-block" /> &lt;60 分</span>
+            <span>{auditSummary.rows.filter((r) => r.lastScore != null).length} 章已审计</span>
+          </div>
         </div>
       )}
 

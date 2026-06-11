@@ -14,7 +14,7 @@ import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFindin
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
 import type { CoreStyleProfile, AuthorIndexItem, AuthorDetail, ExtractedDoc, BookSummary } from "./style-types.js";
 
-type StyleTab = "text" | "files" | "library" | "apply" | "detection";
+type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit";
 type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
 
 interface Nav { toDashboard: () => void }
@@ -69,7 +69,7 @@ function readLocalTextFile(file: File): Promise<string> {
 
 export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunction }) {
   const c = useColors(theme);
-  const [activeTab, setActiveTab] = useState<StyleTab>("text");
+  const [activeTab, setActiveTab] = useState<StyleTab>("import");
   const textFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileAnalysisInputRef = useRef<HTMLInputElement | null>(null);
   const authorSampleInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,7 +108,17 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [loadedChunks, setLoadedChunks] = useState<number>(1);
   const [loadingChunk, setLoadingChunk] = useState(false);
 
-  // --- Four-stage preprocess state ---
+  function stableHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36).slice(0, 6);
+}
+
+// --- Four-stage preprocess state ---
   const [activePreset, setActivePreset] = useState<PresetId>("fidelity");
   const [analysisStage, setAnalysisStage] = useState<"extracted" | "cleaned" | "relayouted">("extracted");
 
@@ -157,6 +167,9 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [newAuthorId, setNewAuthorId] = useState("");
   const [newAuthorName, setNewAuthorName] = useState("");
   const [newAuthorTags, setNewAuthorTags] = useState("");
+
+  // Audit section toggle (library browsing vs apply to book)
+  const [activeAuditSection, setActiveAuditSection] = useState<"library" | "apply">("library");
 
   // Apply state
   const [applyAuthorId, setApplyAuthorId] = useState("");
@@ -554,7 +567,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     setProfile(null);
     const stageKey = analysisStage === "extracted" ? "style.stage.extracted" : analysisStage === "cleaned" ? "style.stage.cleaned" : "style.stage.relayouted";
     setAnalyzeStatus(`已使用「${t(stageKey as any)}」版本`);
-    setActiveTab("text");
+    setActiveTab("diagnose");
   };
 
   const handleExport = () => {
@@ -927,31 +940,41 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         {t("style.title")}
       </h1>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
+      {/* Step progression — unified style analysis workflow */}
+      <div className="flex gap-0 border border-border/40 rounded-lg overflow-hidden">
         {([
-          { key: "text", label: t("style.tabs.text") },
-          { key: "files", label: t("style.tabs.files") },
-          { key: "library", label: t("style.tabs.library") },
-          { key: "apply", label: t("style.tabs.apply") },
-          { key: "detection", label: "AI痕迹" },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { key: "import", label: "1. 文本导入" },
+          { key: "diagnose", label: "2. 文风诊断" },
+          { key: "ai-detect", label: "3. AI 检测" },
+          { key: "deduplicate", label: "4. 修辞去重" },
+          { key: "audit", label: "5. 应用审计" },
+        ] as const).map((step, idx) => {
+          const stepKeys: ReadonlyArray<StyleTab> = ["import", "diagnose", "ai-detect", "deduplicate", "audit"];
+          const currentIdx = stepKeys.indexOf(activeTab);
+          const thisIdx = stepKeys.indexOf(step.key);
+          const completed = thisIdx >= 0 && thisIdx < currentIdx;
+          const active = thisIdx === currentIdx;
+          return (
+            <button
+              key={step.key}
+              onClick={() => setActiveTab(step.key)}
+              className={`flex-1 px-3 py-2.5 text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : completed
+                    ? "bg-primary/10 text-primary hover:bg-primary/15"
+                    : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              <span className="hidden sm:inline">{step.label}</span>
+              {completed && <span className="text-[10px] opacity-70 ml-1">✓</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tab: Text Analysis */}
-      {activeTab === "text" && (
+      {/* Step 1: Text Import & Analysis */}
+      {activeTab === "import" && (
         <StyleTextTab
           text={text}
           setText={setText}
@@ -975,15 +998,53 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         />
       )}
 
-      {/* Tab: AI-Tells Detection */}
-      {activeTab === "detection" && (
+      {/* Step 3: AI Detection */}
+      {activeTab === "ai-detect" && (
         <div className="max-w-2xl mx-auto py-4">
           <AITellsPanel t={t as unknown as (key: string) => string} />
         </div>
       )}
 
-      {/* Tab: File Analysis */}
-      {activeTab === "files" && (
+      {/* Step 2: Style Diagnosis */}
+      {activeTab === "diagnose" && (
+        <div className="max-w-4xl mx-auto py-4 space-y-6">
+          {profile ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">文风诊断报告</h2>
+                <button
+                  onClick={handleDiagnostics}
+                  disabled={loadingDiagnostics || !text.trim()}
+                  className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                >
+                  {loadingDiagnostics ? <div className="w-3 h-3 border-2 border-muted-foreground/20 border-t-mforeground rounded-full animate-spin" /> : <Stethoscope size={12} />}
+                  完整诊断
+                </button>
+              </div>
+              {renderProfileCard(profile, true)}
+              {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} t={t as any} />}
+            </>
+          ) : (
+            <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
+              <p className="text-sm">请在「文本导入」步骤中先粘贴或上传文本并运行分析</p>
+              <p className="text-xs mt-2">分析完成后将在此展示详细的文风诊断报告</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Rhetoric Deduplication */}
+      {activeTab === "deduplicate" && (
+        <div className="max-w-4xl mx-auto py-4 space-y-6">
+          <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
+            <p className="text-sm">修辞去重步骤</p>
+            <p className="text-xs mt-2">导入文本并完成文风诊断后，可在此进行段落去重和修辞优化</p>
+          </div>
+        </div>
+      )}
+
+      {/* Step: File Processing (shown alongside import) */}
+      {activeTab === "import" && fileText && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
@@ -1411,14 +1472,14 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Tab: Library */}
-      {activeTab === "library" && (
+      {/* Step 5: Audit - Author Library */}
+      {activeTab === "audit" && activeAuditSection === "library" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">{t("style.tabs.library")}</h3>
               <button
-                onClick={() => { setShowCreateForm(true); setActiveTab("library"); }}
+                onClick={() => { setShowCreateForm(true); setActiveAuditSection("library"); }}
                 className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} flex items-center gap-1`}
               >
                 <Plus size={12} />
@@ -1618,8 +1679,8 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Tab: Apply */}
-      {activeTab === "apply" && (
+      {/* Step 5: Audit - Apply to Book */}
+      {activeTab === "audit" && activeAuditSection === "apply" && (
         <div className="max-w-xl space-y-6">
           <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.tabs.apply")}</h3>

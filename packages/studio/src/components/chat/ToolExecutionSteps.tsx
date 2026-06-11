@@ -173,7 +173,7 @@ function useElapsedTimer(startedAt: number, active: boolean): number {
 
 // -- Pipeline operation (sub_agent) --
 
-function PipelineExecution({ exec }: { exec: ToolExecution }) {
+function PipelineExecution({ exec, onRetry }: { exec: ToolExecution; onRetry?: (instruction: string) => void }) {
   const isActive = exec.status === "running" || exec.status === "processing";
   const [open, setOpen] = useState(isActive);
   const elapsedMs = useElapsedTimer(exec.startedAt, isActive);
@@ -229,6 +229,14 @@ function PipelineExecution({ exec }: { exec: ToolExecution }) {
               {exec.error}
             </div>
           )}
+          {exec.status === "error" && exec.agent === "architect" && onRetry && (
+            <button
+              onClick={() => onRetry(exec.label)}
+              className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+            >
+              重试建书
+            </button>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -272,6 +280,7 @@ function UtilityToolsGroup({ execs }: { execs: ToolExecution[] }) {
 
 export interface ToolExecutionStepsProps {
   executions: ToolExecution[];
+  onRetry?: (instruction: string) => void;
 }
 
 /**
@@ -305,14 +314,14 @@ export function groupToolExecutionsChronologically(executions: ToolExecution[]):
   return groups;
 }
 
-export function ToolExecutionSteps({ executions }: ToolExecutionStepsProps) {
+export function ToolExecutionSteps({ executions, onRetry }: ToolExecutionStepsProps) {
   const groups = useMemo(() => groupToolExecutionsChronologically(executions), [executions]);
 
   return (
     <div className="space-y-2 mt-2">
       {groups.map((g, i) =>
         g.type === "pipeline"
-          ? <PipelineExecution key={g.exec.id} exec={g.exec} />
+          ? <PipelineExecution key={g.exec.id} exec={g.exec} onRetry={onRetry} />
           : <UtilityToolsGroup key={`utils-${i}`} execs={g.execs} />
       )}
     </div>

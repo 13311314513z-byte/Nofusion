@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "src"),
       "@actalk/inkos-core": resolve(__dirname, "../core/src/index.ts"),
+      "@actalk/inkos-core/browser": resolve(__dirname, "../core/src/browser-index.ts"),
     },
   },
   test: {

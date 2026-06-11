@@ -168,6 +168,33 @@ export function logError(message: string): void {
 }
 
 /**
+ * Standard JSON output format for CLI --json flag.
+ * All commands should emit { status, error?, data?, meta? } for scriptable consumption.
+ */
+export interface JsonOutput<D = unknown, M = Record<string, unknown>> {
+  readonly status: "ok" | "error";
+  readonly error?: string;
+  readonly data?: D;
+  readonly meta?: M;
+}
+
+export function formatJsonOutput<D, M extends Record<string, unknown> = Record<string, unknown>>(
+  dataOrError: D | Error,
+  meta?: M,
+): string {
+  if (dataOrError instanceof Error) {
+    return JSON.stringify(
+      Object.assign({ status: "error" as const, error: dataOrError.message }, meta ? { meta } : {}),
+      null, 2,
+    );
+  }
+  return JSON.stringify(
+    Object.assign({ status: "ok" as const, data: dataOrError }, meta ? { meta } : {}),
+    null, 2,
+  );
+}
+
+/**
  * Resolve book-id: if provided use it, otherwise auto-detect when exactly one book exists.
  * Validates that the book actually exists.
  */

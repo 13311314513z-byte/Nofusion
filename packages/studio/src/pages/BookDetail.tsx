@@ -164,6 +164,11 @@ export function BookDetail({
   const [settingsWordCount, setSettingsWordCount] = useState<number | null>(null);
   const [settingsTargetChapters, setSettingsTargetChapters] = useState<number | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<BookStatus | null>(null);
+  const [settingsVolumeCount, setSettingsVolumeCount] = useState<number | null>(null);
+  const [settingsCurrentVolume, setSettingsCurrentVolume] = useState<number | null>(null);
+  const [settingsKeywords, setSettingsKeywords] = useState<string | null>(null);
+  const [settingsTargetAudience, setSettingsTargetAudience] = useState<string | null>(null);
+  const [settingsSerializationStatus, setSettingsSerializationStatus] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("txt");
   const [exportApprovedOnly, setExportApprovedOnly] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
@@ -384,6 +389,11 @@ export function BookDetail({
       if (settingsWordCount !== null) body.chapterWordCount = settingsWordCount;
       if (settingsTargetChapters !== null) body.targetChapters = settingsTargetChapters;
       if (settingsStatus !== null) body.status = settingsStatus;
+      if (settingsVolumeCount !== null) body.volumeCount = settingsVolumeCount;
+      if (settingsCurrentVolume !== null) body.currentVolume = settingsCurrentVolume;
+      if (settingsKeywords !== null) body.keywords = settingsKeywords.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+      if (settingsTargetAudience !== null) body.targetAudience = settingsTargetAudience;
+      if (settingsSerializationStatus !== null) body.serializationStatus = settingsSerializationStatus;
       await fetchJson(`/books/${bookId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -564,6 +574,11 @@ export function BookDetail({
   const currentWordCount = settingsWordCount ?? book.chapterWordCount;
   const currentTargetChapters = settingsTargetChapters ?? book.targetChapters ?? 0;
   const currentStatus = settingsStatus ?? (book.status as BookStatus);
+  const currentVolumeCount = settingsVolumeCount ?? book.volumeCount ?? null;
+  const currentCurrentVolume = settingsCurrentVolume ?? book.currentVolume ?? null;
+  const currentKeywords = settingsKeywords ?? book.keywords?.join(", ") ?? "";
+  const currentTargetAudience = settingsTargetAudience ?? book.targetAudience ?? "";
+  const currentSerializationStatus = settingsSerializationStatus ?? book.serializationStatus ?? "";
   const roles = rolesData?.roles ?? [];
   const majorRoleCount = roles.filter((role) => role.roleTier === "major").length;
   const minorRoleCount = roles.filter((role) => role.roleTier === "minor").length;
@@ -777,6 +792,58 @@ export function BookDetail({
               <option value="outlining">{t("book.statusOutlining")}</option>
               <option value="completed">{t("book.statusCompleted")}</option>
               <option value="dropped">{t("book.statusDropped")}</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.volumeCount")}</label>
+            <input
+              type="number"
+              min={1}
+              value={currentVolumeCount ?? ""}
+              onChange={(e) => setSettingsVolumeCount(e.target.value ? Number(e.target.value) : null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.currentVolume")}</label>
+            <input
+              type="number"
+              min={1}
+              value={currentCurrentVolume ?? ""}
+              onChange={(e) => setSettingsCurrentVolume(e.target.value ? Number(e.target.value) : null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.keywords")}</label>
+            <input
+              value={currentKeywords}
+              onChange={(e) => setSettingsKeywords(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-40"
+              placeholder="悬疑, 商战"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.targetAudience")}</label>
+            <input
+              value={currentTargetAudience}
+              onChange={(e) => setSettingsTargetAudience(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-36"
+              placeholder="悬疑推理爱好者"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.serializationStatus")}</label>
+            <select
+              value={currentSerializationStatus}
+              onChange={(e) => setSettingsSerializationStatus(e.target.value || null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50"
+            >
+              <option value="">{t("common.notSet")}</option>
+              <option value="draft">{t("book.statusDraft")}</option>
+              <option value="serializing">{t("book.serializing")}</option>
+              <option value="completed">{t("book.statusCompleted")}</option>
+              <option value="hiatus">{t("book.hiatus")}</option>
             </select>
           </div>
           <button

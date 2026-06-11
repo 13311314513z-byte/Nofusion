@@ -742,18 +742,22 @@ function normalizeStudioBookConfig(
       : typeof book.name === "string" && book.name.trim()
         ? book.name
         : bookId;
+  const name = title;
   const genre =
     typeof book.genre === "string" && book.genre.trim()
       ? book.genre
       : typeof book.genreProfileId === "string" && book.genreProfileId.trim()
         ? book.genreProfileId
         : "other";
+  const genreProfileId = genre;
 
   return {
     ...book,
     id: bookId,
     title,
+    name,
     genre,
+    genreProfileId,
     status: typeof book.status === "string" && book.status.trim() ? book.status : "active",
   };
 }
@@ -797,8 +801,8 @@ const bookCreateStatus = new Map<string, {
 const BOOK_CREATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟超时
 const BOOK_CREATE_TTL_MS = 60 * 1000; // 完成后保留 60 秒
 
-// 定期清理过期状态
-setInterval(() => {
+// 定期清理过期状态（保存 timer 引用以便进程退出时清理）
+const bookCreateCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [id, st] of bookCreateStatus) {
     if (now - st.createdAt > st.ttlMs) {
@@ -806,6 +810,9 @@ setInterval(() => {
     }
   }
 }, 30_000);
+
+// 进程退出时主动清理 timer
+process.once("beforeExit", () => clearInterval(bookCreateCleanupTimer));
 
 // 内存缓存：service -> 模型列表 + 更新时间戳；避免每次 sidebar 挂载时都打真实 LLM /models
 const modelListCache = new Map<string, { models: Array<{ id: string; name: string }>; at: number }>();
@@ -1804,6 +1811,26 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         const createdBookId = (r.details?.bookId as string | undefined) ?? r.session.activeBookId ?? bookId;
         if (sourceBundle) {
           await persistFoundationSourceBundle(state.bookDir(createdBookId), sourceBundle, "create");
+        }
+        // Persist extended BookConfig fields (volumeCount, currentVolume, keywords, etc.)
+        // that the interactive agent does not handle during creation.
+        if (bookConfig.volumeCount !== undefined || bookConfig.currentVolume !== undefined || bookConfig.keywords !== undefined || bookConfig.targetAudience !== undefined || bookConfig.serializationStatus !== undefined) {
+          try {
+            const existing = await state.loadBookConfig(createdBookId);
+            const patched = {
+              ...existing,
+              ...(bookConfig.volumeCount !== undefined ? { volumeCount: bookConfig.volumeCount } : {}),
+              ...(bookConfig.currentVolume !== undefined ? { currentVolume: bookConfig.currentVolume } : {}),
+              ...(bookConfig.keywords !== undefined ? { keywords: bookConfig.keywords } : {}),
+              ...(bookConfig.targetAudience !== undefined ? { targetAudience: bookConfig.targetAudience } : {}),
+              ...(bookConfig.serializationStatus !== undefined ? { serializationStatus: bookConfig.serializationStatus } : {}),
+              updatedAt: new Date().toISOString(),
+            };
+            await state.saveBookConfig(createdBookId, patched);
+          } catch {
+            // Best-effort: extended fields are optional; failure to persist them
+            // should not block book creation.
+          }
         }
         const book = await loadStudioBookListSummary(state, createdBookId).catch(() => undefined);
         bookCreateStatus.set(bookId, { status: "completed", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
@@ -3390,7 +3417,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         }
       };
 
-      if (agentBookId && isWriteNextInstruction(instruction)) {
+      try {
+        if (agentBookId && isWriteNextInstruction(instruction)) {
         const toolCallId = `direct-writer-${Date.now().toString(36)}`;
         const toolArgs = { agent: "writer", bookId: agentBookId };
         broadcast("tool:start", {
@@ -3464,7 +3492,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
             isError: true,
           });
           broadcast("agent:error", { instruction, activeBookId: agentBookId, sessionId: bookSession.sessionId, error: message });
-          disposePipeline();
           return c.json({
             error: { code: "AGENT_ACTION_FAILED", message },
             response: message,
@@ -3735,7 +3762,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       await finalizeCreatedBook();
 
       broadcast("agent:complete", { instruction, activeBookId, sessionId: bookSession.sessionId });
-      disposePipeline();
 
       return c.json({
         response: result.responseText,
@@ -3744,6 +3770,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           ...(bookSession.bookId ? { activeBookId: bookSession.bookId } : {}),
         },
       });
+      } finally {
+        disposePipeline();
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         throw e;
@@ -4049,6 +4078,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         : null;
       const apiFormat = normalizeAuditApiFormat(config?.service, config?.apiFormat);
       const api = resolveAuditApiProtocol(config?.service, apiFormat);
+
+      // Determine the primary writing service from project config
+      let writingService = "";
+      try {
+        const projectConfig = await loadProjectConfig(root);
+        writingService = projectConfig?.llm?.provider ?? "";
+      } catch { /* fallback */ }
+
       return c.json({
         service: config?.service ?? null,
         model: config?.model ?? null,
@@ -4059,6 +4096,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         connected: Boolean(auditKey),
         auditKeyFingerprint: fingerprint(auditKey),
         writingKeyFingerprint: fingerprint(writingKey ?? ""),
+        writingService: writingService || config?.service || "",
         keySeparated: Boolean(auditKey && auditKey !== writingKey),
       });
     } catch (e) {
@@ -4290,7 +4328,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         projectRoot: root,
         bookId: id,
       });
-      const result = await auditor.auditChapter(bookDir, content, chapterNum, book.genre);
+      const result = await auditor.auditChapter(bookDir, content, chapterNum, book.genre, {
+        distillationRules: await loadDistillationRules(bookDir),
+      });
       await persistManualAuditResult(id, chapterNum, result);
       broadcast("audit:complete", { bookId: id, chapter: chapterNum, passed: result.passed });
       return c.json(result);
@@ -4299,6 +4339,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: String(e) }, 500);
     }
   });
+
+  /** Load distillation rules from book's style_distillation.json if it exists. */
+  async function loadDistillationRules(bookDir: string): Promise<string[]> {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const raw = await readFile(join(bookDir, "story", "style_distillation.json"), "utf-8");
+      const data = JSON.parse(raw) as { rules?: ReadonlyArray<{ instruction?: string; enabled?: boolean }> };
+      if (!data.rules) return [];
+      return data.rules
+        .filter((r) => r.enabled !== false && r.instruction)
+        .map((r) => r.instruction!);
+    } catch {
+      return [];
+    }
+  }
 
   // --- Revise ---
 
@@ -4345,7 +4401,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     try {
       const artifact = await buildExportArtifact(state, id, {
-        format: format as "txt" | "md" | "epub",
+        format: format as "txt" | "md" | "epub" | "html",
         approvedOnly,
       });
       const responseBody = typeof artifact.payload === "string"
@@ -4379,7 +4435,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           request: {
             intent: "export_book",
             bookId: id,
-            format: fmt as "txt" | "md" | "epub",
+            format: fmt as "txt" | "md" | "epub" | "html",
             approvedOnly,
             outputPath,
           },
@@ -4395,7 +4451,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       });
       return c.json(result);
     } catch (e) {
-      return c.json({ error: String(e) }, 500);
+      const msg = e instanceof Error ? e.message : String(e);
+      // Provide a more specific error for empty books
+      if (msg.includes("no chapters") || msg.includes("No chapters") || msg.includes("empty")) {
+        return c.json({ error: "当前书籍没有可导出的章节，请先创作章节内容。" }, 400);
+      }
+      return c.json({ error: `导出失败：${msg}` }, 500);
     }
   });
 
@@ -4654,6 +4715,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       targetChapters?: number;
       status?: string;
       language?: string;
+      volumeCount?: number;
+      currentVolume?: number;
+      keywords?: string[];
+      targetAudience?: string;
+      serializationStatus?: string;
     }>();
     try {
       const book = await state.loadBookConfig(id);
@@ -4663,6 +4729,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         ...(updates.targetChapters !== undefined ? { targetChapters: Number(updates.targetChapters) } : {}),
         ...(updates.status !== undefined ? { status: updates.status as typeof book.status } : {}),
         ...(updates.language !== undefined ? { language: updates.language as "zh" | "en" } : {}),
+        ...(updates.volumeCount !== undefined ? { volumeCount: Number(updates.volumeCount) } : {}),
+        ...(updates.currentVolume !== undefined ? { currentVolume: Number(updates.currentVolume) } : {}),
+        ...(updates.keywords !== undefined ? { keywords: updates.keywords } : {}),
+        ...(updates.targetAudience !== undefined ? { targetAudience: updates.targetAudience } : {}),
+        ...(updates.serializationStatus !== undefined ? { serializationStatus: updates.serializationStatus as "draft" | "serializing" | "completed" | "hiatus" } : {}),
         updatedAt: new Date().toISOString(),
       };
       await state.saveBookConfig(id, updated);
@@ -5446,6 +5517,333 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const { inspectText: runInspect } = await import("./style-preprocess-adapter.js");
       const result = runInspect(text, checks);
       return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Rhetoric Deduplication ---
+
+  /**
+   * POST /api/v1/style/rhetoric/rewrite
+   * Build a deduplication prompt for the given findings.
+   * The caller sends the prompt to the LLM provider separately.
+   */
+  app.post("/api/v1/style/rhetoric/rewrite", async (c) => {
+    const raw = await c.req.json<{
+      text: string;
+      findings?: unknown[];
+      categories?: string[];
+      mode?: string;
+    }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { buildDedupePrompt, detectDuplicateRhetoric } = await import("@actalk/inkos-core");
+      // Support both `findings` (pre-computed) and `categories` (frontend shorthand)
+      const findings = raw.findings ?? (raw.categories?.length
+        ? raw.categories.map((cat) => ({
+            category: cat,
+            label: cat,
+            count: 0,
+            perThousandChars: 0,
+            severity: "low" as const,
+            examples: [] as Array<{ text: string }>,
+          }))
+        : detectDuplicateRhetoric(raw.text, "zh").findings);
+      const prompt = buildDedupePrompt(raw.text, findings as any[], (raw.mode ?? "replace") as any);
+      return c.json({ prompt });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/rhetoric/aware-prompt
+   * Build a rhetoric-aware system prompt for Pipeline writer.
+   */
+  app.post("/api/v1/style/rhetoric/aware-prompt", async (c) => {
+    const raw = await c.req.json<{
+      basePrompt: string;
+      contextText: string;
+      maxPerThousandChars?: Record<string, number>;
+    }>();
+    if (!raw.basePrompt || !raw.contextText) return c.json({ error: "basePrompt and contextText are required" }, 400);
+    try {
+      const { buildRhetoricAwarePrompt } = await import("@actalk/inkos-core");
+      const prompt = buildRhetoricAwarePrompt(raw.basePrompt, raw.contextText, raw.maxPerThousandChars);
+      return c.json({ prompt });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Paragraph Deduplication ---
+
+  /**
+   * POST /api/v1/style/paragraph/dedup
+   * Detect duplicate and similar paragraphs in text.
+   */
+  app.post("/api/v1/style/paragraph/dedup", async (c) => {
+    const raw = await c.req.json<{ text: string; threshold?: number; minLength?: number }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { detectDuplicateParagraphs } = await import("@actalk/inkos-core");
+      const result = detectDuplicateParagraphs(raw.text, {
+        similarityThreshold: raw.threshold ?? 0.8,
+        minParagraphLength: raw.minLength ?? 20,
+      });
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Readability Score ---
+
+  /**
+   * GET /api/v1/style/readability/score
+   * Compute readability score for the given text.
+   */
+  app.get("/api/v1/style/readability/score", async (c) => {
+    const text = c.req.query("text");
+    if (!text?.trim()) return c.json({ error: "text query parameter is required" }, 400);
+    try {
+      const { computeReadabilityScore } = await import("@actalk/inkos-core");
+      const score = computeReadabilityScore(text);
+      return c.json(score);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Author Search ---
+
+  /**
+   * POST /api/v1/style/authors/search
+   * Search the internet for author works.
+   */
+  app.post("/api/v1/style/authors/search", async (c) => {
+    const raw = await c.req.json<{ authorName: string; language?: string }>();
+    if (!raw.authorName?.trim()) return c.json({ error: "authorName is required" }, 400);
+    try {
+      const { searchAuthorWorks } = await import("./author-search.js");
+      const results = await searchAuthorWorks({
+        authorName: raw.authorName.trim(),
+        language: (raw.language ?? "zh") as "zh" | "en",
+      });
+      return c.json({ results });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/fetch
+   * Fetch content from a URL for author analysis.
+   */
+  app.post("/api/v1/style/authors/fetch", async (c) => {
+    const raw = await c.req.json<{ url: string; maxChars?: number }>();
+    if (!raw.url?.trim()) return c.json({ error: "url is required" }, 400);
+    try {
+      const { fetchUrl } = await import("@actalk/inkos-core");
+      const content = await fetchUrl(raw.url, raw.maxChars ?? 8000);
+      return c.json({ content });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/samples/write
+   * Write a fetched author sample to local MD file.
+   */
+  app.post("/api/v1/style/authors/samples/write", async (c) => {
+    const raw = await c.req.json<{
+      authorId: string;
+      authorName: string;
+      sourceUrl: string;
+      fetchedAt: string;
+      content: string;
+      charCount: number;
+    }>();
+    if (!raw.authorId || !raw.content) return c.json({ error: "authorId and content are required" }, 400);
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) {
+      return c.json({ error: "Project root not available. Set INKOS_PROJECT_ROOT env var or x-project-root header." }, 400);
+    }
+    try {
+      const { writeAuthorSample } = await import("./author-sample-writer.js");
+      const result = await writeAuthorSample(prjRoot, raw);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Author Distillation ---
+
+  /**
+   * POST /api/v1/style/authors/:authorId/distillations
+   * Generate a new distillation draft from the current author profile.
+   */
+  app.post("/api/v1/style/authors/:authorId/distillations", async (c) => {
+    const authorId = c.req.param("authorId");
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) {
+      return c.json({ error: "Project root not available." }, 400);
+    }
+    try {
+      const {
+        getAuthorProfile,
+        generateDistillation,
+        loadDistillationEvidence,
+        loadDistillationOverrides,
+        saveDistillationDraft,
+        loadCurrentDistillation,
+      } = await import("@actalk/inkos-core");
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      if (!authorData) return c.json({ error: "Author not found" }, 404);
+      // Load existing overrides as previous distillation context
+      const evidence = await loadDistillationEvidence(prjRoot, authorId);
+      const overrides = await loadDistillationOverrides(prjRoot, authorId);
+      const previous = await loadCurrentDistillation(prjRoot, authorId);
+      // Merge overrides into previous
+      const mergedPrevious = previous
+        ? { ...previous, rules: overrides.length > 0 ? overrides : previous.rules }
+        : undefined;
+      const result = generateDistillation({
+        profile: authorData.profile,
+        sources: authorData.sources,
+        evidence: [...evidence],
+        previous: mergedPrevious,
+      });
+      await saveDistillationDraft(prjRoot, authorId, result.distillation, result.markdown);
+      return c.json(result.distillation, 201);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * GET /api/v1/style/authors/:authorId/distillations/current
+   * Get the current distillation (draft or published).
+   */
+  app.get("/api/v1/style/authors/:authorId/distillations/current", async (c) => {
+    const authorId = c.req.param("authorId");
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) return c.json({ error: "Project root not available." }, 400);
+    try {
+      const { loadCurrentDistillation, getAuthorProfile } = await import("@actalk/inkos-core");
+      const distillation = await loadCurrentDistillation(prjRoot, authorId);
+      if (!distillation) return c.json({ error: "No distillation found. Generate one first." }, 404);
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      const currentProfileVersion = authorData?.profile.version ?? distillation.authorProfileVersion;
+      return c.json({
+        ...distillation,
+        isStale: distillation.authorProfileVersion !== currentProfileVersion,
+        currentAuthorProfileVersion: currentProfileVersion,
+      });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * PATCH /api/v1/style/authors/:authorId/distillations/current
+   * Update distillation overrides (enable/disable rules, manual edits).
+   */
+  app.patch("/api/v1/style/authors/:authorId/distillations/current", async (c) => {
+    const authorId = c.req.param("authorId");
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) return c.json({ error: "Project root not available." }, 400);
+    try {
+      const body = await c.req.json<{ overrides: unknown[] }>();
+      const {
+        saveDistillationOverrides,
+        loadCurrentDistillation,
+        saveDistillationDraft,
+        generateDistillation,
+        getAuthorProfile,
+        loadDistillationEvidence,
+      } = await import("@actalk/inkos-core");
+      if (!body.overrides || !Array.isArray(body.overrides)) {
+        return c.json({ error: "overrides array is required" }, 400);
+      }
+      await saveDistillationOverrides(prjRoot, authorId, body.overrides as any);
+      // Regenerate draft with overrides
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      if (!authorData) return c.json({ error: "Author not found" }, 404);
+      const evidence = await loadDistillationEvidence(prjRoot, authorId);
+      const previous = await loadCurrentDistillation(prjRoot, authorId);
+      const result = generateDistillation({
+        profile: authorData.profile,
+        sources: authorData.sources,
+        evidence: [...evidence],
+        previous: previous ?? undefined,
+      });
+      await saveDistillationDraft(prjRoot, authorId, result.distillation, result.markdown);
+      return c.json(result.distillation);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/:authorId/distillations/current/publish
+   * Publish the current distillation as an immutable version.
+   */
+  app.post("/api/v1/style/authors/:authorId/distillations/current/publish", async (c) => {
+    const authorId = c.req.param("authorId");
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) return c.json({ error: "Project root not available." }, 400);
+    try {
+      const {
+        loadCurrentDistillation,
+        publishDistillation,
+        getAuthorProfile,
+      } = await import("@actalk/inkos-core");
+      const distillation = await loadCurrentDistillation(prjRoot, authorId);
+      if (!distillation) return c.json({ error: "No distillation to publish" }, 400);
+      if (distillation.sampleAdequacy === "insufficient") {
+        return c.json({ error: "Insufficient samples — cannot publish. Add more sources first." }, 400);
+      }
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      const currentVersion = authorData?.profile.version ?? distillation.authorProfileVersion;
+      if (distillation.authorProfileVersion !== currentVersion) {
+        return c.json({
+          error: "Author profile has changed since this distillation was generated. Regenerate first.",
+          stale: true,
+        }, 400);
+      }
+      // Load markdown from current.md
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      let markdown = "";
+      try {
+        markdown = await readFile(
+          join(prjRoot, "style-library", "authors", authorId, "distillation", "current.md"),
+          "utf-8",
+        );
+      } catch { /* use empty */ }
+      const published = await publishDistillation(prjRoot, authorId, distillation, markdown);
+      return c.json(published);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * GET /api/v1/style/authors/:authorId/distillations/versions
+   * List published distillation versions.
+   */
+  app.get("/api/v1/style/authors/:authorId/distillations/versions", async (c) => {
+    const authorId = c.req.param("authorId");
+    const prjRoot = process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || "";
+    if (!prjRoot) return c.json({ error: "Project root not available." }, 400);
+    try {
+      const { listDistillationVersions } = await import("@actalk/inkos-core");
+      const versions = await listDistillationVersions(prjRoot, authorId);
+      return c.json({ versions });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }

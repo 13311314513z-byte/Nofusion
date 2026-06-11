@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { fetchJson } from "../hooks/use-api";
+import { fetchJson, useApi } from "../hooks/use-api";
 import { useServiceStore } from "../store/service";
-import { Loader2, ArrowLeft, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Trash2, ShieldCheck, FileText, Stethoscope } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ServiceQuickLinks } from "../components/ServiceQuickLinks";
 import { ApiKeyInput } from "../components/ApiKeyInput";
@@ -20,6 +20,10 @@ import {
 
 interface Nav {
   toServices: () => void;
+  toAudit?: () => void;
+  toStyle?: () => void;
+  toDoctor?: () => void;
+  toDashboard?: () => void;
 }
 
 function DetailSkeleton() {
@@ -103,6 +107,8 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
   const effectiveServiceId = isCustom ? `custom:${resolvedCustomName}` : serviceId;
   const label = isCustom ? (customName || persistedCustomName || "自定义服务") : (svc?.label ?? serviceId);
   const storeModels = useServiceStore((s) => s.modelsByService[effectiveServiceId]);
+  const { data: overridesData } = useApi<{ overrides: Record<string, { provider?: string; model?: string }> }>("/project/model-overrides");
+  const { data: auditConfig } = useApi<{ service: string | null; model: string | null }>("/audit/config");
 
   useEffect(() => {
     let cancelled = false;
@@ -279,13 +285,33 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
   return (
     <div className="max-w-xl mx-auto space-y-6">
       {/* Back */}
-      <button
-        onClick={nav.toServices}
-        className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors"
-      >
-        <ArrowLeft size={14} />
-        返回服务商管理
-      </button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={nav.toServices}
+          className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors"
+        >
+          <ArrowLeft size={14} />
+          返回服务商管理
+        </button>
+        {nav.toAudit && (
+          <button onClick={nav.toAudit} className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors">
+            <ShieldCheck size={14} />
+            审计配置
+          </button>
+        )}
+        {nav.toStyle && (
+          <button onClick={nav.toStyle} className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors">
+            <FileText size={14} />
+            文风分析
+          </button>
+        )}
+        {nav.toDoctor && (
+          <button onClick={nav.toDoctor} className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors">
+            <Stethoscope size={14} />
+            诊断
+          </button>
+        )}
+      </div>
 
       {/* Title + status */}
       <div className="flex items-center gap-3">
@@ -409,14 +435,48 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
                 disabled={isBusy}
                 className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-mono disabled:opacity-50"
               >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name ?? model.id}
-                  </option>
-                ))}
+                {models.map((model) => {
+                  const tags: string[] = [];
+                  if ((model as any).contextWindow >= 32000) tags.push("32k");
+                  if ((model as any).contextWindow >= 128000) tags.push("128k");
+                  if ((model as any).maxOutput >= 4096) tags.push("高输出");
+                  const tagStr = tags.length > 0 ? ` [${tags.join("/")}]` : "";
+                  return (
+                    <option key={model.id} value={model.id}>
+                      {model.name ?? model.id}{tagStr}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <p className="text-xs text-muted-foreground/60">点击“测试连接”查看可用模型</p>
+            )}
+          </div>
+        )}
+
+        {/* Agent & audit usage */}
+        {isConnected && overridesData?.overrides && (
+          <div className="pt-2 border-t border-border/20 space-y-1">
+            <p className="text-xs text-muted-foreground/70 font-medium uppercase tracking-wider">
+              使用此服务的模块
+            </p>
+            {(Object.entries(overridesData.overrides) as Array<[string, { provider?: string; model?: string }]>)
+              .filter(([, entry]) => entry.provider === effectiveServiceId)
+              .map(([agent, entry]) => (
+                <div key={agent} className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground capitalize">{agent}</span>
+                  <span className="font-mono text-foreground">{entry.model ?? "默认"}</span>
+                </div>
+              ))
+            }
+            {auditConfig?.service === effectiveServiceId && (
+              <div className="flex items-center gap-2 text-xs text-amber-600">
+                <span className="text-muted-foreground">auditor</span>
+                <span className="font-mono">{auditConfig.model ?? "默认"} (审计)</span>
+              </div>
+            )}
+            {!(Object.entries(overridesData.overrides) as Array<[string, { provider?: string; model?: string }]>).some(([, e]) => e.provider === effectiveServiceId) && auditConfig?.service !== effectiveServiceId && (
+              <p className="text-xs text-muted-foreground/60">当前没有模块使用此服务</p>
             )}
           </div>
         )}

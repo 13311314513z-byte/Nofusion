@@ -28,6 +28,11 @@ export interface BookCreateFormState {
   readonly targetChapters: string;
   readonly chapterWordCount: string;
   readonly brief: string;
+  readonly volumeCount: string;
+  readonly currentVolume: string;
+  readonly keywords: string;
+  readonly targetAudience: string;
+  readonly serializationStatus: string;
 }
 
 export interface BookCreatePayload {
@@ -39,6 +44,11 @@ export interface BookCreatePayload {
   readonly chapterWordCount: number;
   readonly blurb: string;
   readonly foundationSources?: ReadonlyArray<FoundationSourceInput>;
+  readonly volumeCount?: number;
+  readonly currentVolume?: number;
+  readonly keywords?: ReadonlyArray<string>;
+  readonly targetAudience?: string;
+  readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
 }
 
 export interface DraftSummaryRow {
@@ -86,6 +96,15 @@ interface PlatformCopy {
   readonly chapterWordCountLabel: string;
   readonly briefLabel: string;
   readonly briefPlaceholder: string;
+  readonly volumeCountLabel: string;
+  readonly currentVolumeLabel: string;
+  readonly keywordsLabel: string;
+  readonly targetAudienceLabel: string;
+  readonly serializationStatusLabel: string;
+  readonly serializationStatusDraft: string;
+  readonly serializationStatusSerializing: string;
+  readonly serializationStatusCompleted: string;
+  readonly serializationStatusHiatus: string;
   readonly createBook: string;
   readonly creatingBook: string;
   readonly creationStatus: string;
@@ -138,6 +157,15 @@ const PAGE_COPY: Record<"zh" | "en", PlatformCopy> = {
     chapterWordCountLabel: "每章字数",
     briefLabel: "故事简介 / 核心设定",
     briefPlaceholder: "写清世界观、主角、目标、核心冲突和第一阶段方向。例如：近未来港口城，主角是水货账房，想洗白却被旧账拖回港口旧案。",
+    volumeCountLabel: "总卷数",
+    currentVolumeLabel: "当前卷",
+    keywordsLabel: "关键词（逗号分隔）",
+    targetAudienceLabel: "目标读者",
+    serializationStatusLabel: "连载状态",
+    serializationStatusDraft: "存稿",
+    serializationStatusSerializing: "连载中",
+    serializationStatusCompleted: "已完结",
+    serializationStatusHiatus: "暂停",
     createBook: "创建书籍",
     creatingBook: "创建中…",
     creationStatus: "正在创建书籍，完成后会自动进入工作台。",
@@ -174,6 +202,15 @@ const PAGE_COPY: Record<"zh" | "en", PlatformCopy> = {
     chapterWordCountLabel: "Words per chapter",
     briefLabel: "Story brief / core premise",
     briefPlaceholder: "Include the world, protagonist, goal, core conflict, and first arc direction.",
+    volumeCountLabel: "Volume count",
+    currentVolumeLabel: "Current volume",
+    keywordsLabel: "Keywords (comma separated)",
+    targetAudienceLabel: "Target audience",
+    serializationStatusLabel: "Serialization",
+    serializationStatusDraft: "Draft",
+    serializationStatusSerializing: "Serializing",
+    serializationStatusCompleted: "Completed",
+    serializationStatusHiatus: "Hiatus",
     createBook: "Create book",
     creatingBook: "Creating…",
     creationStatus: "Creating the book. The workspace will open automatically when it is ready.",
@@ -217,6 +254,11 @@ export function defaultBookCreateForm(language: "zh" | "en"): BookCreateFormStat
     targetChapters: "200",
     chapterWordCount: defaultChapterWordsForLanguage(language),
     brief: "",
+    volumeCount: "",
+    currentVolume: "",
+    keywords: "",
+    targetAudience: "",
+    serializationStatus: "",
   };
 }
 
@@ -239,6 +281,11 @@ export function isBookCreateFormReady(form: BookCreateFormState): boolean {
   );
 }
 
+function parseKeywords(value: string): string[] | undefined {
+  const parts = value.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : undefined;
+}
+
 export function buildBookCreatePayload(
   form: BookCreateFormState,
   language: "zh" | "en",
@@ -256,6 +303,13 @@ export function buildBookCreatePayload(
     targetChapters,
     chapterWordCount,
     blurb: form.brief.trim(),
+    volumeCount: parsePositiveInteger(form.volumeCount) ?? undefined,
+    currentVolume: parsePositiveInteger(form.currentVolume) ?? undefined,
+    keywords: parseKeywords(form.keywords),
+    targetAudience: form.targetAudience.trim() || undefined,
+    serializationStatus: (["draft", "serializing", "completed", "hiatus"] as const).includes(form.serializationStatus as any)
+      ? (form.serializationStatus as "draft" | "serializing" | "completed" | "hiatus")
+      : undefined,
   };
 }
 
@@ -528,6 +582,11 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
       targetChapters: draft.targetChapters ? String(draft.targetChapters) : current.targetChapters,
       chapterWordCount: draft.chapterWordCount ? String(draft.chapterWordCount) : current.chapterWordCount,
       brief: draftBrief || current.brief,
+      volumeCount: current.volumeCount,
+      currentVolume: current.currentVolume,
+      keywords: current.keywords,
+      targetAudience: current.targetAudience,
+      serializationStatus: current.serializationStatus,
     }));
   };
 
@@ -790,6 +849,67 @@ export function BookCreate({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunc
               placeholder={copy.briefPlaceholder}
             />
           </label>
+
+          {/* BookConfig extended fields */}
+          <details className="rounded-md border border-border/40 px-4 py-3 text-sm">
+            <summary className="cursor-pointer text-xs font-bold uppercase tracking-widest text-muted-foreground select-none">
+              {projectLang === "zh" ? "高级设置（可选）" : "Advanced settings (optional)"}
+            </summary>
+            <div className="grid gap-4 sm:grid-cols-2 mt-4">
+              <label className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">{copy.volumeCountLabel}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.volumeCount}
+                  onChange={(event) => updateForm({ volumeCount: event.target.value })}
+                  className={`w-full ${c.input} rounded-md px-3 py-2.5 focus:outline-none text-sm`}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">{copy.currentVolumeLabel}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.currentVolume}
+                  onChange={(event) => updateForm({ currentVolume: event.target.value })}
+                  className={`w-full ${c.input} rounded-md px-3 py-2.5 focus:outline-none text-sm`}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">{copy.keywordsLabel}</span>
+                <input
+                  value={form.keywords}
+                  onChange={(event) => updateForm({ keywords: event.target.value })}
+                  className={`w-full ${c.input} rounded-md px-3 py-2.5 focus:outline-none text-sm`}
+                  placeholder={projectLang === "zh" ? "悬疑, 商战, 近未来" : "mystery, business, near-future"}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">{copy.targetAudienceLabel}</span>
+                <input
+                  value={form.targetAudience}
+                  onChange={(event) => updateForm({ targetAudience: event.target.value })}
+                  className={`w-full ${c.input} rounded-md px-3 py-2.5 focus:outline-none text-sm`}
+                  placeholder={projectLang === "zh" ? "例如：喜欢悬疑推理的成人读者" : "e.g. adult mystery fans"}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">{copy.serializationStatusLabel}</span>
+                <select
+                  value={form.serializationStatus}
+                  onChange={(event) => updateForm({ serializationStatus: event.target.value })}
+                  className={`w-full ${c.input} rounded-md px-3 py-2.5 focus:outline-none text-sm bg-background`}
+                >
+                  <option value="">{projectLang === "zh" ? "未设置" : "Not set"}</option>
+                  <option value="draft">{copy.serializationStatusDraft}</option>
+                  <option value="serializing">{copy.serializationStatusSerializing}</option>
+                  <option value="completed">{copy.serializationStatusCompleted}</option>
+                  <option value="hiatus">{copy.serializationStatusHiatus}</option>
+                </select>
+              </label>
+            </div>
+          </details>
 
           <label className="block rounded-md border border-dashed border-border px-4 py-3 text-sm">
             <span className="font-medium">

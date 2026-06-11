@@ -32,6 +32,7 @@ import {
   MessageContent,
 } from "../components/ai-elements/message";
 import {
+  type ChatPageModelInfo,
   type ChatPageModelPreference,
   filterModelGroups,
   getBookCreateSessionId,
@@ -267,6 +268,15 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
     void sendMessage(activeSessionId, text, activeBookId);
   };
 
+  const handleRetry = (instruction: string) => {
+    if (!activeSessionId) return;
+    // Find the last user message to re-send
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    if (lastUserMsg) {
+      void sendMessage(activeSessionId, lastUserMsg.content, activeBookId);
+    }
+  };
+
   const handleQuickAction = (command: string) => {
     if (!activeSessionId) return;
     void sendMessage(activeSessionId, command, activeBookId);
@@ -339,7 +349,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
                           );
                         }
                         if (item.kind === "tools") {
-                          return <ToolExecutionSteps key={`x-${item.startIdx}`} executions={item.parts.map(p => p.execution)} />;
+                          return <ToolExecutionSteps key={`x-${item.startIdx}`} executions={item.parts.map(p => p.execution)} onRetry={handleRetry} />;
                         }
                         if (item.kind === "text" && item.part.content) {
                           return (
@@ -460,7 +470,7 @@ function ModelPickerContent({
   onSelect,
   onManage,
 }: {
-  groupedModels: ReadonlyArray<{ service: string; label: string; models: ReadonlyArray<{ id: string; name?: string }> }>;
+  groupedModels: ReadonlyArray<{ service: string; label: string; models: ReadonlyArray<ChatPageModelInfo> }>;
   selectedModel: string | null;
   selectedService: string | null;
   onSelect: (model: string, service: string) => void;
@@ -496,9 +506,19 @@ function ModelPickerContent({
                   onClick={() => onSelect(m.id, group.service)}
                   className={isSelected ? "bg-muted/50" : ""}
                 >
-                  <div className="flex flex-1 items-center justify-between">
-                    <span className="text-sm">{m.name ?? m.id}</span>
-                    {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                  <div className="flex flex-1 items-center justify-between gap-2">
+                    <span className="text-sm truncate">{m.name ?? m.id}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(m.contextWindow ?? 0) >= 128000 ? (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-500 font-medium">128k</span>
+                      ) : (m.contextWindow ?? 0) >= 32000 ? (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-500 font-medium">32k</span>
+                      ) : null}
+                      {(m.maxOutput ?? 0) >= 8192 ? (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">8k出</span>
+                      ) : null}
+                      {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                    </div>
                   </div>
                 </DropdownMenuItem>
               );

@@ -50,6 +50,11 @@ describe("book create form", () => {
       targetChapters: "200",
       chapterWordCount: "3000",
       brief: "",
+      targetAudience: "",
+      keywords: "",
+      serializationStatus: "",
+      volumeCount: "",
+      currentVolume: "",
     });
   });
 
@@ -75,6 +80,11 @@ describe("book create form", () => {
       targetChapters: "120",
       chapterWordCount: "2600",
       brief: " 主角查账洗白，旧案回潮。 ",
+      volumeCount: "",
+      currentVolume: "",
+      keywords: "",
+      targetAudience: "",
+      serializationStatus: "",
     }, "zh")).toEqual({
       title: "夜港账本",
       genre: "都市悬疑",

@@ -385,6 +385,8 @@ export class ContinuityAuditor extends BaseAgent {
         ledger?: string;
         hooks?: string;
       };
+      /** Structured distillation rules (from AuthorDistillation) appended to style guide */
+      distillationRules?: ReadonlyArray<string>;
     },
   ): Promise<AuditResult> {
     const [diskCurrentState, diskLedger, diskHooks, styleGuideRaw, subplotBoard, emotionalArcs, characterMatrix, chapterSummaries, parentCanon, fanficCanon, volumeOutline] =
@@ -602,8 +604,8 @@ overall_score 评分校准：
       : "";
     const styleGuideBlock = reducedControlBlock.length === 0
       ? isEnglish
-        ? `\n## Style Guide\n${styleGuide}`
-        : `\n## 文风指南\n${styleGuide}`
+        ? `\n## Style Guide\n${styleGuide}${options?.distillationRules && options.distillationRules.length > 0 ? `\n\n### Distillation Rules\n${options.distillationRules.join("\n")}` : ""}`
+        : `\n## 文风指南\n${styleGuide}${options?.distillationRules && options.distillationRules.length > 0 ? `\n\n### 蒸馏规则\n${options.distillationRules.join("\n")}` : ""}`
       : "";
 
     const prevChapterBlock = previousChapter

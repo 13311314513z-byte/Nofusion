@@ -7,6 +7,7 @@
  */
 
 import type { InspectionCode, InspectionFinding, InspectionResult } from "../shared/contracts.js";
+import { detectDuplicateRhetoric } from "@actalk/inkos-core";
 
 // ---------------------------------------------------------------------------
 // Request validation
@@ -204,6 +205,51 @@ export function inspectText(text: string, checks?: InspectionCode[]): Inspection
     }
   }
 
+  // ======================================================================
+  // 语义查重 — 修辞重复检测
+  // ======================================================================
+  const RHETORIC_CHECK_MAP: Record<string, InspectionCode> = {
+    "parallelism": "duplicate-parallelism",
+    "metaphor": "duplicate-metaphor",
+    "personification": "duplicate-personification",
+    "repetition": "duplicate-repetition",
+    "transition": "duplicate-transition",
+    "hyperbole": "duplicate-hyperbole",
+    "rhetorical-question": "duplicate-rhetorical-question",
+    "anaphora": "duplicate-anaphora",
+    "epistrophe": "duplicate-epistrophe",
+    "parallel-structure": "duplicate-parallel-structure",
+  };
+
+  const wantRhetoricCheck = !checks || checks.length === 0 ||
+    Object.values(RHETORIC_CHECK_MAP).some((code) => checks.includes(code));
+
+  if (wantRhetoricCheck) {
+    const language = isChineseText(text) ? "zh" : "en";
+    const rhetoricResult = detectDuplicateRhetoric(inspectText, language);
+
+    for (const finding of rhetoricResult.findings) {
+      const code = RHETORIC_CHECK_MAP[finding.category];
+      if (!code) continue;
+      if (checks && checks.length > 0 && !checks.includes(code)) continue;
+
+      findings.push({
+        code,
+        severity: finding.severity === "high" ? "warning" : "info",
+        count: finding.count,
+        lineNumbers: finding.examples.map((e) => e.lineNumber),
+        samples: finding.examples.map((e) => e.text),
+        messageKey: `style.inspect.${code}`,
+        // 扩展字段（向后兼容，非修辞检测的 finding 不携带）
+        ranges: finding.ranges,
+        rhetoricSeverity: finding.severity,
+        perThousandChars: finding.perThousandChars,
+        confidence: finding.confidence,
+        findingId: finding.id,
+      });
+    }
+  }
+
   return { charCount, lineCount, paragraphCount, findings };
 }
 
@@ -218,4 +264,10 @@ function countMatches(text: string, pattern: RegExp, limit: number): number {
     if (count >= limit) break;
   }
   return count;
+}
+
+/** Quick check: does the text contain meaningful Chinese characters? */
+function isChineseText(text: string): boolean {
+  const chineseChars = (text.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  return chineseChars > text.length * 0.1;
 }

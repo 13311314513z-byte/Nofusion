@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { StateManager, computeAnalytics } from "@actalk/inkos-core";
-import { loadConfig, findProjectRoot, resolveBookId, log, logError } from "../utils.js";
+import { loadConfig, findProjectRoot, resolveBookId, log, logError, formatJsonOutput } from "../utils.js";
 
 export const analyticsCommand = new Command("analytics")
   .alias("stats")
@@ -18,7 +18,7 @@ export const analyticsCommand = new Command("analytics")
       const analytics = computeAnalytics(bookId, chapters);
 
       if (opts.json) {
-        log(JSON.stringify(analytics, null, 2));
+        log(formatJsonOutput(analytics));
       } else {
         log(`Analytics for "${bookId}":`);
         log("");
@@ -68,7 +68,7 @@ export const analyticsCommand = new Command("analytics")
       }
     } catch (e) {
       if (opts.json) {
-        log(JSON.stringify({ error: String(e) }));
+        log(formatJsonOutput(e instanceof Error ? e : new Error(String(e))));
       } else {
         logError(`Analytics failed: ${e}`);
       }

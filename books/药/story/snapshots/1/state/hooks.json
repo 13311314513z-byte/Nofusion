@@ -1,0 +1,104 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "悬疑",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "36",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "威胁",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "55",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "物品",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "52",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 0,
+      "type": "关系",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "50",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 0,
+      "type": "背景",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "0",
+      "payoffTiming": "mid-arc",
+      "notes": "[0]"
+    },
+    {
+      "hookId": "SHIYI-hand-tremor",
+      "startChapter": 1,
+      "type": "relationship",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "揭示程时一今天情绪异常、手抖的原因",
+      "payoffTiming": "near-term",
+      "notes": "程靖霖回到药铺后，观察到程时一右手食指在茶杯边缘摩挲时微微发抖，是情绪性生理反应，与写药方时相同。程时一没追问送药细节，表现出沉默的紧张。"
+    },
+    {
+      "hookId": "SUN-yaofang-redstamp",
+      "startChapter": 1,
+      "type": "mystery",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "expectedPayoff": "查明药方上伪满卫生署红色药厂章的真实来源",
+      "payoffTiming": "mid-arc",
+      "notes": "程靖霖回程时余光扫过孙家院子菜窖，发现早上压在木板正中的石头偏了三寸，边缘露出干泥——菜窖在送药期间被打开过，不是取菜的方式。结合新布票和药方异常，程靖霖推断孙家藏了人。"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 5,
+      "type": "身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "42",
+      "payoffTiming": "mid-arc",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 12,
+      "type": "身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "48",
+      "payoffTiming": "mid-arc",
+      "notes": "[H004, H002]"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 18,
+      "type": "物品",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "30",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002]"
+    }
+  ]
+}

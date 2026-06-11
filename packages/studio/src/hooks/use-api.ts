@@ -200,3 +200,40 @@ export async function putApi<T>(path: string, body?: unknown): Promise<T> {
   invalidateApiPaths(deriveInvalidationPaths(path));
   return result;
 }
+
+// ── Style API helpers ──────────────────────────────────────────────────────
+
+/** 修辞改写 */
+export function rewriteRhetoric(text: string, categories: ReadonlyArray<string>): Promise<{ rewritten: string }> {
+  return postApi("/style/rhetoric/rewrite", { text, categories });
+}
+
+/** 修辞感知提示注入 */
+export function fetchRhetoricAwarePrompt(text: string): Promise<{ prompt: string }> {
+  return postApi("/style/rhetoric/aware-prompt", { text });
+}
+
+/** 段落去重 */
+export function dedupParagraphs(text: string): Promise<{ paragraphs: ReadonlyArray<{ hash: string; content: string; lineNumber: number; duplicates: ReadonlyArray<number> }> }> {
+  return postApi("/style/paragraph/dedup", { text });
+}
+
+/** 可读性评分 */
+export function fetchReadabilityScore(text: string, lang?: string): Promise<import("@actalk/inkos-core").ReadabilityScore> {
+  return postApi("/style/readability/score", { text, language: lang ?? "zh" });
+}
+
+/** 搜索作者作品（网络搜索） */
+export function searchAuthorWork(query: string): Promise<{ sources: ReadonlyArray<{ title: string; url: string; snippet: string }> }> {
+  return postApi("/style/authors/search", { query });
+}
+
+/** 拉取作者作品 */
+export function fetchAuthorWork(url: string): Promise<{ content: string; title: string }> {
+  return postApi("/style/authors/fetch", { url });
+}
+
+/** 写入作者样本 */
+export function writeAuthorSample(authorId: string, content: string, sourceUrl?: string): Promise<{ written: boolean }> {
+  return postApi("/style/authors/samples/write", { authorId, content, sourceUrl });
+}

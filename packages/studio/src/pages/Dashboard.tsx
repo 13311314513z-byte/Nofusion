@@ -82,6 +82,7 @@ function BookMenu({ bookId, bookTitle, nav, t, onDelete, onOpenChange }: {
       <button
         onClick={() => setOpen((prev) => !prev)}
         className="p-3 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+        title={t("book.moreOptions")}
       >
         <MoreVertical size={18} />
       </button>

@@ -17,7 +17,7 @@ export interface ExportArtifact {
   readonly fileName: string;
   readonly chaptersExported: number;
   readonly totalWords: number;
-  readonly format: "txt" | "md" | "epub";
+  readonly format: "txt" | "md" | "epub" | "html";
   readonly contentType: string;
   readonly payload: string | Buffer;
 }
@@ -59,7 +59,7 @@ export async function buildExportArtifact(
   state: ExportStateLike,
   bookId: string,
   options: {
-    readonly format?: "txt" | "md" | "epub";
+    readonly format?: "txt" | "md" | "epub" | "html";
     readonly approvedOnly?: boolean;
     readonly outputPath?: string;
   },
@@ -108,16 +108,46 @@ export async function buildExportArtifact(
     };
   }
 
+  // Build TOC for html/md; for txt just use plain title
+  const hasToc = format === "md" || format === "html";
   const parts: string[] = [];
-  parts.push(format === "md" ? `# ${book.title}\n\n---\n` : `${book.title}\n\n`);
-  for (const chapter of chapters) {
-    const match = chapterFiles.get(chapter.number);
-    if (!match) {
-      continue;
+
+  if (format === "html") {
+    parts.push(`<!DOCTYPE html><html lang="${book.language === "en" ? "en" : "zh-CN"}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${escapeHtml(book.title)}</title>`);
+    parts.push("<style>body{font-family:system-ui,-apple-system,sans-serif;line-height:1.8;max-width:720px;margin:40px auto;padding:0 20px;color:#1a1a1a}h1{font-size:1.8em;border-bottom:2px solid #eee;padding-bottom:.3em}h2{font-size:1.3em;margin-top:1.5em}.toc{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:8px;padding:16px 24px;margin:24px 0}.toc h2{margin-top:0;font-size:1.1em}.toc a{display:block;padding:4px 0;color:#2563eb;text-decoration:none}.toc a:hover{text-decoration:underline}pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;line-height:inherit}p{margin:.6em 0}hr{border:none;border-top:1px solid #eee;margin:1.5em 0}@media(prefers-color-scheme:dark){body{background:#121212;color:#e0e0e0}.toc{background:#1e1e1e;border-color:#333}.toc a{color:#60a5fa}h1{border-bottom-color:#333}}");
+    parts.push(`</style></head><body><h1>${escapeHtml(book.title)}</h1>`);
+    parts.push(`<div class="toc"><h2>目录</h2>`);
+    for (const chapter of chapters) {
+      const match = chapterFiles.get(chapter.number);
+      if (!match) continue;
+      const markdown = await readFile(join(chaptersDir, match), "utf-8");
+      const { title } = markdownToSimpleHtml(markdown);
+      parts.push(`<a href="#ch${chapter.number}">第${chapter.number}章 ${escapeHtml(title)}</a>`);
     }
-    parts.push(await readFile(join(chaptersDir, match), "utf-8"));
-    parts.push("\n\n");
+    parts.push(`</div>`);
+    for (const chapter of chapters) {
+      const match = chapterFiles.get(chapter.number);
+      if (!match) continue;
+      const markdown = await readFile(join(chaptersDir, match), "utf-8");
+      const { title, html } = markdownToSimpleHtml(markdown);
+      parts.push(`<h2 id="ch${chapter.number}">第${chapter.number}章 ${escapeHtml(title)}</h2>\n${html}`);
+    }
+    parts.push(`</body></html>`);
+  } else {
+    parts.push(format === "md" ? `# ${book.title}\n\n---\n` : `${book.title}\n\n`);
+    for (const chapter of chapters) {
+      const match = chapterFiles.get(chapter.number);
+      if (!match) continue;
+      parts.push(await readFile(join(chaptersDir, match), "utf-8"));
+      parts.push("\n\n");
+    }
   }
+
+  const contentTypeMap: Record<string, string> = {
+    md: "text/markdown; charset=utf-8",
+    html: "text/html; charset=utf-8",
+    txt: "text/plain; charset=utf-8",
+  };
 
   return {
     outputPath,
@@ -125,8 +155,12 @@ export async function buildExportArtifact(
     chaptersExported: chapters.length,
     totalWords,
     format,
-    contentType: format === "md" ? "text/markdown; charset=utf-8" : "text/plain; charset=utf-8",
-    payload: parts.join(format === "md" ? "\n---\n\n" : "\n"),
+    contentType: contentTypeMap[format] ?? "text/plain; charset=utf-8",
+    payload: format === "html"
+      ? parts.join("")
+      : format === "md"
+        ? parts.join("\n---\n\n")
+        : parts.join("\n"),
   };
 }
 
@@ -134,7 +168,7 @@ export async function writeExportArtifact(
   state: ExportStateLike,
   bookId: string,
   options: {
-    readonly format?: "txt" | "md" | "epub";
+    readonly format?: "txt" | "md" | "epub" | "html";
     readonly approvedOnly?: boolean;
     readonly outputPath?: string;
   },

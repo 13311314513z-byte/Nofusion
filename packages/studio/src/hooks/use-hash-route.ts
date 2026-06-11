@@ -63,6 +63,11 @@ function parseHash(hash: string): HashRoute {
     "cover-config": { page: "cover-config" },
     cover: { page: "cover-config" },
   };
+  // Dynamic analytics route: #/analytics/<bookId>
+  const analyticsMatch = path.match(/^analytics\/([^/]+)$/);
+  if (analyticsMatch) {
+    return { page: "analytics", bookId: decodeURIComponent(analyticsMatch[1]) };
+  }
   if (staticRoutes[path]) return staticRoutes[path];
 
   return { page: "dashboard" };
@@ -88,6 +93,7 @@ function routeToHash(route: HashRoute): string {
     case "radar": return "#/radar";
     case "doctor": return "#/doctor";
     case "audit": return "#/audit";
+    case "analytics": return `#/analytics/${encodeURIComponent(route.bookId)}`;
     case "automation": return "#/automation";
     case "cover-config": return "#/cover-config";
     default: return "";
@@ -96,7 +102,7 @@ function routeToHash(route: HashRoute): string {
 
 export { parseHash, routeToHash }; // for testing
 
-const HASH_PAGES = new Set(["dashboard", "chat", "book", "book-settings", "book-create", "services", "service-detail", "audit", "daemon", "logs", "genres", "style", "import", "radar", "doctor", "automation", "cover-config"]);
+const HASH_PAGES = new Set(["dashboard", "chat", "book", "book-settings", "book-create", "services", "service-detail", "audit", "analytics", "daemon", "logs", "genres", "style", "import", "radar", "doctor", "automation", "cover-config"]);
 
 export function useHashRoute() {
   const [route, setRouteState] = useState<HashRoute>(() => parseHash(window.location.hash));

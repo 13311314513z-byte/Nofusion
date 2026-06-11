@@ -1,0 +1,58 @@
+{
+  "id": "1780938628412",
+  "authorId": "9999",
+  "fileName": "_卡_淫语大学习 - 2026-06-07_23h53m37s271ms.jsonl",
+  "fileType": "txt",
+  "textHash": "4ee705a88d85faa6",
+  "charCount": 654881,
+  "profile": {
+    "avgSentenceLength": 40.2,
+    "sentenceLengthStdDev": 27.5,
+    "avgParagraphLength": 559,
+    "paragraphLengthRange": {
+      "min": 16,
+      "max": 7799
+    },
+    "vocabularyDiversity": 0.004,
+    "topPatterns": [
+      "她的...(1397次)",
+      "- ...(596次)",
+      "杨曼...(419次)",
+      "那些...(291次)",
+      "司雯...(290次)"
+    ],
+    "rhetoricalFeatures": [
+      "比喻(像/如/仿佛)(1396处)",
+      "反问(6处)",
+      "短句节奏(390处)"
+    ],
+    "fingerprint": {
+      "dialogueRatio": 0.03,
+      "actionDensity": 0.43,
+      "psychologicalRatio": 0.14,
+      "sensoryDensity": 0.77,
+      "colloquialismScore": 0.22,
+      "rhetoricDensity": 0.09,
+      "punctuationRhythm": {
+        "commaRatio": 0.55,
+        "periodRatio": 0.28,
+        "questionRatio": 0.01,
+        "exclamationRatio": 0.01,
+        "ellipsisRatio": 0.15,
+        "semicolonRatio": 0.01
+      },
+      "aiTellRisk": 0.5,
+      "sensoryBreakdown": {
+        "visual": 0.4,
+        "auditory": 0.17,
+        "tactile": 0.34,
+        "olfactory": 0.06,
+        "gustatory": 0.03
+      }
+    },
+    "sourceName": "_卡_淫语大学习 - 2026-06-07_23h53m37s271ms.jsonl",
+    "analyzedAt": "2026-06-08T17:10:28.565Z"
+  },
+  "status": "ready",
+  "extractedAt": "2026-06-08T17:10:28.565Z"
+}

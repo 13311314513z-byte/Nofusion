@@ -4,6 +4,119 @@
 
 import type { StyleProfile } from "../models/style-profile.js";
 import type { StyleSourceDocument, AuthorStyleProfile, StyleLibraryIndex } from "./models.js";
+import type { SentenceTypeDistribution, ParagraphRhythm, RhetoricBreakdown, DialogueFeatures } from "../utils/style-dimensions.js";
+
+// ---------------------------------------------------------------------------
+// New field merge helpers
+// ---------------------------------------------------------------------------
+
+function mergeSentenceTypeDistribution(
+  profiles: ReadonlyArray<StyleProfile>,
+  weights: ReadonlyArray<number>,
+  totalWeight: number,
+): SentenceTypeDistribution {
+  let decl = 0, inter = 0, excl = 0, imper = 0;
+  for (let i = 0; i < profiles.length; i++) {
+    const d = profiles[i].fingerprint.sentenceTypeDistribution;
+    const w = weights[i] / totalWeight;
+    decl += (d?.declarative ?? 0) * w;
+    inter += (d?.interrogative ?? 0) * w;
+    excl += (d?.exclamatory ?? 0) * w;
+    imper += (d?.imperative ?? 0) * w;
+  }
+  return {
+    declarative: Math.round(decl * 100) / 100,
+    interrogative: Math.round(inter * 100) / 100,
+    exclamatory: Math.round(excl * 100) / 100,
+    imperative: Math.round(imper * 100) / 100,
+  };
+}
+
+function mergeParagraphRhythm(
+  profiles: ReadonlyArray<StyleProfile>,
+  weights: ReadonlyArray<number>,
+  totalWeight: number,
+): ParagraphRhythm {
+  let short = 0, medium = 0, long = 0;
+  const histAccum = new Map<string, number>();
+  for (let i = 0; i < profiles.length; i++) {
+    const r = profiles[i].fingerprint.paragraphRhythm;
+    const w = weights[i] / totalWeight;
+    short += (r?.shortParaRate ?? 0) * w;
+    medium += (r?.mediumParaRate ?? 0) * w;
+    long += (r?.longParaRate ?? 0) * w;
+    if (r?.lengthHistogram) {
+      for (const h of r.lengthHistogram) {
+        histAccum.set(h.range, (histAccum.get(h.range) ?? 0) + h.count);
+      }
+    }
+  }
+  const lengthHistogram = [...histAccum.entries()]
+    .map(([range, count]) => ({ range, count }))
+    .sort((a, b) => a.range.localeCompare(b.range));
+  return {
+    shortParaRate: Math.round(short * 100) / 100,
+    mediumParaRate: Math.round(medium * 100) / 100,
+    longParaRate: Math.round(long * 100) / 100,
+    lengthHistogram,
+  };
+}
+
+function mergeRhetoricBreakdown(
+  profiles: ReadonlyArray<StyleProfile>,
+  weights: ReadonlyArray<number>,
+  totalWeight: number,
+): RhetoricBreakdown {
+  let meta = 0, para = 0, pers = 0, hype = 0, rheq = 0, rep = 0;
+  for (let i = 0; i < profiles.length; i++) {
+    const r = profiles[i].fingerprint.rhetoricBreakdown;
+    const w = weights[i] / totalWeight;
+    meta += (r?.metaphorRate ?? 0) * w;
+    para += (r?.parallelismRate ?? 0) * w;
+    pers += (r?.personificationRate ?? 0) * w;
+    hype += (r?.hyperboleRate ?? 0) * w;
+    rheq += (r?.rhetoricalQuestionRate ?? 0) * w;
+    rep += (r?.repetitionRate ?? 0) * w;
+  }
+  return {
+    metaphorRate: Math.round(meta * 100) / 100,
+    parallelismRate: Math.round(para * 100) / 100,
+    personificationRate: Math.round(pers * 100) / 100,
+    hyperboleRate: Math.round(hype * 100) / 100,
+    rhetoricalQuestionRate: Math.round(rheq * 100) / 100,
+    repetitionRate: Math.round(rep * 100) / 100,
+  };
+}
+
+function mergeDialogueFeatures(
+  profiles: ReadonlyArray<StyleProfile>,
+  weights: ReadonlyArray<number>,
+  totalWeight: number,
+): DialogueFeatures {
+  let avgLen = 0, freq = 0;
+  const tagAccum: Record<string, number> = {};
+  for (let i = 0; i < profiles.length; i++) {
+    const d = profiles[i].fingerprint.dialogueFeatures;
+    const w = weights[i] / totalWeight;
+    avgLen += (d?.avgDialogueLength ?? 0) * w;
+    freq += (d?.dialogueFrequency ?? 0) * w;
+    if (d?.dialogueTagRatio) {
+      for (const [tag, count] of Object.entries(d.dialogueTagRatio)) {
+        tagAccum[tag] = (tagAccum[tag] ?? 0) + count;
+      }
+    }
+  }
+  const totalTags = Object.values(tagAccum).reduce((a, b) => a + b, 0);
+  const dialogueTagRatio: Record<string, number> = {};
+  for (const [tag, count] of Object.entries(tagAccum)) {
+    dialogueTagRatio[tag] = totalTags > 0 ? Math.round((count / totalTags) * 100) / 100 : 0;
+  }
+  return {
+    avgDialogueLength: Math.round(avgLen),
+    dialogueFrequency: Math.round(freq * 100) / 100,
+    dialogueTagRatio,
+  };
+}
 
 /**
  * Merge multiple StyleProfiles into a single aggregated profile.
@@ -27,21 +140,26 @@ export function mergeStyleProfiles(
     throw new Error("Total weight cannot be zero");
   }
 
+  // Generic numeric field merger — reduces future extension omissions
+  const mergeNum = (extractor: (p: StyleProfile) => number): number => {
+    let sum = 0;
+    for (let i = 0; i < profiles.length; i++) {
+      sum += extractor(profiles[i]) * (weights[i] / totalWeight);
+    }
+    return Math.round(sum * 100) / 100;
+  };
+
   // Weighted average for numerical fields
-  let weightedAvgSentenceLength = 0;
-  let weightedAvgSentenceStdDev = 0;
-  let weightedAvgParagraphLength = 0;
-  let weightedVocabDiversity = 0;
+  const weightedAvgSentenceLength = mergeNum((p) => p.avgSentenceLength);
+  const weightedAvgSentenceStdDev = mergeNum((p) => p.sentenceLengthStdDev);
+  const weightedAvgParagraphLength = mergeNum((p) => p.avgParagraphLength);
+  const weightedVocabDiversity = mergeNum((p) => p.vocabularyDiversity);
+
   let minParagraph = Infinity;
   let maxParagraph = 0;
 
   for (let i = 0; i < profiles.length; i++) {
-    const w = weights[i] / totalWeight;
     const p = profiles[i];
-    weightedAvgSentenceLength += p.avgSentenceLength * w;
-    weightedAvgSentenceStdDev += p.sentenceLengthStdDev * w;
-    weightedAvgParagraphLength += p.avgParagraphLength * w;
-    weightedVocabDiversity += p.vocabularyDiversity * w;
     minParagraph = Math.min(minParagraph, p.paragraphLengthRange.min);
     maxParagraph = Math.max(maxParagraph, p.paragraphLengthRange.max);
   }
@@ -149,6 +267,11 @@ export function mergeStyleProfiles(
         olfactory: Math.round(weightedOlfactory * 100) / 100,
         gustatory: Math.round(weightedGustatory * 100) / 100,
       },
+      // 扩展字段（可选，向后兼容）
+      sentenceTypeDistribution: mergeSentenceTypeDistribution(profiles, weights, totalWeight),
+      paragraphRhythm: mergeParagraphRhythm(profiles, weights, totalWeight),
+      rhetoricBreakdown: mergeRhetoricBreakdown(profiles, weights, totalWeight),
+      dialogueFeatures: mergeDialogueFeatures(profiles, weights, totalWeight),
     },
     sourceName: authorName,
     analyzedAt: new Date().toISOString(),
@@ -191,6 +314,10 @@ export function buildAuthorProfile(
             punctuationRhythm: { commaRatio: 0, periodRatio: 0, questionRatio: 0, exclamationRatio: 0, ellipsisRatio: 0, semicolonRatio: 0 },
             aiTellRisk: 0,
             sensoryBreakdown: { visual: 0, auditory: 0, tactile: 0, olfactory: 0, gustatory: 0 },
+            sentenceTypeDistribution: { declarative: 0, interrogative: 0, exclamatory: 0, imperative: 0 },
+            paragraphRhythm: { shortParaRate: 0, mediumParaRate: 0, longParaRate: 0, lengthHistogram: [] },
+            rhetoricBreakdown: { metaphorRate: 0, parallelismRate: 0, personificationRate: 0, hyperboleRate: 0, rhetoricalQuestionRate: 0, repetitionRate: 0 },
+            dialogueFeatures: { avgDialogueLength: 0, dialogueFrequency: 0, dialogueTagRatio: {} },
           },
           sourceName: name,
           analyzedAt: new Date().toISOString(),

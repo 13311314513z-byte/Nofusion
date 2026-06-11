@@ -111,6 +111,14 @@ export interface LLMResponse {
     readonly completionTokens: number;
     readonly totalTokens: number;
   };
+  /**
+   * API 返回的 stop_reason / finish_reason。
+   * - "stop": 正常结束
+   * - "length": 达到 max_tokens 限制被截断
+   * - "tool_use": 触发了工具调用
+   * - undefined: 无法获取（如流中断等）
+   */
+  readonly stopReason?: "stop" | "length" | "tool_use" | string;
 }
 
 export interface LLMMessage {
@@ -696,6 +704,18 @@ function extractAnthropicContent(json: any): string {
     .join("");
 }
 
+function mapResponsesStopReason(json: any): LLMResponse["stopReason"] {
+  const raw = json?.response?.status
+    ?? json?.status
+    ?? json?.choices?.[0]?.finish_reason
+    ?? json?.stop_reason;
+  if (raw === "completed" || raw === "stop" || raw === "end_turn") return "stop";
+  if (raw === "incomplete" || raw === "length" || raw === "max_tokens") return "length";
+  if (raw === "tool_use") return "tool_use";
+  if (typeof raw === "string") return raw;
+  return undefined;
+}
+
 async function chatCompletionViaCustomAnthropicCompatible(
   client: LLMClient,
   model: string,
@@ -851,6 +871,7 @@ async function chatCompletionViaCustomOpenAICompatible(
           completionTokens: json?.usage?.output_tokens ?? 0,
           totalTokens: json?.usage?.total_tokens ?? 0,
         },
+        stopReason: mapResponsesStopReason(json),
       };
     }
 
@@ -862,6 +883,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const monitor = createStreamMonitor(onStreamProgress);
 
+    let stopReason: LLMResponse["stopReason"] = undefined;
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -883,6 +905,7 @@ async function chatCompletionViaCustomOpenAICompatible(
               completionTokens: json.response?.usage?.output_tokens ?? 0,
               totalTokens: json.response?.usage?.total_tokens ?? 0,
             };
+            stopReason = mapResponsesStopReason(json.response);
             if (!content) {
               content = extractResponsesContent(json.response);
             }
@@ -896,7 +919,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     if (!content) {
       throw wrapLLMError(new Error("LLM returned empty response from stream"), errorCtx);
     }
-    return { content, usage };
+    return { content, usage, stopReason };
   }
 
   const payload: Record<string, unknown> = {
@@ -950,6 +973,7 @@ async function chatCompletionViaCustomOpenAICompatible(
         completionTokens: json?.usage?.completion_tokens ?? 0,
         totalTokens: json?.usage?.total_tokens ?? 0,
       },
+      stopReason: mapResponsesStopReason(json),
     };
   }
 
@@ -959,6 +983,7 @@ async function chatCompletionViaCustomOpenAICompatible(
   let buffer = "";
   let content = "";
   let reasoningContent = "";
+  let stopReason: LLMResponse["stopReason"] = undefined;
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const monitor = createStreamMonitor(onStreamProgress);
 
@@ -984,6 +1009,11 @@ async function chatCompletionViaCustomOpenAICompatible(
             monitor.onChunk(reasoningDelta);
           }
         }
+        // Capture finish_reason from the last chunk in the stream
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason) {
+          stopReason = mapResponsesStopReason({ choices: [{ finish_reason: finishReason }] });
+        }
         if (json?.usage) {
           usage = {
             promptTokens: json.usage.prompt_tokens ?? usage.promptTokens,
@@ -1001,7 +1031,7 @@ async function chatCompletionViaCustomOpenAICompatible(
   if (!finalContent) {
     throw wrapLLMError(new Error("LLM returned empty response from stream"), errorCtx);
   }
-  return { content: finalContent, usage };
+  return { content: finalContent, usage, stopReason };
 }
 
 // === Simple Chat (used by all agents via BaseAgent.chat()) ===
@@ -1049,6 +1079,7 @@ export async function chatCompletion(
       return {
         content: error.partialContent,
         usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        stopReason: "length",
       };
     }
     throw wrapLLMError(error, errorCtx);
@@ -1220,6 +1251,7 @@ async function chatCompletionViaPiAi(
         completionTokens: response.usage.output,
         totalTokens: response.usage.totalTokens,
       },
+      stopReason: mapPiStopReason(response.stopReason),
     };
   }
 
@@ -1228,6 +1260,7 @@ async function chatCompletionViaPiAi(
   const monitor = createStreamMonitor(onStreamProgress);
   let inputTokens = 0;
   let outputTokens = 0;
+  let stopReason: LLMResponse["stopReason"] = undefined;
 
   try {
     for await (const event of eventStream) {
@@ -1240,6 +1273,9 @@ async function chatCompletionViaPiAi(
         const msg = event.type === "done" ? event.message : event.error;
         inputTokens = msg.usage.input;
         outputTokens = msg.usage.output;
+        if (event.type === "done") {
+          stopReason = mapPiStopReason(msg.stopReason);
+        }
         if (event.type === "error" && msg.errorMessage) {
           const partial = chunks.join("");
           if (partial.length >= MIN_SALVAGEABLE_CHARS) {
@@ -1275,7 +1311,17 @@ async function chatCompletionViaPiAi(
       completionTokens: outputTokens,
       totalTokens: inputTokens + outputTokens,
     },
+    stopReason,
   };
+}
+
+/** Map pi-ai stop reasons to our LLMResponse.stopReason format. */
+function mapPiStopReason(reason: string | undefined): LLMResponse["stopReason"] {
+  if (!reason) return undefined;
+  if (reason === "stop" || reason === "end_turn") return "stop";
+  if (reason === "length" || reason === "max_tokens") return "length";
+  if (reason === "tool_use") return "tool_use";
+  return reason;
 }
 
 async function chatWithToolsViaPiAi(

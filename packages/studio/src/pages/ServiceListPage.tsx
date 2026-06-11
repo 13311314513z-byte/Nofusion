@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Plus, Search, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, GROUP_SHORT_LABELS } from "../constants/service-groups";
 import { fetchJson } from "../hooks/use-api";
 import { useI18n } from "../hooks/use-i18n";
@@ -240,6 +240,11 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
   const services = useServiceStore((s) => s.services);
   const loading = useServiceStore((s) => s.servicesLoading);
   const fetchServices = useServiceStore((s) => s.fetchServices);
+  const refreshServices = useServiceStore((s) => s.refreshServices);
+  const fetchBankModels = useServiceStore((s) => s.fetchBankModels);
+  const fetchCustomModels = useServiceStore((s) => s.fetchCustomModels);
+  const modelsByService = useServiceStore((s) => s.modelsByService);
+  const bankModelsLoading = useServiceStore((s) => s.bankModelsLoading);
 
   useEffect(() => { void fetchServices(); }, [fetchServices]);
 
@@ -325,12 +330,25 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
 
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl">服务商管理</h1>
-        <button
-          onClick={nav.toAudit}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors"
-        >
-          {t("nav.audit")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              await refreshServices();
+              await Promise.all([fetchBankModels(), fetchCustomModels()]);
+            }}
+            disabled={bankModelsLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50"
+          >
+            {bankModelsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={14} />}
+            {bankModelsLoading ? "检测中…" : "一键检测全部"}
+          </button>
+          <button
+            onClick={nav.toAudit}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors"
+          >
+            {t("nav.audit")}
+          </button>
+        </div>
       </div>
 
       <CoverConfigCard />

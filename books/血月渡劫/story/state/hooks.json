@@ -1,0 +1,114 @@
+{
+  "hooks": [
+    {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "身世之谜",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "200",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 1,
+      "type": "血月兵器计划",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "195",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 1,
+      "type": "第三力量觉醒",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "175",
+      "payoffTiming": "slow-burn",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 1,
+      "type": "第27号实验体秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "120",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 2,
+      "type": "灰的身份",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "80",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H006",
+      "startChapter": 3,
+      "type": "柳三娘的血族宝戒",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "135",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002, H004]"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 4,
+      "type": "铁须镇地下的上古遗骸",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "150",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 3,
+      "type": "博士的怀表照片",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "155",
+      "payoffTiming": "mid-arc",
+      "notes": "[H001]"
+    },
+    {
+      "hookId": "H009",
+      "startChapter": 2,
+      "type": "周岩的真正出身",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "145",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002]"
+    },
+    {
+      "hookId": "H010",
+      "startChapter": 5,
+      "type": "血族亲王的妹妹是否还活着",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "195",
+      "payoffTiming": "slow-burn",
+      "notes": "[H006]"
+    },
+    {
+      "hookId": "H011",
+      "startChapter": 1,
+      "type": "实验室废墟中的隐藏层",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "160",
+      "payoffTiming": "mid-arc",
+      "notes": "[H002]"
+    }
+  ]
+}

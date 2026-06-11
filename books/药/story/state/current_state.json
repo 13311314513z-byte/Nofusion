@@ -1,0 +1,53 @@
+{
+  "chapter": 1,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "发现程时一今天的药方有特殊来源（新京渠道红印），结合孙家异常，义父可能参与了抗联物资接济，自己已被卷入边缘；内心在'什么都不管'与'逐步查清'之间拉扯",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "孙太太（新建立微妙信任，但保持警惕距离）",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "活过这个冬天，守住药店，不卷入孙家与抗日分子的纠葛",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "药铺后院厨房",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "腊月二十七，距领配给还有两天；药铺细辛库存不足；账面上钱粮紧张",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "完成晨间送药至城西孙家任务回铺，发现四条异常线索（药方红印、孙家菜窖、程时一手抖、哨卡7号数字被擦除），已将三颗糖藏入柜底",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1
+    }
+  ]
+}

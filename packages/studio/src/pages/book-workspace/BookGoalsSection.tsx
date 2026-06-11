@@ -204,7 +204,7 @@ export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
         {actionError && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between">
             <span>{actionError}</span>
-            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">Dismiss</button>
+            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">{t("common.dismiss")}</button>
           </div>
         )}
         {/* Header */}

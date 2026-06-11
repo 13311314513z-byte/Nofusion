@@ -340,6 +340,11 @@ export {
   type StyleSourceDocument,
   type StyleLibraryIndex,
   type ApplyStyleResult,
+  type AuthorDistillation,
+  type DistillationRule,
+  type DistillationEvidence,
+  type DistillationStatus,
+  type SampleAdequacyLevel,
 } from "./style-library/models.js";
 export {
   listAuthorProfiles,
@@ -359,6 +364,25 @@ export {
   getAuthorDiagnostics,
   type AuthorDiagnosticsEntry,
 } from "./style-library/store.js";
+export {
+  generateDistillation,
+  evaluateAuthorSampleAdequacy,
+  type DistillationInput,
+  type DistillationOutput,
+} from "./style-library/distillation.js";
+export {
+  loadCurrentDistillation,
+  saveDistillationDraft,
+  loadDistillationEvidence,
+  saveDistillationEvidence,
+  loadDistillationOverrides,
+  saveDistillationOverrides,
+  publishDistillation,
+  listDistillationVersions,
+  loadDistillationVersion,
+  getDistillationStatus,
+  type DistillationStatusInfo,
+} from "./style-library/distillation-store.js";
 export { extractDocument, extractDocumentFromText, extractDocumentChunked, extractFromJsonlChunked, extractFromJsonChunked, MAX_CHARS, MAX_CHARS_PER_CHUNK, type ExtractedDocument, type DocumentFileType } from "./utils/document-reader.js";
 export {
   assembleFoundationContext,
@@ -382,6 +406,24 @@ export {
   type FoundationSourceIndexEntry,
 } from "./import/foundation-source.js";
 export { preprocessText, exportPreprocessed, type PreprocessOptions, type PreprocessResult, type PreprocessExportFormat, type PreprocessExportResult } from "./utils/text-preprocessor.js";
+export { detectDuplicateRhetoric, type DuplicateRhetoricFinding, type DuplicateRhetoricResult, type RhetoricCategory } from "./utils/semantic-duplication.js";
+export { detectDuplicateParagraphs, findDuplicateParagraphs, findSimilarParagraphs, type DuplicateParagraphGroup, type SimilarParagraphGroup, type DedupResult } from "./utils/paragraph-dedup.js";
+export { computeReadabilityScore, type ReadabilityScore, type ReadabilityTrend } from "./utils/readability-score.js";
+export { buildRhetoricAwarePrompt, buildDedupePrompt, RHETORIC_SAFE_THRESHOLDS, type RewriteMode, type RhetoricChange } from "./agents/rhetoric-rewriter.js";
+export {
+  computeSentenceTypeDistribution,
+  computeParagraphRhythm,
+  computeRhetoricBreakdown,
+  computeDialogueFeatures,
+  computeExpandedFingerprint,
+  extractDimensionSamples,
+  type SentenceTypeDistribution,
+  type ParagraphRhythm,
+  type RhetoricBreakdown,
+  type DialogueFeatures,
+  type ExpandedFingerprint,
+  type DimensionSample,
+} from "./utils/style-dimensions.js";
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { exportDocument, type ExportFormat, type ExportResult } from "./utils/document-writer.js";
 export { analyzeDetectionInsights } from "./agents/detection-insights.js";

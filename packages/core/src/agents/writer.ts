@@ -289,6 +289,13 @@ export class WriterAgent extends BaseAgent {
       ],
       { temperature: creativeTemperature },
     );
+    if (creativeResponse.stopReason === "length") {
+      this.log?.warn(
+        resolvedLanguage === "en"
+          ? `Chapter ${chapterNumber} creative response was truncated (stopReason=length). Content may be incomplete.`
+          : `第${chapterNumber}章创作响应被截断（stopReason=length），内容可能不完整。`,
+      );
+    }
     const creativeUsage = creativeResponse.usage;
 
     const creative = parseCreativeOutput(chapterNumber, creativeResponse.content, resolvedLengthSpec.countingMode);

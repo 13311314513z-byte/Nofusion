@@ -1,0 +1,57 @@
+{
+  "id": "1780938739189",
+  "authorId": "9999",
+  "fileName": "_卡_淫语大学习 - 2026-05-19_17h55m48s276ms.jsonl",
+  "fileType": "txt",
+  "textHash": "de7b9c99c84c39e2",
+  "charCount": 197521,
+  "profile": {
+    "avgSentenceLength": 36.5,
+    "sentenceLengthStdDev": 28.6,
+    "avgParagraphLength": 518,
+    "paragraphLengthRange": {
+      "min": 7,
+      "max": 5669
+    },
+    "vocabularyDiversity": 0.009,
+    "topPatterns": [
+      "林老...(280次)",
+      "赵老...(212次)",
+      "周悦...(163次)",
+      "“那...(160次)",
+      "“操...(148次)"
+    ],
+    "rhetoricalFeatures": [
+      "比喻(像/如/仿佛)(224处)",
+      "短句节奏(184处)"
+    ],
+    "fingerprint": {
+      "dialogueRatio": 0.07,
+      "actionDensity": 0.46,
+      "psychologicalRatio": 0.17,
+      "sensoryDensity": 0.55,
+      "colloquialismScore": 0.65,
+      "rhetoricDensity": 0.04,
+      "punctuationRhythm": {
+        "commaRatio": 0.5,
+        "periodRatio": 0.16,
+        "questionRatio": 0.05,
+        "exclamationRatio": 0.01,
+        "ellipsisRatio": 0.27,
+        "semicolonRatio": 0
+      },
+      "aiTellRisk": 0.25,
+      "sensoryBreakdown": {
+        "visual": 0.27,
+        "auditory": 0.42,
+        "tactile": 0.26,
+        "olfactory": 0.04,
+        "gustatory": 0.02
+      }
+    },
+    "sourceName": "_卡_淫语大学习 - 2026-05-19_17h55m48s276ms.jsonl",
+    "analyzedAt": "2026-06-08T17:12:19.241Z"
+  },
+  "status": "ready",
+  "extractedAt": "2026-06-08T17:12:19.241Z"
+}

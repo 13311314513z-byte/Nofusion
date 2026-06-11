@@ -52,8 +52,13 @@ export interface AuthorProfile {
   readonly name: string;
   readonly language: "zh" | "en";
   readonly tags: ReadonlyArray<string>;
+  readonly sourceIds: ReadonlyArray<string>;
   readonly sampleStats: { readonly sourceCount: number; readonly totalChars: number; readonly avgCharsPerSource: number };
   readonly aggregateProfile: CoreStyleProfile;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly sourceUrls?: ReadonlyArray<string>;
 }
 
 export interface AuthorDetail {

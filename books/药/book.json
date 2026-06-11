@@ -1,0 +1,12 @@
+{
+  "id": "药",
+  "title": "药",
+  "genre": "historical",
+  "platform": "other",
+  "language": "zh",
+  "status": "active",
+  "targetChapters": 60,
+  "chapterWordCount": 5000,
+  "createdAt": "2026-06-09T04:48:00.867Z",
+  "updatedAt": "2026-06-09T05:31:04.726Z"
+}

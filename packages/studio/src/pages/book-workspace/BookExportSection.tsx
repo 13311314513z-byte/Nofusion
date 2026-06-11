@@ -19,7 +19,7 @@ import {
   Clock,
 } from "lucide-react";
 
-type ExportFormat = "txt" | "md" | "epub";
+type ExportFormat = "txt" | "md" | "epub" | "html";
 
 interface BookData {
   readonly book: {
@@ -248,7 +248,7 @@ export function BookExportSection({ bookId, nav, t }: BookExportSectionProps) {
         {actionError && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between">
             <span>{actionError}</span>
-            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">Dismiss</button>
+            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">{t("common.dismiss")}</button>
           </div>
         )}
         {/* Header */}
@@ -290,6 +290,7 @@ export function BookExportSection({ bookId, nav, t }: BookExportSectionProps) {
           >
             <option value="txt">TXT</option>
             <option value="md">Markdown</option>
+            <option value="html">HTML</option>
             <option value="epub">EPUB</option>
           </select>
 

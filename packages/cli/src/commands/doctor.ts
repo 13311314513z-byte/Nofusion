@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { findProjectRoot, log, logError, GLOBAL_ENV_PATH } from "../utils.js";
+import { findProjectRoot, log, logError, formatJsonOutput, GLOBAL_ENV_PATH } from "../utils.js";
 import { fetchWithProxy } from "@actalk/inkos-core";
 import {
   ensureNodeRuntimePinFiles,
@@ -94,7 +94,8 @@ async function fetchDoctorModels(
 export const doctorCommand = new Command("doctor")
   .description("Check environment and project health")
   .option("--repair-node-runtime", "Write .nvmrc and .node-version pinned to Node 22 for this project")
-  .action(async (opts: { repairNodeRuntime?: boolean }) => {
+  .option("--json", "Output JSON")
+  .action(async (opts: { repairNodeRuntime?: boolean; json?: boolean }) => {
     const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
     const root = findProjectRoot();
 
@@ -376,6 +377,11 @@ export const doctorCommand = new Command("doctor")
     }
 
     // Output
+    if (opts.json) {
+      log(formatJsonOutput({ checks }));
+      return;
+    }
+
     log("\nInkOS Doctor\n");
     for (const check of checks) {
       const icon = check.ok ? "[OK]" : "[!!]";

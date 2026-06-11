@@ -639,7 +639,7 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
       {actionError && (
         <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">Dismiss</button>
+          <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">{t("common.dismiss")}</button>
         </div>
       )}
       {/* Header */}
@@ -681,12 +681,15 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
               {calculatingAll ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-violet-600/20 border-t-violet-600 rounded-full animate-spin" />
-                  <button
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); calculateCancelledRef.current = true; }}
-                    className="ml-1 text-[10px] underline hover:no-underline"
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); calculateCancelledRef.current = true; } }}
+                    className="ml-1 text-[10px] underline hover:no-underline cursor-pointer"
                   >
                     {t("common.cancel")}
-                  </button>
+                  </span>
                 </>
               ) : (
                 <Palette size={14} />
