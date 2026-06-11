@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { fetchJson } from "../../hooks/use-api";
 import { AlertTriangle, Shield, Info, Search, Loader2, FileText, Bug } from "lucide-react";
 
@@ -15,6 +15,8 @@ interface AITellResult {
 
 interface Props {
   readonly t: (key: string) => string;
+  readonly initialText?: string;
+  readonly language?: "zh" | "en";
 }
 
 function severityIcon(severity: "warning" | "info") {
@@ -28,29 +30,95 @@ function severityBorder(severity: "warning" | "info") {
     : "border-sky-500/20 bg-sky-500/5";
 }
 
-export function AITellsPanel({ t }: Props) {
-  const [text, setText] = useState("");
+/** Shared detection logic — used by both auto and manual triggers. */
+async function runDetection(
+  text: string,
+  language: "zh" | "en",
+  signal?: AbortSignal,
+): Promise<AITellResult> {
+  return fetchJson<AITellResult>("/style/ai-tells", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, language }),
+    signal,
+  });
+}
+
+export function AITellsPanel({ t, initialText, language = "zh" }: Props) {
+  const [text, setText] = useState(initialText ?? "");
   const [result, setResult] = useState<AITellResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel any in-flight request
+  const cancel = useRef(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  });
+
+  // Auto-detect with debounce — fires only when initialText stabilizes
+  useEffect(() => {
+    if (!initialText?.trim()) return;
+    setText(initialText);
+
+    const debounceTimer = setTimeout(async () => {
+      cancel.current();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setLoading(true);
+      setError(null);
+      setResult(null);
+      try {
+        const data = await runDetection(initialText, language, controller.signal);
+        if (!controller.signal.aborted) {
+          setResult(data);
+        }
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      }
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      cancel.current();
+    };
+  }, [initialText, language]);
 
   const handleAnalyze = async () => {
     if (!text.trim()) return;
+    cancel.current();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const data = await fetchJson<AITellResult>("/style/ai-tells", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language: "zh" }),
-      });
-      setResult(data);
+      const data = await runDetection(text, language, controller.signal);
+      if (!controller.signal.aborted) {
+        setResult(data);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (!controller.signal.aborted) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     }
-    setLoading(false);
+    if (!controller.signal.aborted) {
+      setLoading(false);
+    }
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => cancel.current();
+  }, []);
 
   return (
     <div className="space-y-4">

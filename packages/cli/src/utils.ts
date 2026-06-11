@@ -181,6 +181,7 @@ export interface JsonOutput<D = unknown, M = Record<string, unknown>> {
 export function formatJsonOutput<D, M extends Record<string, unknown> = Record<string, unknown>>(
   dataOrError: D | Error,
   meta?: M,
+  raw?: boolean,
 ): string {
   if (dataOrError instanceof Error) {
     return JSON.stringify(
@@ -188,10 +189,12 @@ export function formatJsonOutput<D, M extends Record<string, unknown> = Record<s
       null, 2,
     );
   }
-  return JSON.stringify(
-    Object.assign({ status: "ok" as const, data: dataOrError }, meta ? { meta } : {}),
-    null, 2,
-  );
+  const payload = raw ? dataOrError : Object.assign({ status: "ok" as const, data: dataOrError }, meta ? { meta } : {});
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return JSON.stringify({ status: "error" as const, error: "Failed to serialize output" }, null, 2);
+  }
 }
 
 /**

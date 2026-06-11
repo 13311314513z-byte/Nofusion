@@ -59,6 +59,18 @@ function versionMdPath(root: string, authorId: string, version: number): string 
 }
 
 // ---------------------------------------------------------------------------
+// Author ID sanitisation — prevent path traversal
+// ---------------------------------------------------------------------------
+
+function assertSafeAuthorId(id: string): string {
+  const clean = id.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!clean || clean !== id) {
+    throw new Error(`Invalid authorId: ${id}`);
+  }
+  return clean;
+}
+
+// ---------------------------------------------------------------------------
 // Safe JSON read
 // ---------------------------------------------------------------------------
 
@@ -79,6 +91,7 @@ export async function loadCurrentDistillation(
   root: string,
   authorId: string,
 ): Promise<AuthorDistillation | null> {
+  assertSafeAuthorId(authorId);
   return readJsonSafe<AuthorDistillation>(currentJsonPath(root, authorId));
 }
 
@@ -88,6 +101,7 @@ export async function saveDistillationDraft(
   distillation: AuthorDistillation,
   markdown: string,
 ): Promise<void> {
+  assertSafeAuthorId(authorId);
   const dir = distillationDir(root, authorId);
   await mkdir(dir, { recursive: true });
 
@@ -103,6 +117,7 @@ export async function loadDistillationEvidence(
   root: string,
   authorId: string,
 ): Promise<ReadonlyArray<DistillationEvidence>> {
+  assertSafeAuthorId(authorId);
   const data = await readJsonSafe<{ evidence: DistillationEvidence[] }>(evidencePath(root, authorId));
   return data?.evidence ?? [];
 }
@@ -112,6 +127,7 @@ export async function saveDistillationEvidence(
   authorId: string,
   evidence: ReadonlyArray<DistillationEvidence>,
 ): Promise<void> {
+  assertSafeAuthorId(authorId);
   const dir = distillationDir(root, authorId);
   await mkdir(dir, { recursive: true });
   await writeFile(
@@ -129,6 +145,7 @@ export async function loadDistillationOverrides(
   root: string,
   authorId: string,
 ): Promise<ReadonlyArray<DistillationRule>> {
+  assertSafeAuthorId(authorId);
   const data = await readJsonSafe<{ overrides: DistillationRule[] }>(overridesPath(root, authorId));
   return data?.overrides ?? [];
 }
@@ -138,6 +155,7 @@ export async function saveDistillationOverrides(
   authorId: string,
   overrides: ReadonlyArray<DistillationRule>,
 ): Promise<void> {
+  assertSafeAuthorId(authorId);
   const dir = distillationDir(root, authorId);
   await mkdir(dir, { recursive: true });
   await writeFile(
@@ -157,6 +175,7 @@ export async function publishDistillation(
   distillation: AuthorDistillation,
   markdown: string,
 ): Promise<AuthorDistillation> {
+  assertSafeAuthorId(authorId);
   const published: AuthorDistillation = {
     ...distillation,
     status: "published",
@@ -181,6 +200,7 @@ export async function listDistillationVersions(
   root: string,
   authorId: string,
 ): Promise<ReadonlyArray<number>> {
+  assertSafeAuthorId(authorId);
   const vDir = versionDir(root, authorId);
   try {
     const entries = await readdir(vDir);
@@ -200,6 +220,7 @@ export async function loadDistillationVersion(
   authorId: string,
   version: number,
 ): Promise<AuthorDistillation | null> {
+  assertSafeAuthorId(authorId);
   return readJsonSafe<AuthorDistillation>(versionJsonPath(root, authorId, version));
 }
 
@@ -221,6 +242,7 @@ export async function getDistillationStatus(
   authorId: string,
   currentAuthorProfileVersion: number,
 ): Promise<DistillationStatusInfo> {
+  assertSafeAuthorId(authorId);
   const current = await loadCurrentDistillation(root, authorId);
   if (!current) {
     return {

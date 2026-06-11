@@ -343,7 +343,7 @@ export function detectDuplicateRhetoric(text: string, language: "zh" | "en" = "z
     const confidence = Math.min(0.95, 0.4 + (allMatches.length / 20) * 0.3 + (clusteringFactor - 1) * 0.15);
 
     findings.push({
-      id: `rhetoric-${pattern.category}-${Date.now()}`,
+        id: `rhetoric-${pattern.category}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       category: pattern.category,
       label: pattern.label,
       count: allMatches.length,

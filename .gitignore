@@ -4,5 +4,8 @@ node_modules/
 .inkos/secrets.json
 .inkos/sessions/
 books/**/story/memory.db
+books/
 dist/
 coverage/
+reports/
+*.tsbuildinfo

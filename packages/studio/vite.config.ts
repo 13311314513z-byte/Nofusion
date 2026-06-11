@@ -12,6 +12,17 @@ export default defineConfig({
   },
   server: {
     port: 4577,
+    // 防止 Windows 文件监听抖动触发 Vite 全量 HMR 刷新
+    watch: {
+      ignored: [
+        "**/dist/**",
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/books/**",
+        "**/reports/**",
+        "**/*.tsbuildinfo",
+      ],
+    },
     proxy: {
       "/api/v1/events": {
         target: `http://localhost:${process.env.INKOS_STUDIO_PORT ?? "4579"}`,

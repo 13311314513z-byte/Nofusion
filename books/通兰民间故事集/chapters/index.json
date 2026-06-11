@@ -1,0 +1,71 @@
+[
+  {
+    "number": 1,
+    "title": "七号库的门",
+    "status": "audit-failed",
+    "wordCount": 5509,
+    "createdAt": "2026-06-11T11:49:04.071Z",
+    "updatedAt": "2026-06-11T13:20:23.585Z",
+    "auditIssues": [
+      "[info] 正文中出现一次“忽然”，频率为约3300字1次，未超过每3000字1次的warning阈值，仅作记录供Polisher参考。",
+      "[warning] 连续出现5个不足35字的短段，容易形成短句堆砌。",
+      "[warning] Manual text edit requires review before continuation."
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "target": 5000,
+      "softMin": 4319,
+      "softMax": 5681,
+      "hardMin": 3637,
+      "hardMax": 6363,
+      "countingMode": "zh_chars",
+      "writerCount": 6027,
+      "postWriterNormalizeCount": 5509,
+      "postReviseCount": 5509,
+      "finalCount": 5509,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 66141,
+      "completionTokens": 21286,
+      "totalTokens": 87427
+    }
+  },
+  {
+    "number": 2,
+    "title": "后墙的通风口",
+    "status": "audit-failed",
+    "wordCount": 4514,
+    "createdAt": "2026-06-11T12:05:26.416Z",
+    "updatedAt": "2026-06-11T12:05:26.416Z",
+    "auditIssues": [
+      "[warning] 正文末尾出现「腊月十三了」，与当前状态卡和上一章确立的「康德九年腊月十五」矛盾（第1章开篇即写「腊月十五」）。应是笔误，应为「腊月十六」或保留腊月十五语境。",
+      "[info] chapter2正文中「仿佛」出现1次、「不禁」0次、「竟然」0次、「宛如」0次。AI标记词密度（仿佛/不禁/宛如/竟然/忽然/猛地）约每4200字1次，不超阈值。但「深吸一口」类动作出现2次（「深深地吸了一口」），建议减少至1次或替换为其他表示聚精会神的动作。",
+      "[info] H010「跟踪者三次逼近」在本章（第2章）即出现（东北角枯槐树后），而memo的hook账中写「第四章出现」。提前出现不违规（advance逻辑成立），但建议在后续chapter intent中注明已出现在第2章，避免计划冲突。",
+      "[critical] 出现了「不是……而是……」句式",
+      "[warning] 136个段落里有85个不足35字，段落被切得过碎。",
+      "[warning] 连续出现5个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "target": 5000,
+      "softMin": 4319,
+      "softMax": 5681,
+      "hardMin": 3637,
+      "hardMax": 6363,
+      "countingMode": "zh_chars",
+      "writerCount": 4514,
+      "postWriterNormalizeCount": 4514,
+      "postReviseCount": 0,
+      "finalCount": 4514,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 70302,
+      "completionTokens": 12975,
+      "totalTokens": 83277
+    }
+  }
+]

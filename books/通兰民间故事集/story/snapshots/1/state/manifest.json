@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "language": "zh",
+  "lastAppliedChapter": 1,
+  "projectionVersion": 1,
+  "migrationWarnings": [
+    "H001:status normalized from \"种子\" to \"open\"",
+    "H002:status normalized from \"种子\" to \"open\"",
+    "H003:status normalized from \"种子\" to \"open\"",
+    "H004:status normalized from \"种子\" to \"open\"",
+    "H005:status normalized from \"种子\" to \"open\"",
+    "H006:status normalized from \"种子\" to \"open\"",
+    "H007:status normalized from \"种子\" to \"open\"",
+    "H008:status normalized from \"种子\" to \"open\"",
+    "H009:status normalized from \"种子\" to \"open\"",
+    "H009:lastAdvancedChapter normalized from \"本章发现七号库封条被揭、锁被换，程靖霖观察到细节并汇报给程时一\" to 0",
+    "H010:lastAdvancedChapter normalized from \"本章确认程靖霖被跟踪监视，跟踪者三次出现，站位一次比一次靠近\" to 0"
+  ]
+}

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
+import type { CoreStyleProfile } from "./style-types.js";
+import type { FullStyleDiagnostics, DuplicateRhetoricFinding } from "@actalk/inkos-core";
 import {
   ChevronLeft,
   Check,
@@ -22,6 +24,10 @@ import {
   AlertTriangle,
   Loader2,
   Info,
+  Wand2,
+  BarChart3,
+  ChevronDown,
+  Bug,
 } from "lucide-react";
 
 interface ChapterData {
@@ -49,6 +55,373 @@ interface Nav {
   toDashboard: () => void;
 }
 
+/** Compact style analysis panel — shared between editing sidebar and reading view. */
+function StyleAnalysisSidebar({ styleProfile, styleDiagnostics, rhetoricFindings, rhetoricLoading, currentText, styleLoading, styleError, onClose, onRefresh, onIssueClick, onApplyRewrite }: {
+  readonly styleProfile: CoreStyleProfile | null;
+  readonly styleDiagnostics: FullStyleDiagnostics | null;
+  readonly rhetoricFindings: ReadonlyArray<DuplicateRhetoricFinding>;
+  readonly rhetoricLoading: boolean;
+  readonly currentText: string;
+  readonly styleLoading: boolean;
+  readonly styleError: string | null;
+  readonly onClose: () => void;
+  readonly onRefresh: () => void;
+  readonly onIssueClick: (start: number, end: number) => void;
+  readonly onApplyRewrite?: (start: number, end: number, pattern: string) => Promise<string | null>;
+}) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showRhetoric, setShowRhetoric] = useState(false);
+  const [fixingIdx, setFixingIdx] = useState<string | null>(null);
+  const [fixStatus, setFixStatus] = useState<string | null>(null);
+
+  const severityColor = (severity: string) => {
+    if (severity === "high" || severity === "critical") return "text-red-500 bg-red-500/10 border-red-500/20";
+    if (severity === "medium" || severity === "warning") return "text-amber-600 bg-amber-500/10 border-amber-500/20";
+    return "text-sky-600 bg-sky-500/10 border-sky-500/20";
+  };
+
+  const totalDiagnosticIssues = (styleDiagnostics?.intentRepetitions?.length ?? 0)
+    + (styleDiagnostics?.repeatedDescriptions?.length ?? 0)
+    + (styleDiagnostics?.transitionClustering?.length ?? 0)
+    + (styleDiagnostics?.clauseComplexity?.length ?? 0);
+
+  return (
+    <div className="border border-indigo-500/20 rounded-lg p-4 bg-card/50 space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <Wand2 size={12} />
+          文风快照
+        </h4>
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+      </div>
+
+      {styleLoading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+          <Loader2 size={12} className="animate-spin" />
+          分析中…
+        </div>
+      )}
+
+      {styleError && (
+        <div className="text-xs text-destructive bg-destructive/5 rounded p-2">{styleError}</div>
+      )}
+
+      {styleProfile && (
+        <>
+          {/* Basic Stats */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="bg-secondary/30 rounded-lg p-2.5">
+              <div className="text-[10px] text-muted-foreground">句长</div>
+              <div className="text-lg font-bold">{styleProfile.avgSentenceLength.toFixed(1)}</div>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-2.5">
+              <div className="text-[10px] text-muted-foreground">词汇多样性</div>
+              <div className="text-lg font-bold">{(styleProfile.vocabularyDiversity * 100).toFixed(0)}%</div>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-2.5">
+              <div className="text-[10px] text-muted-foreground">段落均长</div>
+              <div className="text-lg font-bold">{styleProfile.avgParagraphLength.toFixed(0)}</div>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-2.5">
+              <div className="text-[10px] text-muted-foreground">句长标准差</div>
+              <div className="text-lg font-bold">{styleProfile.sentenceLengthStdDev.toFixed(1)}</div>
+            </div>
+          </div>
+
+          {styleProfile.topPatterns.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">常见句式</h5>
+              <div className="flex flex-wrap gap-1">
+                {styleProfile.topPatterns.slice(0, 6).map((pt: string) => (
+                  <span key={pt} className="px-1.5 py-0.5 text-[10px] bg-secondary rounded">{pt}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {styleProfile.rhetoricalFeatures.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">修辞特征</h5>
+              <div className="flex flex-wrap gap-1">
+                {styleProfile.rhetoricalFeatures.slice(0, 6).map((rf: string) => (
+                  <span key={rf} className="px-1.5 py-0.5 text-[10px] bg-primary/10 text-primary rounded">{rf}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {styleProfile.fingerprint && (
+            <div>
+              <h5 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">风格指纹</h5>
+              <div className="space-y-1.5">
+                {[
+                  { label: "对话占比", value: styleProfile.fingerprint.dialogueRatio, color: "bg-emerald-500" },
+                  { label: "动作密度", value: styleProfile.fingerprint.actionDensity, color: "bg-amber-500" },
+                  { label: "心理占比", value: styleProfile.fingerprint.psychologicalRatio, color: "bg-purple-500" },
+                  { label: "修辞密度", value: styleProfile.fingerprint.rhetoricDensity, color: "bg-indigo-500" },
+                  { label: "AI 风险", value: styleProfile.fingerprint.aiTellRisk, color: styleProfile.fingerprint.aiTellRisk > 0.5 ? "bg-destructive" : "bg-emerald-500" },
+                ].map((item) => (
+                  <div key={item.label} className="space-y-0.5">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-medium">{(item.value * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${item.color}`} style={{ width: `${Math.min(item.value * 100, 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Risk Diagnosis Section (collapsible) */}
+          {styleDiagnostics && totalDiagnosticIssues > 0 && (
+            <div className="border border-amber-500/20 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setShowDiagnostics(!showDiagnostics)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-amber-700 bg-amber-500/5 hover:bg-amber-500/10 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle size={12} />
+                  风险诊断（{totalDiagnosticIssues}）
+                </span>
+                <ChevronDown size={12} className={`transition-transform ${showDiagnostics ? "rotate-180" : ""}`} />
+              </button>
+              {showDiagnostics && (
+                <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+                  {/* Intent Repetitions */}
+                  {styleDiagnostics.intentRepetitions.map((item, idx) => {
+                    const key = `ir-${idx}`;
+                    const ex = item.examples?.[0];
+                    return (
+                    <div key={key} className="overflow-hidden flex items-center gap-1 text-[10px] py-1 px-1.5 rounded hover:bg-amber-500/10 transition-colors border border-transparent hover:border-amber-500/20 group">
+                      <button
+                        onClick={() => { if (ex) onIssueClick(ex.start, ex.end); }}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left overflow-hidden"
+                      >
+                        <span className={`px-1 py-0.5 rounded border shrink-0 ${severityColor(item.severity)}`}>{item.severity}</span>
+                        <span className="truncate flex-1">{item.pattern}</span>
+                        <span className="text-muted-foreground shrink-0">{item.count}次</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (fixingIdx) return;
+                          setFixingIdx(key);
+                          setFixStatus(null);
+                          try {
+                            const result = onApplyRewrite
+                              ? await onApplyRewrite(ex?.start ?? 0, ex?.end ?? 0, item.pattern)
+                              : null;
+                            setFixStatus(result ? "已替换" : "无法替换");
+                          } catch (e) {
+                            setFixStatus(`失败: ${e instanceof Error ? e.message : String(e)}`);
+                          }
+                          setFixingIdx(null);
+                          setTimeout(() => setFixStatus(null), 3000);
+                        }}
+                        disabled={fixingIdx === key}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 border border-indigo-500/20 shrink-0 disabled:opacity-30"
+                      >
+                        {fixingIdx === key ? <Loader2 size={8} className="animate-spin" /> : "修复"}
+                      </button>
+                      {fixStatus && fixingIdx !== key && (
+                        <span className="text-[8px] text-muted-foreground shrink-0 max-w-[60px] truncate">{fixStatus}</span>
+                      )}
+                    </div>
+                  );})}
+                  {/* Repeated Descriptions */}
+                  {styleDiagnostics.repeatedDescriptions.map((item, idx) => {
+                    const key = `rd-${idx}`;
+                    const oc = item.occurrences?.[0];
+                    return (
+                    <div key={key} className="overflow-hidden flex items-center gap-1 text-[10px] py-1 px-1.5 rounded hover:bg-purple-500/10 transition-colors border border-transparent hover:border-purple-500/20 group">
+                      <button
+                        onClick={() => { if (oc) onIssueClick(oc.start, oc.end); }}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left overflow-hidden"
+                      >
+                        <span className={`px-1 py-0.5 rounded border shrink-0 ${severityColor(item.severity)}`}>{item.severity}</span>
+                        <span className="truncate flex-1">{item.cluster}</span>
+                        <span className="text-muted-foreground shrink-0">{item.occurrences.length}处</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (fixingIdx) return;
+                          setFixingIdx(key);
+                          setFixStatus(null);
+                          try {
+                            const result = onApplyRewrite
+                              ? await onApplyRewrite(oc?.start ?? 0, oc?.end ?? 0, item.cluster)
+                              : null;
+                            setFixStatus(result ? "已替换" : "无法替换");
+                          } catch (e) {
+                            setFixStatus(`失败: ${e instanceof Error ? e.message : String(e)}`);
+                          }
+                          setFixingIdx(null);
+                          setTimeout(() => setFixStatus(null), 3000);
+                        }}
+                        disabled={fixingIdx === key}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 border border-indigo-500/20 shrink-0 disabled:opacity-30"
+                      >
+                        {fixingIdx === key ? <Loader2 size={8} className="animate-spin" /> : "修复"}
+                      </button>
+                    </div>
+                  );})}
+                  {/* Transition Clustering — highlight by searching transition word */}
+                  {styleDiagnostics.transitionClustering.map((item, idx) => {
+                    const word = item.transitionWord;
+                    const wordPos = currentText ? currentText.indexOf(word) : -1;
+                    return (
+                    <div key={`tc-${idx}`} className="overflow-hidden flex items-center gap-1 text-[10px] py-1 px-1.5 rounded hover:bg-sky-500/10 transition-colors border border-transparent hover:border-sky-500/20">
+                      <button
+                        onClick={() => { if (wordPos >= 0) onIssueClick(wordPos, wordPos + word.length); else onIssueClick(0, 0); }}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left overflow-hidden"
+                      >
+                        <span className={`px-1 py-0.5 rounded border shrink-0 ${severityColor(item.severity)}`}>{item.severity}</span>
+                        <span className="truncate flex-1">"{item.transitionWord}" 连续{item.consecutiveTransitions}次</span>
+                        <span className="text-muted-foreground shrink-0">{item.totalCount}次</span>
+                      </button>
+                    </div>
+                  );})}
+                  {/* Clause Complexity */}
+                  {styleDiagnostics.clauseComplexity.map((item, idx) => {
+                    const snippet = item.sentence.slice(0, 30);
+                    const snipPos = currentText ? currentText.indexOf(snippet) : -1;
+                    return (
+                    <div key={`cc-${idx}`} className="overflow-hidden flex items-center gap-1 text-[10px] py-1 px-1.5 rounded hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/20">
+                      <button
+                        onClick={() => { if (snipPos >= 0) onIssueClick(snipPos, snipPos + snippet.length); else onIssueClick(0, 0); }}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left overflow-hidden"
+                      >
+                        <span className={`px-1 py-0.5 rounded border shrink-0 ${severityColor(item.severity)}`}>{item.severity}</span>
+                        <span className="truncate flex-1">{item.sentence.slice(0, 40)}…</span>
+                        <span className="text-muted-foreground shrink-0">{item.sentenceLength}字</span>
+                      </button>
+                    </div>
+                  );})}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Rhetoric Deduplication Section (collapsible) */}
+          {rhetoricFindings.length > 0 && (
+            <div className="border border-purple-500/20 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setShowRhetoric(!showRhetoric)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-purple-700 bg-purple-500/5 hover:bg-purple-500/10 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Bug size={12} />
+                  修辞去重（{rhetoricFindings.length}）
+                </span>
+                <ChevronDown size={12} className={`transition-transform ${showRhetoric ? "rotate-180" : ""}`} />
+              </button>
+              {showRhetoric && (
+                <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+                  {rhetoricFindings.map((finding, idx) => {
+                    // Find ALL occurrences of the example text in currentText, pick the one nearest to the middle
+                    const exampleText = finding.examples?.[0]?.text;
+                    let bestPos = -1;
+                    if (exampleText && currentText) {
+                      let searchFrom = 0;
+                      let iteration = 0;
+                      while (iteration < finding.count && searchFrom < currentText.length) {
+                        const p = currentText.indexOf(exampleText, searchFrom);
+                        if (p < 0) break;
+                        if (iteration === 0) bestPos = p;
+                        // Pick the occurrence closest to the middle of the text
+                        const mid = currentText.length / 2;
+                        if (Math.abs(p - mid) < Math.abs(bestPos - mid)) bestPos = p;
+                        searchFrom = p + exampleText.length;
+                        iteration++;
+                      }
+                    }
+                    return (
+                    <button
+                      key={`rf-${idx}`}
+                      onClick={() => {
+                        if (bestPos >= 0) onIssueClick(bestPos, bestPos + (exampleText?.length ?? 0));
+                        else onIssueClick(0, 0);
+                      }}
+                      className="w-full text-left flex items-center gap-2 text-[10px] py-1.5 px-2 rounded hover:bg-purple-500/10 transition-colors border border-transparent hover:border-purple-500/20"
+                    >
+                      <span className={`px-1 py-0.5 rounded border ${severityColor(finding.severity ?? "info")}`}>
+                        {finding.severity ?? "info"}
+                      </span>
+                      <span className="truncate flex-1">{finding.label ?? finding.category}</span>
+                      <span className="text-muted-foreground shrink-0">{finding.count ?? 0}次</span>
+                    </button>
+                  );})}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Refresh button */}
+          <div className="flex gap-2">
+            <button
+              onClick={onRefresh}
+              disabled={styleLoading}
+              className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary border border-border disabled:opacity-30 flex items-center justify-center gap-1"
+            >
+              <BarChart3 size={10} />
+              {styleLoading ? "分析中…" : "刷新分析"}
+            </button>
+            {rhetoricLoading && (
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Loader2 size={10} className="animate-spin" />
+                检测修辞…
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {!styleProfile && !styleLoading && !styleError && (
+        <div className="text-xs text-muted-foreground text-center py-8">
+          点击工具栏的「文风」按钮分析当前文本
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Heuristic text variation for common style issues — used when AI rewrite is not available. */
+function generateVariedReplacement(originalText: string, pattern: string): string {
+  if (!originalText.trim()) return originalText;
+
+  const SYNONYM_LIB: Record<string, ReadonlyArray<string>> = {
+    "转": ["扭", "侧", "偏"],
+    "看": ["望", "瞧", "瞅", "瞥", "观"],
+    "目光": ["视线", "眼神", "眼光", "眼波"],
+    "视线": ["目光", "眼神", "视野", "眼帘"],
+    "眼神": ["目光", "视线", "眼色", "神情"],
+    "叹": ["吁", "呼"],
+    "叹气": ["叹息", "吁气", "舒气"],
+    "点头": ["颔首", "首肯"],
+    "摇头": ["摆手", "晃首"],
+    "但是": ["然而", "不过", "可是"],
+    "然而": ["但是", "不过", "可是"],
+    "所以": ["因此", "因而", "于是"],
+    "于是": ["便", "就", "随即"],
+    "突然": ["忽然", "猛然", "骤然"],
+    "忽然": ["突然", "猛然", "蓦然"],
+    "终于": ["总算", "终究", "到底"],
+    "虽然": ["尽管", "虽说", "固然"],
+    "因为": ["由于", "鉴于", "基于"],
+  };
+
+  for (const [key, synonyms] of Object.entries(SYNONYM_LIB)) {
+    if (originalText.includes(key)) {
+      const synonym = synonyms[Math.floor(Math.random() * synonyms.length)];
+      return originalText.replace(key, synonym);
+    }
+  }
+
+  return originalText;
+}
+
 export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   bookId: string;
   chapterNumber: number;
@@ -67,6 +440,163 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   const [auditing, setAuditing] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [showAudit, setShowAudit] = useState(false);
+
+  // Inline style analysis state
+  const [showStylePanel, setShowStylePanel] = useState(false);
+  const [styleProfile, setStyleProfile] = useState<CoreStyleProfile | null>(null);
+  const [styleDiagnostics, setStyleDiagnostics] = useState<FullStyleDiagnostics | null>(null);
+  const [rhetoricFindings, setRhetoricFindings] = useState<ReadonlyArray<DuplicateRhetoricFinding>>([]);
+  const [rhetoricLoading, setRhetoricLoading] = useState(false);
+  const [styleLoading, setStyleLoading] = useState(false);
+  const [styleError, setStyleError] = useState<string | null>(null);
+
+  const handleStyleAnalysis = async () => {
+    const textToAnalyze = editing ? editContent : data?.content ?? "";
+    if (!textToAnalyze.trim()) return;
+    setStyleLoading(true);
+    setStyleError(null);
+    setStyleProfile(null);
+    setStyleDiagnostics(null);
+    setRhetoricFindings([]);
+    setShowStylePanel(true);
+    try {
+      const [profile, diagnostics, rhetoricResult] = await Promise.all([
+        fetchJson<CoreStyleProfile>("/style/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToAnalyze, sourceName: `chapter-${chapterNumber}` }),
+        }),
+        fetchJson<FullStyleDiagnostics>("/style/diagnostics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToAnalyze, language: "zh" }),
+        }),
+        fetchJson<{ findings: ReadonlyArray<DuplicateRhetoricFinding> }>("/style/rhetoric/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToAnalyze, language: "zh" }),
+        }),
+      ]);
+      setStyleProfile(profile);
+      setStyleDiagnostics(diagnostics);
+      setRhetoricFindings(Array.isArray(rhetoricResult?.findings) ? rhetoricResult.findings : []);
+    } catch (e) {
+      setStyleError(e instanceof Error ? e.message : String(e));
+    }
+    setStyleLoading(false);
+  };
+
+  /** Replacement library — maps original pattern to replacement text */
+  const [replacementLib, setReplacementLib] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(sessionStorage.getItem("style-replacement-lib") ?? "{}"); }
+    catch { return {}; }
+  });
+
+  const saveToReplacementLib = useCallback((original: string, replacement: string) => {
+    setReplacementLib((prev) => {
+      const next = { ...prev, [original]: replacement };
+      try { sessionStorage.setItem("style-replacement-lib", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleIssueClick = useCallback((start: number, end: number) => {
+    const jumpToPosition = () => {
+      const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
+      if (!textarea) {
+        // If no textarea (reading mode), try again with delay
+        if (!editing && data) {
+          setEditContent(data.content);
+          setEditing(true);
+          setTimeout(jumpToPosition, 150);
+        }
+        return;
+      }
+      textarea.focus();
+      if (start > 0 || end > 0) {
+        const clampedStart = Math.max(0, Math.min(start, textarea.value.length));
+        const clampedEnd = Math.min(end || start + 100, textarea.value.length);
+        textarea.selectionStart = clampedStart;
+        textarea.selectionEnd = clampedEnd;
+        // Calculate scroll position: show target line in middle of viewport
+        const beforeText = textarea.value.substring(0, clampedStart);
+        const lineCount = beforeText.split('\n').length;
+        const lineHeight = 29;
+        const viewportLines = Math.floor(textarea.clientHeight / lineHeight);
+        const targetScrollLine = Math.max(0, lineCount - Math.floor(viewportLines / 2));
+        textarea.scrollTop = targetScrollLine * lineHeight;
+      }
+    };
+
+    jumpToPosition();
+  }, [editing, data]);
+
+  /** Apply AI rewrite: replace text directly, store in replacement library */
+  const handleApplyRewrite = useCallback(async (start: number, end: number, pattern: string): Promise<string | null> => {
+    const textToFix = editing ? editContent : data?.content ?? "";
+    if (!textToFix || start < 0 || end > textToFix.length) {
+      // Fallback: enter edit mode and select from beginning
+      if (!editing && data) {
+        setEditContent(data.content);
+        setEditing(true);
+      }
+      return null;
+    }
+
+    const originalText = textToFix.substring(start, end);
+    if (!originalText.trim()) return null;
+
+    // Check replacement library first
+    const cached = replacementLib[originalText];
+    if (cached) {
+      await doTextReplace(start, end, cached);
+      return cached;
+    }
+
+    // Try API first
+    try {
+      const { rewriteRhetoric } = await import("../hooks/use-api.js");
+      const result = await rewriteRhetoric(textToFix, [pattern]);
+      if (result.prompt) {
+        await navigator.clipboard.writeText(result.prompt).catch(() => {});
+      }
+    } catch { /* ignore API errors, fall back to heuristic */ }
+
+    // Use heuristic replacement (always works locally)
+    const replacement = generateVariedReplacement(originalText, pattern);
+    await doTextReplace(start, end, replacement);
+    saveToReplacementLib(originalText, replacement);
+    return replacement;
+  }, [editing, editContent, data, replacementLib, saveToReplacementLib]);
+
+  const doTextReplace = useCallback(async (start: number, end: number, replacement: string) => {
+    if (!editing && data) {
+      setEditContent(data.content);
+      setEditing(true);
+      // Wait for state update + render, then apply
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    setEditContent((prev) => prev.substring(0, start) + replacement + prev.substring(end));
+    // Refresh style analysis after a short delay
+    setTimeout(() => { if (editing || true) handleStyleAnalysis(); }, 600);
+  }, [editing, data]);
+
+  /** Apply text replacement to editContent */
+  const applyTextReplacement = useCallback((start: number, end: number, replacement: string) => {
+    if (!editing) {
+      // Enter edit mode first
+      if (data) setEditContent(data.content);
+      setEditing(true);
+      setTimeout(() => {
+        setEditContent((prev) => prev.substring(0, start) + replacement + prev.substring(end));
+      }, 50);
+    } else {
+      setEditContent((prev) => prev.substring(0, start) + replacement + prev.substring(end));
+    }
+    // Refresh analysis after a short delay
+    setTimeout(() => { handleStyleAnalysis(); }, 500);
+  }, [editing, data]);
+
 
   const handleStartEdit = () => {
     if (!data) return;
@@ -184,7 +714,7 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 fade-in">
+    <div className="mx-auto space-y-10 fade-in">
       {/* Navigation & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <nav className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
@@ -268,6 +798,18 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
             {auditing ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
             {auditing ? "审计中…" : "审计"}
           </button>
+          <button
+            onClick={handleStyleAnalysis}
+            disabled={styleLoading}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all border shadow-sm disabled:opacity-50 ${
+              showStylePanel
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-indigo-500/10 text-indigo-600 border-indigo-500/20 hover:bg-indigo-500 hover:text-white"
+            }`}
+          >
+            {styleLoading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            文风
+          </button>
         </div>
       </div>
 
@@ -294,12 +836,34 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
         </header>
 
         {editing ? (
-          <textarea
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            className="w-full min-h-[60vh] bg-transparent font-serif text-lg leading-[1.8] text-foreground/90 focus:outline-none resize-none border border-border/30 rounded-lg p-6 focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all"
-            autoFocus
-          />
+          <div className="flex gap-4">
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className={`bg-transparent font-serif text-lg leading-[1.8] text-foreground/90 focus:outline-none resize-none border border-border/30 rounded-lg p-6 focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all ${
+                showStylePanel ? "w-4/5" : "w-full"
+              }`}
+              style={{ minHeight: "60vh" }}
+              autoFocus
+            />
+
+            {/* Inline Style Panel (editing mode — side by side) */}
+            {showStylePanel && editing && (
+              <StyleAnalysisSidebar
+                styleProfile={styleProfile}
+                styleDiagnostics={styleDiagnostics}
+                rhetoricFindings={rhetoricFindings}
+                rhetoricLoading={rhetoricLoading}
+                currentText={editing ? editContent : data?.content ?? ""}
+                styleLoading={styleLoading}
+                styleError={styleError}
+                onClose={() => setShowStylePanel(false)}
+                onRefresh={handleStyleAnalysis}
+                onIssueClick={handleIssueClick}
+                onApplyRewrite={handleApplyRewrite}
+              />
+            )}
+          </div>
         ) : (
           <article className="prose prose-zinc dark:prose-invert max-w-none">
             {paragraphs.map((para, i) => {
@@ -444,6 +1008,25 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
           </div>
         )}
       </div>
+
+      {/* Inline Style Panel (non-editing mode — below manuscript) */}
+      {showStylePanel && !editing && (
+        <div className="mt-8 pt-8 border-t border-indigo-200 dark:border-indigo-800">
+          <StyleAnalysisSidebar
+            styleProfile={styleProfile}
+            styleDiagnostics={styleDiagnostics}
+            rhetoricFindings={rhetoricFindings}
+            rhetoricLoading={rhetoricLoading}
+            currentText={data?.content ?? ""}
+            styleLoading={styleLoading}
+            styleError={styleError}
+            onClose={() => setShowStylePanel(false)}
+            onRefresh={handleStyleAnalysis}
+            onIssueClick={handleIssueClick}
+            onApplyRewrite={handleApplyRewrite}
+          />
+        </div>
+      )}
 
       {/* Footer Navigation */}
       <div className="flex justify-between items-center py-8">

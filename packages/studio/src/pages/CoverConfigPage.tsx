@@ -29,6 +29,9 @@ export function CoverConfigPage({ t }: Props) {
   const [selectedService, setSelectedService] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [hasStoredKeys, setHasStoredKeys] = useState<Record<string, boolean>>({});
+  const [keyPreviews, setKeyPreviews] = useState<Record<string, string>>({});
+  const [keyDirty, setKeyDirty] = useState<Record<string, boolean>>({});
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
@@ -60,15 +63,32 @@ export function CoverConfigPage({ t }: Props) {
 
   const handleLoadKey = async (service: string) => {
     try {
-      const data = await fetchJson<{ apiKey: string }>(`/cover/secret/${service}`);
-      setApiKeys((prev) => ({ ...prev, [service]: data.apiKey }));
+      const data = await fetchJson<{ hasApiKey: boolean; keyPreview: string }>(`/cover/secret/${service}`);
+      setHasStoredKeys((prev) => ({ ...prev, [service]: data.hasApiKey }));
+      setKeyPreviews((prev) => ({ ...prev, [service]: data.keyPreview }));
+      setApiKeys((prev) => ({ ...prev, [service]: "" })); // Don't keep plaintext
+      setKeyDirty((prev) => ({ ...prev, [service]: false }));
     } catch { /* ignore */ }
   };
 
   const handleSaveKey = async (service: string) => {
     setSavingKey(service);
     try {
-      await putApi(`/cover/secret/${service}`, { apiKey: apiKeys[service] || "" });
+      const payload: Record<string, string> = {};
+      const keyValue = (apiKeys[service] ?? "").trim();
+      if (keyValue) {
+        payload.apiKey = keyValue;
+      } else if (keyDirty[service]) {
+        payload.clear = "true";
+      } else {
+        // No change — skip
+        setSavingKey(null);
+        return;
+      }
+      await putApi(`/cover/secret/${service}`, payload);
+      setHasStoredKeys((prev) => ({ ...prev, [service]: !!keyValue }));
+      setKeyPreviews((prev) => ({ ...prev, [service]: keyValue ? keyValue.slice(0, 4) + "..." : "" }));
+      setKeyDirty((prev) => ({ ...prev, [service]: false }));
       setSaveStatus(`key-saved:${service}`);
     } catch (e) {
       setSaveStatus(`key-error:${e instanceof Error ? e.message : String(e)}`);
@@ -166,7 +186,10 @@ export function CoverConfigPage({ t }: Props) {
               <input
                 type={visibleKeys[selectedService] ? "text" : "password"}
                 value={apiKeys[selectedService] ?? ""}
-                onChange={(e) => setApiKeys((prev) => ({ ...prev, [selectedService]: e.target.value }))}
+                onChange={(e) => {
+                  setApiKeys((prev) => ({ ...prev, [selectedService]: e.target.value }));
+                  setKeyDirty((prev) => ({ ...prev, [selectedService]: true }));
+                }}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -176,7 +199,7 @@ export function CoverConfigPage({ t }: Props) {
                 data-lpignore="true"
                 data-1p-ignore="true"
                 data-bwignore="true"
-                placeholder="粘贴 API Key..."
+                placeholder={hasStoredKeys[selectedService] ? `已有密钥 ${keyPreviews[selectedService] ?? ""}，输入新值替换` : "粘贴 API Key..."}
                 className="w-full px-3 py-2 pr-10 rounded-lg bg-secondary/30 border border-border text-sm font-mono focus:outline-none focus:border-primary"
               />
               <button
@@ -186,14 +209,27 @@ export function CoverConfigPage({ t }: Props) {
                 {visibleKeys[selectedService] ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
-            <button
-              onClick={() => void handleSaveKey(selectedService)}
-              disabled={savingKey === selectedService}
-              className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground disabled:opacity-30 hover:opacity-90 flex items-center gap-1"
-            >
-              {savingKey === selectedService ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              保存
-            </button>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => void handleSaveKey(selectedService)}
+                disabled={savingKey === selectedService}
+                className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground disabled:opacity-30 hover:opacity-90 flex items-center gap-1"
+              >
+                {savingKey === selectedService ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                保存
+              </button>
+              {hasStoredKeys[selectedService] && !keyDirty[selectedService] && (
+                <span className="text-xs text-muted-foreground">已有密钥，留空不修改</span>
+              )}
+              {hasStoredKeys[selectedService] && keyDirty[selectedService] && !apiKeys[selectedService]?.trim() && (
+                <button
+                  onClick={() => void handleSaveKey(selectedService)}
+                  className="text-xs text-destructive hover:underline text-left"
+                >
+                  清除已存储的密钥
+                </button>
+              )}
+            </div>
           </div>
           {saveStatus === `key-saved:${selectedService}` && (
             <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle size={12} />密钥已保存</span>

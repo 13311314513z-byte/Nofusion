@@ -1,10 +1,9 @@
 import { type ChangeEvent, type RefObject } from "react";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import { Upload, BarChart3, Stethoscope, Link, User } from "lucide-react";
+import { Upload, BarChart3, Stethoscope, Link, User, BookOpen } from "lucide-react";
 import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel.js";
-import { AdjustmentSuggestionsPanel } from "./style-manager/AdjustmentSuggestionsPanel.js";
 import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
-import type { CoreStyleProfile, AuthorIndexItem } from "./style-types.js";
+import type { CoreStyleProfile, AuthorIndexItem, BookSummary } from "./style-types.js";
 
 interface Props {
   readonly text: string;
@@ -19,21 +18,30 @@ interface Props {
   readonly loadingDiagnostics: boolean;
   readonly textFileInputRef: RefObject<HTMLInputElement | null>;
   readonly libraryData: { authors: ReadonlyArray<AuthorIndexItem> } | null;
+  readonly booksData: { books: ReadonlyArray<BookSummary> } | null;
   readonly c: Record<string, string>;
   readonly t: (key: string) => string;
   readonly handleTextLocalFile: (e: ChangeEvent<HTMLInputElement>) => void;
   readonly handleImportUrl: () => void;
   readonly handleAnalyze: () => void;
   readonly handleDiagnostics: () => void;
+  readonly handleImportBookChapter: (bookId: string, chapterNumber?: number) => Promise<void>;
   readonly renderProfileCard: (p: CoreStyleProfile | null, showImport?: boolean) => React.ReactNode;
+  // Chapter selection
+  readonly importBookId: string;
+  readonly chapterIndex: ReadonlyArray<{ number: number; title: string }> | null;
+  readonly importChapterNumber: number;
+  readonly handleSelectBook: (bookId: string) => Promise<void>;
+  readonly onSelectChapter: (chapterNumber: number) => void;
 }
 
 export function StyleTextTab({
   text, setText, sourceName, setSourceName, urlSource, setUrlSource,
   profile, diagnostics, loading, loadingDiagnostics,
-  textFileInputRef, libraryData, c, t,
-  handleTextLocalFile, handleImportUrl, handleAnalyze, handleDiagnostics,
+  textFileInputRef, libraryData, booksData, c, t,
+  handleTextLocalFile, handleImportUrl, handleAnalyze, handleDiagnostics, handleImportBookChapter,
   renderProfileCard,
+  importBookId, chapterIndex, importChapterNumber, handleSelectBook, onSelectChapter,
 }: Props) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -70,8 +78,44 @@ export function StyleTextTab({
             </button>
           </div>
         </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
+        <div>          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">
+            <BookOpen size={12} className="inline mr-1" />
+            已创作书籍导入
+          </label>
+          <div className="flex gap-2">
+            <select
+              className="min-w-0 flex-1 px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
+              value={importBookId}
+              onChange={(e) => { handleSelectBook(e.target.value); }}
+            >
+              <option value="">选择书籍...</option>
+              {booksData?.books.map((b) => (
+                <option key={b.id} value={b.id}>{b.title}</option>
+              ))}
+            </select>
+            {chapterIndex && chapterIndex.length > 0 ? (
+              <select
+                className="px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
+                value={importChapterNumber}
+                onChange={(e) => onSelectChapter(Number(e.target.value))}
+              >
+                {chapterIndex.map((ch) => (
+                  <option key={ch.number} value={ch.number}>
+                    第 {ch.number} 章{ch.title ? `: ${ch.title}` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs text-muted-foreground self-center whitespace-nowrap">导入首章</span>
+            )}
+            <button
+              onClick={() => handleImportBookChapter(importBookId, importChapterNumber)}
+              disabled={!importBookId || loading}
+              className={`px-3 py-2 text-sm rounded-lg ${c.btnPrimary} disabled:opacity-30`}
+            >{t("style.importChapter")}</button>
+          </div>
+        </div>
+        <div>          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -112,16 +156,6 @@ export function StyleTextTab({
             <Stethoscope size={14} />
             {loadingDiagnostics ? "诊断中…" : "文风诊断"}
           </button>
-        </div>
-
-        {/* Adjustment suggestions */}
-        <div className={`border ${c.cardStatic} rounded-lg p-4`}>
-          <AdjustmentSuggestionsPanel
-            text={text}
-            onTextChange={setText}
-            diagnostics={diagnostics}
-            t={t as unknown as (key: string) => string}
-          />
         </div>
       </div>
 

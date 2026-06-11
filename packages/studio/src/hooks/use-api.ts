@@ -203,19 +203,19 @@ export async function putApi<T>(path: string, body?: unknown): Promise<T> {
 
 // ── Style API helpers ──────────────────────────────────────────────────────
 
-/** 修辞改写 */
-export function rewriteRhetoric(text: string, categories: ReadonlyArray<string>): Promise<{ rewritten: string }> {
+/** 修辞改写 — 返回生成的改写 prompt */
+export function rewriteRhetoric(text: string, categories: ReadonlyArray<string>): Promise<{ prompt: string }> {
   return postApi("/style/rhetoric/rewrite", { text, categories });
 }
 
 /** 修辞感知提示注入 */
-export function fetchRhetoricAwarePrompt(text: string): Promise<{ prompt: string }> {
-  return postApi("/style/rhetoric/aware-prompt", { text });
+export function fetchRhetoricAwarePrompt(basePrompt: string, contextText: string): Promise<{ prompt: string }> {
+  return postApi("/style/rhetoric/aware-prompt", { basePrompt, contextText });
 }
 
 /** 段落去重 */
-export function dedupParagraphs(text: string): Promise<{ paragraphs: ReadonlyArray<{ hash: string; content: string; lineNumber: number; duplicates: ReadonlyArray<number> }> }> {
-  return postApi("/style/paragraph/dedup", { text });
+export function dedupParagraphs(text: string, threshold?: number, minLength?: number): Promise<{ duplicateGroups: unknown[]; similarGroups: unknown[] }> {
+  return postApi("/style/paragraph/dedup", { text, threshold, minLength });
 }
 
 /** 可读性评分 */
@@ -224,16 +224,23 @@ export function fetchReadabilityScore(text: string, lang?: string): Promise<impo
 }
 
 /** 搜索作者作品（网络搜索） */
-export function searchAuthorWork(query: string): Promise<{ sources: ReadonlyArray<{ title: string; url: string; snippet: string }> }> {
-  return postApi("/style/authors/search", { query });
+export function searchAuthorWork(authorName: string, language?: string): Promise<{ results: ReadonlyArray<{ title: string; url: string; snippet: string }> }> {
+  return postApi("/style/authors/search", { authorName, language });
 }
 
 /** 拉取作者作品 */
-export function fetchAuthorWork(url: string): Promise<{ content: string; title: string }> {
-  return postApi("/style/authors/fetch", { url });
+export function fetchAuthorWork(url: string, maxChars?: number): Promise<{ content: string }> {
+  return postApi("/style/authors/fetch", { url, maxChars });
 }
 
 /** 写入作者样本 */
-export function writeAuthorSample(authorId: string, content: string, sourceUrl?: string): Promise<{ written: boolean }> {
-  return postApi("/style/authors/samples/write", { authorId, content, sourceUrl });
+export function writeAuthorSample(params: {
+  authorId: string;
+  authorName: string;
+  sourceUrl: string;
+  fetchedAt: string;
+  content: string;
+  charCount: number;
+}): Promise<{ filePath: string }> {
+  return postApi("/style/authors/samples/write", params);
 }

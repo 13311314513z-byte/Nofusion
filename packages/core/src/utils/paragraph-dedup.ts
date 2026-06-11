@@ -46,10 +46,25 @@ function quickHash(s: string): string {
   return hash.toString(36);
 }
 
-function findLineNumber(text: string, target: string): number {
+function findLineNumber(text: string, target: string, hintIndex?: number): number {
+  // Use hint if provided and valid, otherwise search from beginning
   const lines = text.split("\n");
+  const prefix = target.slice(0, Math.min(20, target.length));
+
+  if (hintIndex !== undefined && hintIndex < lines.length) {
+    // Find the Nth occurrence that matches
+    let matchCount = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(prefix)) {
+        matchCount++;
+        if (matchCount === hintIndex) return i + 1;
+      }
+    }
+  }
+
+  // Fallback: first match
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(target.slice(0, Math.min(20, target.length)))) return i + 1;
+    if (lines[i].includes(prefix)) return i + 1;
   }
   return 0;
 }
@@ -69,13 +84,16 @@ function normalizeParagraph(s: string): string {
 export function findDuplicateParagraphs(text: string): ReadonlyArray<DuplicateParagraphGroup> {
   const paras = text.split(/\n\s*\n/);
   const seen = new Map<string, number[]>(); // hash → [lineNumbers]
+  const occurrenceCount = new Map<string, number>(); // track occurrence per hash
 
-  paras.forEach((para, _i) => {
+  paras.forEach((para) => {
     const normalized = normalizeParagraph(para);
     if (normalized.length < 20) return;
     const hash = quickHash(normalized);
     const existing = seen.get(hash) ?? [];
-    seen.set(hash, [...existing, findLineNumber(text, para)]);
+    const count = occurrenceCount.get(hash) ?? 0;
+    occurrenceCount.set(hash, count + 1);
+    seen.set(hash, [...existing, findLineNumber(text, para, count)]);
   });
 
   return [...seen.entries()]

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useState, useCallback, useRef, useMemo, type ChangeEvent } from "react";
 import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
@@ -8,6 +8,9 @@ import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel
 import { AITellsPanel } from "../components/style/AITellsPanel.js";
 import { AdjustmentSuggestionsPanel } from "./style-manager/AdjustmentSuggestionsPanel.js";
 import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
+import { ReadabilityDashboard } from "../components/readability/ReadabilityDashboard.js";
+import { DuplicateParagraphPanel } from "../components/readability/DuplicateParagraphPanel.js";
+import { RhetoricIssuePanel } from "../components/readability/RhetoricIssuePanel.js";
 import { StyleTextTab } from "./StyleTextTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
@@ -65,6 +68,78 @@ function readLocalTextFile(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read local file"));
     reader.readAsText(file, "utf-8");
   });
+}
+
+/** Style drift score display — compares current text against book's style profile. */
+function StyleDriftScoreSection({ bookId, chapterNumber, t }: { bookId: string; chapterNumber?: number; t: (key: string) => string }) {
+  const [scoreData, setScoreData] = useState<{ score: number | null; chapterFingerprint?: unknown; profileFingerprint?: unknown } | null>(null);
+  const [loadingScore, setLoadingScore] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const { data: booksData } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
+  const bookTitle = booksData?.books.find((b) => b.id === bookId)?.title ?? bookId;
+  const chNum = chapterNumber ?? 1;
+
+  const handleFetchScore = async () => {
+    setLoadingScore(true);
+    setScoreError(null);
+    try {
+      const data = await fetchJson<{ score: number | null; message?: string }>(`/books/${bookId}/chapters/${chNum}/style-score`, {
+        method: "POST",
+      });
+      setScoreData(data);
+    } catch (e) {
+      setScoreError(e instanceof Error ? e.message : String(e));
+    }
+    setLoadingScore(false);
+  };
+
+  return (
+    <div className="border border-border/40 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <BarChart3 size={14} />
+          风格漂移评分 — {bookTitle} 第 {chNum} 章
+        </h4>
+        <button
+          onClick={handleFetchScore}
+          disabled={loadingScore}
+          className="px-3 py-1 text-xs rounded-lg bg-secondary/30 hover:bg-secondary/50 border border-border disabled:opacity-30"
+        >
+          {loadingScore ? "计算中..." : "计算评分"}
+        </button>
+      </div>
+      {scoreError && (
+        <div className="text-xs text-destructive">{scoreError}</div>
+      )}
+      {scoreData && (
+        <div className="flex items-center gap-3">
+          <div className={`text-2xl font-bold font-mono ${
+            scoreData.score === null
+              ? "text-muted-foreground"
+              : scoreData.score >= 80
+                ? "text-emerald-500"
+                : scoreData.score >= 60
+                  ? "text-amber-500"
+                  : "text-destructive"
+          }`}>
+            {scoreData.score !== null ? `${scoreData.score}%` : "N/A"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {scoreData.score === null
+              ? "该书暂无风格档案，请先导入文风指南"
+              : scoreData.score >= 80
+                ? "与全书风格高度一致"
+                : scoreData.score >= 60
+                  ? "有轻微风格漂移，建议检查"
+                  : "存在明显风格漂移，建议调整"}
+          </div>
+        </div>
+      )}
+      {scoreData === null && !loadingScore && (
+        <div className="text-xs text-muted-foreground">点击「计算评分」以比较当前文本与全书风格档案</div>
+      )}
+    </div>
+  );
 }
 
 export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunction }) {
@@ -170,6 +245,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
   // Audit section toggle (library browsing vs apply to book)
   const [activeAuditSection, setActiveAuditSection] = useState<"library" | "apply">("library");
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   // Apply state
   const [applyAuthorId, setApplyAuthorId] = useState("");
@@ -178,9 +254,33 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
   // Shared
   const [importBookId, setImportBookId] = useState("");
+  const [importChapterNumber, setImportChapterNumber] = useState(1);
+  const [chapterIndex, setChapterIndex] = useState<ReadonlyArray<{ number: number; title: string }> | null>(null);
   const [importStatus, setImportStatus] = useState("");
   const { data: booksData } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
   const statusNotice = buildStyleStatusNotice(analyzeStatus, importStatus || applyStatus);
+
+  // Derive source hash from text for staleness tracking
+  const sourceHash = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36).slice(0, 8);
+  }, [text]);
+
+  // Step 4: Deduplication state
+  const [dedupData, setDedupData] = useState<{
+    duplicateGroups: ReadonlyArray<import("@actalk/inkos-core").DuplicateParagraphGroup>;
+    similarGroups: ReadonlyArray<import("@actalk/inkos-core").SimilarParagraphGroup>;
+    rhetoricFindings: ReadonlyArray<import("@actalk/inkos-core").DuplicateRhetoricFinding>;
+    readabilityScore: import("@actalk/inkos-core").ReadabilityScore | null;
+  } | null>(null);
+  const [loadingDedup, setLoadingDedup] = useState(false);
+  const [ignoredRhetoricIds, setIgnoredRhetoricIds] = useState<readonly string[]>([]);
+  const [fixedRhetoricIds, setFixedRhetoricIds] = useState<readonly string[]>([]);
 
   const loadAuthorDetail = useCallback(async (authorId: string) => {
     if (!authorId) { setAuthorDetail(null); return; }
@@ -246,6 +346,91 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     } finally {
       setLoading(false);
     }
+  };
+
+  /** Import a specific chapter from a book for style analysis. Defaults to chapter 1. */
+  const handleImportBookChapter = async (bookId: string, chapterNumber?: number) => {
+    const chNum = chapterNumber ?? importChapterNumber;
+    setLoading(true);
+    setAnalyzeStatus("");
+    setProfile(null);
+    setImportBookId(bookId);
+    try {
+      // Fetch chapter index when a book is first selected
+      if (!chapterIndex) {
+        try {
+          const data = await fetchJson<{ chapters: ReadonlyArray<{ number: number; title: string }> }>(`/books/${bookId}`);
+          setChapterIndex(data.chapters);
+        } catch {
+          // Chapter index not available — proceed with default
+        }
+      }
+
+      const data = await fetchJson<{ content: string }>(`/books/${bookId}/chapters/${chNum}`);
+      if (!data.content?.trim()) {
+        setAnalyzeStatus("Error: 该书暂无章节内容");
+        return;
+      }
+      setText(data.content);
+      setSourceName(bookId);
+      setImportChapterNumber(chNum);
+      setAnalyzeStatus(`已导入「${booksData?.books.find((b) => b.id === bookId)?.title ?? bookId}」第 ${chNum} 章`);
+    } catch (e) {
+      setAnalyzeStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Fetch book detail (including chapter index) for a book without importing. */
+  const handleSelectBook = async (bookId: string) => {
+    setImportBookId(bookId);
+    setImportChapterNumber(1);
+    setChapterIndex(null);
+    if (bookId) {
+      try {
+        const data = await fetchJson<{ chapters: ReadonlyArray<{ number: number; title: string }> }>(`/books/${bookId}`);
+        setChapterIndex(data.chapters);
+      } catch {
+        setChapterIndex([]);
+      }
+    }
+  };
+
+  /** Fetch deduplication and readability data for Step 4. */
+  const handleFetchDedupData = async () => {
+    if (!text.trim()) return;
+    setLoadingDedup(true);
+    setDedupData(null);
+    try {
+      const [paragraphResult, rhetoricResult, readabilityResult] = await Promise.allSettled([
+        fetchJson<{ duplicateGroups: ReadonlyArray<import("@actalk/inkos-core").DuplicateParagraphGroup>; similarGroups: ReadonlyArray<import("@actalk/inkos-core").SimilarParagraphGroup> }>("/style/paragraph/dedup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+        fetchJson<{ findings: ReadonlyArray<import("@actalk/inkos-core").DuplicateRhetoricFinding> }>("/style/rhetoric/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+        fetchJson<import("@actalk/inkos-core").ReadabilityScore>("/style/readability/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+      ]);
+      const duplicateGroups = paragraphResult.status === "fulfilled" ? paragraphResult.value.duplicateGroups : [];
+      const similarGroups = paragraphResult.status === "fulfilled" ? paragraphResult.value.similarGroups : [];
+      const rhetoricFindings = rhetoricResult.status === "fulfilled" && Array.isArray(rhetoricResult.value?.findings)
+        ? rhetoricResult.value.findings
+        : [];
+      const readabilityScore = readabilityResult.status === "fulfilled" ? readabilityResult.value : null;
+      setDedupData({ duplicateGroups, similarGroups, rhetoricFindings, readabilityScore });
+    } catch {
+      // Individual failures already handled by allSettled
+    }
+    setLoadingDedup(false);
   };
 
   const handleFileAnalysisLocalFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -988,20 +1173,31 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           loadingDiagnostics={loadingDiagnostics}
           textFileInputRef={textFileInputRef}
           libraryData={libraryData}
+          booksData={booksData}
           c={c}
           t={t as unknown as (key: string) => string}
           handleTextLocalFile={handleTextLocalFile}
           handleImportUrl={handleImportUrl}
           handleAnalyze={handleAnalyze}
           handleDiagnostics={handleDiagnostics}
+          handleImportBookChapter={handleImportBookChapter}
           renderProfileCard={renderProfileCard}
+          importBookId={importBookId}
+          chapterIndex={chapterIndex}
+          importChapterNumber={importChapterNumber}
+          handleSelectBook={handleSelectBook}
+          onSelectChapter={setImportChapterNumber}
         />
       )}
 
       {/* Step 3: AI Detection */}
       {activeTab === "ai-detect" && (
         <div className="max-w-2xl mx-auto py-4">
-          <AITellsPanel t={t as unknown as (key: string) => string} />
+          <AITellsPanel
+            t={t as unknown as (key: string) => string}
+            initialText={text || undefined}
+            language="zh"
+          />
         </div>
       )}
 
@@ -1022,7 +1218,12 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                 </button>
               </div>
               {renderProfileCard(profile, true)}
-              {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} t={t as any} />}
+              {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} text={text} t={t as any} />}
+
+              {/* Style drift score — shown when source is a book */}
+              {importBookId && (
+                <StyleDriftScoreSection bookId={importBookId} chapterNumber={importChapterNumber} t={t as unknown as (key: string) => string} />
+              )}
             </>
           ) : (
             <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
@@ -1036,10 +1237,131 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
       {/* Step 4: Rhetoric Deduplication */}
       {activeTab === "deduplicate" && (
         <div className="max-w-4xl mx-auto py-4 space-y-6">
-          <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
-            <p className="text-sm">修辞去重步骤</p>
-            <p className="text-xs mt-2">导入文本并完成文风诊断后，可在此进行段落去重和修辞优化</p>
-          </div>
+          {!text.trim() ? (
+            <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
+              <p className="text-sm">请先在「文本导入」步骤中导入文本</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">修辞去重</h2>
+                <button
+                  onClick={handleFetchDedupData}
+                  disabled={loadingDedup}
+                  className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                >
+                  {loadingDedup ? <div className="w-3 h-3 border-2 border-muted-foreground/20 border-t-mforeground rounded-full animate-spin" /> : <BarChart3 size={12} />}
+                  {loadingDedup ? "检测中..." : "开始检测"}
+                </button>
+              </div>
+
+              {/* Readability Dashboard */}
+              {dedupData?.readabilityScore && (
+                <ReadabilityDashboard score={dedupData.readabilityScore} source="style" />
+              )}
+
+              {/* Duplicate Paragraph Panel */}
+              {dedupData && (dedupData.duplicateGroups.length > 0 || dedupData.similarGroups.length > 0) && (
+                <DuplicateParagraphPanel
+                  duplicateGroups={dedupData.duplicateGroups}
+                  similarGroups={dedupData.similarGroups}
+                  onDelete={(ids) => {
+                    // Remove deleted paragraphs from text by replacing with empty lines
+                    const lines = text.split("\n");
+                    // ids are 1-based line numbers, convert to 0-based indices
+                    const indicesToRemove = [...ids]
+                      .map((id) => id - 1)          // 1基→0基
+                      .filter((i) => i >= 0 && i < lines.length)
+                      .sort((a, b) => b - a);       // 从后往前删除
+                    for (const idx of indicesToRemove) {
+                      lines[idx] = "";
+                    }
+                    setText(lines.filter((l) => l !== "").join("\n"));
+                    setAnalyzeStatus(`已删除 ${ids.length} 段重复内容`);
+                  }}
+                  onMerge={(group, mergedText) => {
+                    // Replace the first paragraph of the group with merged text,
+                    // remove the rest
+                    const lines = text.split("\n");
+                    if (group.paragraphs && group.paragraphs.length > 0) {
+                      const firstLineIndex = group.paragraphs[0].lineNumber - 1; // 1基→0基
+                      if (firstLineIndex >= 0 && firstLineIndex < lines.length) {
+                        lines[firstLineIndex] = mergedText;
+                      }
+                      const restIndices = group.paragraphs
+                        .slice(1)
+                        .map((p) => p.lineNumber - 1)   // 1基→0基
+                        .filter((i) => i >= 0 && i < lines.length)
+                        .sort((a, b) => b - a);
+                      for (const idx of restIndices) {
+                        lines[idx] = "";
+                      }
+                    }
+                    setText(lines.filter((l) => l !== "").join("\n"));
+                    setAnalyzeStatus("已合并相似段落");
+                  }}
+                />
+              )}
+
+              {/* Rhetoric Issue Panel */}
+              {dedupData && dedupData.rhetoricFindings.filter((f) => !ignoredRhetoricIds.includes(f.id)).length > 0 && (
+                <RhetoricIssuePanel
+                  findings={dedupData.rhetoricFindings.filter((f) => !ignoredRhetoricIds.includes(f.id) && !fixedRhetoricIds.includes(f.id))}
+                  mode="full"
+                  actions={["highlight", "ignore", "ai-rewrite", "mark-fixed"]}
+                  storageKey="style-dedup-rhetoric"
+                  onAction={async (action, findingId) => {
+                    if (action === "ignore") {
+                      setIgnoredRhetoricIds((prev) => [...prev, findingId]);
+                    } else if (action === "mark-fixed") {
+                      setFixedRhetoricIds((prev) => [...prev, findingId]);
+                    } else if (action === "highlight") {
+                      // Scroll to the finding's first example in the text area
+                      const finding = dedupData?.rhetoricFindings.find((f) => f.id === findingId);
+                      if (finding?.examples?.[0]?.text) {
+                        const exampleText = finding.examples[0].text;
+                        const findIdx = text.indexOf(exampleText);
+                        if (findIdx >= 0) {
+                          const textArea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="粘贴"]');
+                          if (textArea) {
+                            textArea.focus();
+                            textArea.selectionStart = findIdx;
+                            textArea.selectionEnd = Math.min(findIdx + exampleText.length, text.length);
+                            textArea.scrollTop = (findIdx / text.length) * textArea.scrollHeight;
+                          }
+                        }
+                      }
+                    } else if (action === "ai-rewrite") {
+                      try {
+                        const { rewriteRhetoric } = await import("../hooks/use-api.js");
+                        const result = await rewriteRhetoric(text, []);
+                        const prompt = result.prompt;
+                        if (prompt) {
+                          setAnalyzeStatus(`AI 改写建议已生成，已复制到剪贴板`);
+                          navigator.clipboard.writeText(prompt).catch(() => {});
+                        }
+                      } catch (e) {
+                        setAnalyzeStatus(`Error: 生成改写建议失败 — ${e instanceof Error ? e.message : String(e)}`);
+                      }
+                    }
+                  }}
+                />
+              )}
+
+              {/* Empty state */}
+              {dedupData && dedupData.duplicateGroups.length === 0 && dedupData.similarGroups.length === 0 && dedupData.rhetoricFindings.length === 0 && (
+                <div className="text-center text-muted-foreground py-8 border border-dashed border-border/40 rounded-lg">
+                  <p className="text-sm">未发现需要去重或优化的内容</p>
+                </div>
+              )}
+
+              {!dedupData && !loadingDedup && (
+                <div className="text-center text-muted-foreground py-8 border border-dashed border-border/40 rounded-lg">
+                  <p className="text-sm">点击「开始检测」分析文本中的重复段落和修辞问题</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -1473,7 +1795,33 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
       )}
 
       {/* Step 5: Audit - Author Library */}
-      {activeTab === "audit" && activeAuditSection === "library" && (
+      {activeTab === "audit" && (
+        <>
+          {/* Section toggle: Library / Apply */}
+          <div className="flex gap-0 border border-border/40 rounded-lg overflow-hidden mb-4">
+            <button
+              onClick={() => setActiveAuditSection("library")}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-all ${
+                activeAuditSection === "library"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {t("style.tabs.library")}
+            </button>
+            <button
+              onClick={() => setActiveAuditSection("apply")}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-all ${
+                activeAuditSection === "apply"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {t("style.tabs.apply")}
+            </button>
+          </div>
+
+          {activeAuditSection === "library" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1563,11 +1911,18 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        await fetchJson(`/style/authors/${selectedAuthorId}/reanalyze`, { method: "POST" });
-                        loadAuthorDetail(selectedAuthorId);
-                        refetchLibrary();
+                        if (reanalyzing) return;
+                        setReanalyzing(true);
+                        try {
+                          await fetchJson(`/style/authors/${selectedAuthorId}/reanalyze`, { method: "POST" });
+                          loadAuthorDetail(selectedAuthorId);
+                          refetchLibrary();
+                        } finally {
+                          setReanalyzing(false);
+                        }
                       }}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} flex items-center gap-1`}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                      disabled={reanalyzing}
                     >
                       <RefreshCw size={12} />
                       {t("style.reanalyzeAuthor")}
@@ -1679,9 +2034,8 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Step 5: Audit - Apply to Book */}
-      {activeTab === "audit" && activeAuditSection === "apply" && (
-        <div className="max-w-xl space-y-6">
+      {activeAuditSection === "apply" && (
+        <div className="max-w-[48rem] space-y-6">
           <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.tabs.apply")}</h3>
 
@@ -1728,7 +2082,43 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
               </div>
             )}
           </div>
+
+          {/* Adjustment recommendations for the current text */}
+          <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.adjustmentSuggestions")}</h3>
+            <AdjustmentSuggestionsPanel
+              text={text}
+              onTextChange={setText}
+              diagnostics={diagnostics}
+              t={t as unknown as (key: string) => string}
+              onApply={() => {
+                // Auto-trigger re-diagnosis after applying an adjustment
+                setProfile(null);
+                setDiagnostics(null);
+                // Navigate back to diagnose step so user can see fresh results
+                setTimeout(() => {
+                  handleAnalyze();
+                  handleDiagnostics();
+                }, 300);
+              }}
+            />
+          </div>
+
+          {/* Compare current text with an author profile */}
+          <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.compareWithAuthor")}</h3>
+            <AuthorStyleComparison
+              text={text}
+              onComparisonResult={(result) => {
+                // Store comparison result — can be logged or displayed
+                console.log("[StyleManager] Comparison result:", result);
+              }}
+              t={t as unknown as (key: string) => string}
+            />
+          </div>
         </div>
+      )}
+      </>
       )}
 
       {statusNotice && (

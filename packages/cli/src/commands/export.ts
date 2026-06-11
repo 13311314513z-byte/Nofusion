@@ -29,7 +29,7 @@ export const exportCommand = new Command("export")
           totalWords: result.totalWords,
           format: result.format,
           outputPath: result.outputPath,
-        }));
+        }, undefined, true));
       } else {
         log(`Exported ${result.chaptersExported} chapters (${result.totalWords} words)`);
         log(`Output: ${result.outputPath}`);

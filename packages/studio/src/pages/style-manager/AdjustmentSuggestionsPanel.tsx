@@ -16,6 +16,7 @@ interface Props {
   readonly onTextChange: (text: string) => void;
   readonly diagnostics: unknown; // FullStyleDiagnostics | null — passed to API
   readonly t: (key: string) => string;
+  readonly onApply?: () => void;
 }
 
 const SEVERITY_CONFIG: Record<string, { icon: React.ElementType; className: string }> = {
@@ -26,7 +27,7 @@ const SEVERITY_CONFIG: Record<string, { icon: React.ElementType; className: stri
 
 type CategoryFilter = "all" | AdjustmentSuggestion["category"];
 
-export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics, t }: Props) {
+export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics, t, onApply }: Props) {
   const [state, setState] = useState<AdjustmentState>(createInitialAdjustmentState());
   const [targetAuthorId, setTargetAuthorId] = useState("");
   const [filterCategory, setFilterCategory] = useState<CategoryFilter>("all");
@@ -98,6 +99,7 @@ export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics, t 
     actions.markStale();
     setShowApplied(true);
     setTimeout(() => setShowApplied(false), 2000);
+    onApply?.();
   }, [text, onTextChange]);
 
   const handleUndo = useCallback(() => {

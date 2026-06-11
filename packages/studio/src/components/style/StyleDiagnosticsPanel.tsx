@@ -1,6 +1,6 @@
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { TFunction } from "../../hooks/use-i18n";
-import { AlertTriangle, Hash, ShieldAlert, ShieldCheck, Shield, ChevronDown, ChevronUp, Save } from "lucide-react";
+import { AlertTriangle, Hash, ShieldAlert, ShieldCheck, Shield, ChevronDown, ChevronUp, Save, FileText } from "lucide-react";
 import { useState } from "react";
 import { fetchJson } from "../../hooks/use-api";
 
@@ -37,13 +37,15 @@ interface Props {
   readonly diagnostics: FullStyleDiagnostics;
   readonly authors?: ReadonlyArray<AuthorItem>;
   readonly t?: TFunction;
+  readonly text?: string;
 }
 
-export function StyleDiagnosticsPanel({ diagnostics, authors, t }: Props) {
+export function StyleDiagnosticsPanel({ diagnostics, authors, t, text }: Props) {
   const _t = t ?? ((key: string) => key);
   const [showClauseDetails, setShowClauseDetails] = useState(false);
   const [showTransitionDetails, setShowTransitionDetails] = useState(false);
   const [showDescriptionDetails, setShowDescriptionDetails] = useState(false);
+  const [showRiskAnnotations, setShowRiskAnnotations] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
@@ -157,6 +159,98 @@ export function StyleDiagnosticsPanel({ diagnostics, authors, t }: Props) {
           </div>
         )}
       </div>
+
+      {/* Original Text Risk Annotations — link diagnostics to actual text */}
+      {text && text.trim() && (
+        <div className="border rounded-lg p-4 space-y-3">
+          <button
+            className="w-full flex items-center justify-between font-semibold text-sm"
+            onClick={() => setShowRiskAnnotations((v) => !v)}
+          >
+            <span className="flex items-center gap-2">
+              <FileText size={14} className="text-muted-foreground" />
+              原文风险标注
+            </span>
+            {showRiskAnnotations ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {showRiskAnnotations && text && (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {/* Intent repetition examples with exact position snippets */}
+              {intentRepetitions.filter((r) => r.examples?.length > 0).length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-medium text-muted-foreground">高频重复 — 原文片段</h4>
+                  {intentRepetitions.filter((r) => r.examples?.length > 0).slice(0, 5).map((item, ri) => (
+                    <div key={`ir-${ri}`} className="flex flex-col gap-1 text-xs bg-amber-500/5 rounded px-2 py-1.5 border border-amber-500/10">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                        <span className="font-medium truncate">"{item.pattern}"</span>
+                        <span className="text-muted-foreground shrink-0">×{item.count}</span>
+                      </div>
+                      {item.examples.slice(0, 2).map((ex, ei) => (
+                        <div key={ei} className="font-mono text-[10px] pl-4 text-muted-foreground truncate border-l-2 border-amber-500/30 ml-1">
+                          {text.slice(Math.max(0, ex.start), Math.min(text.length, ex.end)) || ex.sentence}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Repeated description occurrences with position data */}
+              {repeatedDescriptions.filter((r) => r.occurrences?.length > 0).length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-medium text-muted-foreground">重复描写 — 原文位置</h4>
+                  {repeatedDescriptions.filter((r) => r.occurrences?.length > 0).slice(0, 3).map((item, ri) => (
+                    <div key={`rd-${ri}`} className="flex flex-col gap-1 text-xs bg-purple-500/5 rounded px-2 py-1.5 border border-purple-500/10">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{item.cluster}</span>
+                        <span className="text-muted-foreground shrink-0">×{item.occurrences.length}</span>
+                      </div>
+                      {item.occurrences.slice(0, 2).map((occ, oi) => (
+                        <div key={oi} className="font-mono text-[10px] pl-4 text-muted-foreground truncate border-l-2 border-purple-500/30 ml-1">
+                          {text.slice(Math.max(0, occ.start), Math.min(text.length, occ.end))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Transition clustering with position */}
+              {transitionClustering.length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-medium text-muted-foreground">过渡词密集区</h4>
+                  {transitionClustering.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-purple-600 bg-purple-500/5 rounded px-2 py-1">
+                      <span className="font-mono">"{item.transitionWord}"</span>
+                      <span>连续 {item.consecutiveTransitions} 次 · 共 {item.totalCount} 次</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Complex sentence snippets */}
+              {clauseComplexity.length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-medium text-muted-foreground">复杂句式</h4>
+                  {clauseComplexity.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="text-xs text-rose-600 bg-rose-500/5 rounded px-2 py-1 font-mono truncate">
+                      {item.sentence}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {intentRepetitions.filter((r) => r.examples?.length > 0).length === 0 &&
+                repeatedDescriptions.filter((r) => r.occurrences?.length > 0).length === 0 &&
+                transitionClustering.length === 0 &&
+                clauseComplexity.length === 0 && (
+                <div className="text-xs text-muted-foreground">诊断结果中未发现需要特别标注的风险项</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Intent Repetitions */}
       {intentRepetitions.length > 0 && (

@@ -88,3 +88,51 @@ export interface BookSummary {
   readonly id: string;
   readonly title: string;
 }
+
+// ---------------------------------------------------------------------------
+// Unified source context — tracks where the analysis text came from
+// ---------------------------------------------------------------------------
+
+export type StyleSourceType = "manual" | "file" | "url" | "chapter" | "book-sample";
+
+export interface StyleSourceContext {
+  readonly sourceType: StyleSourceType;
+  readonly sourceName: string;
+  readonly bookId?: string;
+  readonly chapterNumber?: number;
+  readonly language: "zh" | "en";
+}
+
+// ---------------------------------------------------------------------------
+// Analysis session — shared state across all analysis steps
+// ---------------------------------------------------------------------------
+
+export interface StyleAnalysisSession {
+  readonly source: StyleSourceContext;
+  readonly text: string;
+  readonly sourceHash: string;
+  readonly status: "idle" | "analyzing" | "ready" | "stale" | "error";
+}
+
+// ---------------------------------------------------------------------------
+// Unified text range issue — used for precise positioning and highlighting
+// ---------------------------------------------------------------------------
+
+export interface TextRangeIssue {
+  readonly id: string;
+  readonly category: string;
+  readonly severity: "high" | "medium" | "low" | "info";
+  readonly start: number;
+  readonly end: number;
+  readonly message: string;
+  readonly suggestion?: string;
+}
+
+export interface ChapterIndexEntry {
+  readonly number: number;
+  readonly title: string;
+}
+
+export interface ChapterIndex {
+  readonly chapters: ReadonlyArray<ChapterIndexEntry>;
+}

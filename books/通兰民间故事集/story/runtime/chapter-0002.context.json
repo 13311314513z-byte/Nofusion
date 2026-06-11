@@ -1,0 +1,120 @@
+{
+  "chapter": 2,
+  "selectedContext": [
+    {
+      "source": "runtime/chapter_memo",
+      "reason": "Carry the planner's chapter memo into governed writing.",
+      "excerpt": "goal=程靖霖通过夜间探查七号库后墙通风口，发现门被动手脚的实证，并第一次主动运用记忆与观察力 | golden-opening=true | ## 当前任务\n程靖霖在深夜从药房出发，沿南大道绕东侧巷子摸到七号库后墙，找到通风口并确认粮库大门被换锁后内部有人为活动痕迹。\n\n## 读者此刻在等什么\n1. 读者期待程靖霖的夜间探查能否成功——是否会撞上跟踪者，能否发现关键线索。\n2. 本章部分兑现探查结果（通风口有新鲜脚印、铁网被剪断），但制造更强缺口：烟头线索将跟踪者与七号库直接关联，且跟踪者今晚再次出现在墙根阴影处，距离比上次更近。\n\n## 该兑现的 / 暂不掀的\n- 该兑现：H009（七号门被动手脚）从猜测升级为现场实证——通风口铁网被剪、内部有新鲜脚印，证明有人近期频繁出入。\n- 暂不掀：H010 跟踪者的身份和立场——只写“穿大衣的人”站在更近的墙根下，不写脸、不写动机、不写是否日伪或抗联，留到第3章或第4章。\n\n## 日常/过渡承担什么任务\n[药房出发前] → 程时一简短叮嘱：“通风口在东侧，铁网锈得厉害，但去年秋天我见过有人从那儿往外递东西。” 一句话点明钥匙用途、拉高危险预期、暗示程时一对粮库早有警觉。\n[返回药房后] → 程靖霖在账房磨研药杵，借碾药动作复盘探查细节（心理动作，不写长独白），暗示他正在把线索串起来。\n\n## 关键抉择过三连问\n- 主角本章最关键的一次选择：\n  - 为什么这么做？——在通风口前，他摸到铁网切口边缘发亮（新剪的），又闻见一股带油味的烟味（与跟踪者一致），他选择不进、只摸一把土墙角的烟头就撤回。好处：不暴露自己、不陷入可能埋伏、带回可追查的物证；符合当前利益：他只是探查者，不是行动者；符合人设：藏锋、谨慎、任务优先。\n- 对手/配角本章最关键的一次选择：\n  - 为什么这么做？——穿大衣的人站在七号库东北角枯树下，看见程靖霖蹲在通风口前却不上前制止。他选择继续观察，因为想摸清程靖霖背后是谁在指挥；符合当前利益：保持暗线，不惊动药房；符合人设（第1章及历史设定）：耐心的监视者，有人物厚度，不冲动。\n\n## 章尾必须发生的改变\n1. **信息改变**：程靖霖确认七号库内部被多次进出（通风口脚印新旧夹杂、铁网剪口为钳子工具），门被换锁不是例行维护，而是掩盖秘密。\n2. **关系改变**：程靖霖对程时一的信任加深（钥匙确实指向通风口），但同时从程时一那句“去年秋天见过”意识到程时一比自己知道更多但未交待——两人之间出现“可说/不可说”的张力。\n3. **物理改变**：程靖霖左手食指内侧被锈铁网划出一道浅口，回药房后他用煤油灯烤干血迹，不包扎（避免暴露），皮肤上留下一条细小疤痕，可作后续识别标记。\n\n## 本章 hook 账\nopen:\n- [new] 通风口墙角捡到的烟头（锡纸卷的烟丝，非本地常见卷烟纸，带有煤油味）|| 理由：与跟踪者几次的烟味直接呼应，但材质特殊，可连回某特定人群（火车司炉工？军需仓库？），本章只抛出物证，不追查来源。\n\nadvance:\n- H009 “七号门被动过手脚” → 程靖霖摸到通风口铁网被剪、内部有新鲜脚印（open → pressured），离查明秘密又近一步。\n- H010 “跟踪者三次逼近” → 第四章出现——墙根下的枯树后，程靖霖余光扫见大衣下摆一闪（pressured → near_payoff），但无直接接触，制造下一次冲突的紧迫感。\n\nresolve:\n- (无)\n\ndefer:\n- (无)\n\n## 不要做\n1. 不要揭示跟踪者是谁（身份、阵营、脸面都不给）。\n2. 不要让程靖霖钻进通风口——他必须克制，否则人设崩塌（一个药房伙计绝不会冒险闯入未知陷阱）。\n3. 不要交代钥匙的来源或程时一的背景，仅通过“去年秋天我见过”暗示程时一知情更早。\n4. 不要出现大段心理独白或回忆1931年序幕，本章聚焦在眼前行动。\n5. 不要出现第二个新场景（如巡警、保甲所），场景控制在药房卧室→后墙通风口→药房账房，三个场景以内。"
+    },
+    {
+      "source": "story/current_focus.md",
+      "reason": "Current task focus for this chapter.",
+      "excerpt": "（描述接下来 1-3 章最需要优先推进的内容。）"
+    },
+    {
+      "source": "story/audit_drift.md",
+      "reason": "Carry forward audit drift guidance from the previous chapter without polluting hard state facts.",
+      "excerpt": "> 第1章审计发现以下问题，下一章写作时必须避免："
+    },
+    {
+      "source": "story/current_state.md",
+      "reason": "Preserve hard state facts referenced by the active chapter brief or hard constraints.",
+      "excerpt": "| 字段 | 值 |"
+    },
+    {
+      "source": "story/outline/story_frame.md",
+      "reason": "Preserve canon constraints referenced by the active chapter brief or hard constraints.",
+      "excerpt": "---"
+    },
+    {
+      "source": "story/outline/volume_map.md",
+      "reason": "Anchor the default planning node for this chapter.",
+      "excerpt": "全书分为四卷，对应29天中的四个阶段，每卷约20章，每章约5000字。"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_titles",
+      "reason": "Keep recent title history visible to avoid repetitive chapter naming.",
+      "excerpt": "1: 七号库的门"
+    },
+    {
+      "source": "story/chapter_summaries.md#recent_mood_type_trail",
+      "reason": "Keep recent mood and chapter-type cadence visible before writing the next chapter.",
+      "excerpt": "1: 由静入紧，压抑中酝酿危机 / 推进主线"
+    },
+    {
+      "source": "runtime/hook_debt#H009",
+      "reason": "含原始种子文本的叙事债务简报。",
+      "excerpt": "H009（前台，备忘引用旧债，已开1章） | 读者承诺：卷二中段 | 种于第1章：ch1 七号库的门 - 程靖霖送药至粮谷奉纳所；归途发现七号库门封条重贴、锁被换；两次被同一股烟味跟踪；回到药房向程时一汇报；程时一给钥匙指示今夜探查七号库后墙通风口"
+    },
+    {
+      "source": "runtime/hook_debt#H010",
+      "reason": "含原始种子文本的叙事债务简报。",
+      "excerpt": "H010（前台，备忘引用旧债，已开1章） | 读者承诺：卷二初 | 种于第1章：ch1 七号库的门 - 程靖霖送药至粮谷奉纳所；归途发现七号库门封条重贴、锁被换；两次被同一股烟味跟踪；回到药房向程时一汇报；程时一给钥匙指示今夜探查七号库后墙通风口"
+    },
+    {
+      "source": "story/current_state.md#当前目标",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前目标 | 今晚去七号库后墙摸通风口"
+    },
+    {
+      "source": "story/current_state.md#当前冲突",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前冲突 | 七号库门被动过手脚（封条重贴、锁被换），有人跟踪监视，程时一指示夜间探查"
+    },
+    {
+      "source": "story/current_state.md#主角状态",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "主角状态 | 已发现七号库门异常，被跟踪监视，获得钥匙任务"
+    },
+    {
+      "source": "story/current_state.md#当前限制",
+      "reason": "Relevant current-state fact retrieved for the current chapter goal.",
+      "excerpt": "当前限制 | 被跟踪监视，必须在10天内完成探查（距腊月廿五清库）"
+    },
+    {
+      "source": "story/chapter_summaries.md#1",
+      "reason": "Relevant episodic memory retrieved for the current chapter goal.",
+      "excerpt": "七号库的门 | 程靖霖送药至粮谷奉纳所；归途发现七号库门封条重贴、锁被换；两次被同一股烟味跟踪；回到药房向程时一汇报；程时一给钥匙指示今夜探查七号库后墙通风口 | 程靖霖：从寻常送药到发现异常、被跟踪、接受夜间探查任务；程时一：从日常坐诊到下达秘密指令 | 新开H009（七号门被动过手脚）、H010（跟踪者三次逼近）"
+    },
+    {
+      "source": "story/pending_hooks.md#H007",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "后台 | open | 卷三初 | mid-arc | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H008",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "前台 | open | 卷三中 | near-term | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H009",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "前台 | open | 卷二中段 | near-term | 核心悬念，需尽快推进"
+    },
+    {
+      "source": "story/pending_hooks.md#H010",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "前台 | open | 卷二初 | near-term | 跟踪者线索，与H009关联"
+    },
+    {
+      "source": "story/pending_hooks.md#H001",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "后台 | open | 卷四中段 | slow-burn | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H002",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "后台 | open | 卷三末 | slow-burn | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H003",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "后台 | open | 卷四前段 | mid-arc | 无"
+    },
+    {
+      "source": "story/pending_hooks.md#H004",
+      "reason": "Carry forward unresolved hooks that match the chapter focus.",
+      "excerpt": "后台 | open | 卷二中段 | near-term | 无"
+    }
+  ]
+}

@@ -426,13 +426,17 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
 
   const handleStyleDiagnostics = async (chapterNumber: number, title: string) => {
     try {
-      const content = await fetchJson<{ content: string }>(`/books/${bookId}/chapters/${chapterNumber}/content`);
-      sessionStorage.setItem("style-chapter-text", content.content);
+      const data = await fetchJson<{ content: string }>(`/books/${bookId}/chapters/${chapterNumber}`);
+      if (!data.content?.trim()) return;
+      sessionStorage.setItem("style-chapter-text", data.content);
       sessionStorage.setItem("style-chapter-source", `${title} (#${chapterNumber})`);
       sessionStorage.setItem("style-book-id", bookId);
       sessionStorage.setItem("style-chapter-number", String(chapterNumber));
-    } catch { /* ignore, will navigate without pre-fill */ }
-    window.location.hash = "#/style";
+      window.location.hash = "#/style";
+    } catch {
+      // Navigation without pre-fill is still allowed
+      window.location.hash = "#/style";
+    }
   };
 
   const handleSync = async (chapterNumber: number) => {

@@ -86,6 +86,10 @@ const agentSessionQueues = new Map<string, Promise<void>>();
 /** TTL for cached agents: 5 minutes. */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Maximum time (ms) a single agent session may run before being timed out.
+ *  Default: 15 minutes. Prevents queue deadlocks when the LLM hangs. */
+const AGENT_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+
 /** Cleanup interval handle (lazy-started). */
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -169,9 +173,20 @@ async function runInAgentSessionQueue<T>(
 
   await previous.catch(() => undefined);
   try {
-    return await task();
+    // Wrap the task in a timeout to prevent queue deadlocks
+    const result = await Promise.race([
+      task(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Agent session timed out after ${AGENT_SESSION_TIMEOUT_MS / 1000}s`));
+        }, AGENT_SESSION_TIMEOUT_MS);
+      }),
+    ]);
+    return result;
   } finally {
     release();
+    // Only clean up the queue entry if it's still ours (stale entries from
+    // timed-out preceding tasks should NOT be deleted — they are already gone).
     if (agentSessionQueues.get(key) === queued) {
       agentSessionQueues.delete(key);
     }
@@ -503,9 +518,18 @@ export async function runAgentSession(
   userMessage: string,
   initialMessages?: Array<{ role: string; content: string }>,
 ): Promise<AgentSessionResult> {
-  return runInAgentSessionQueue(config.projectRoot, config.sessionId, () =>
-    runAgentSessionUnlocked(config, userMessage, initialMessages)
-  );
+  try {
+    return await runInAgentSessionQueue(config.projectRoot, config.sessionId, () =>
+      runAgentSessionUnlocked(config, userMessage, initialMessages)
+    );
+  } catch (error) {
+    // On timeout, evict the cached Agent so a fresh one is created next time
+    const cacheKey = agentCacheKey(config.projectRoot, config.sessionId);
+    if (agentCache.has(cacheKey)) {
+      agentCache.delete(cacheKey);
+    }
+    throw error;
+  }
 }
 
 async function runAgentSessionUnlocked(

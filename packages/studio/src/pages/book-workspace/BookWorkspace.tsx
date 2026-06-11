@@ -24,6 +24,7 @@ interface NavLike {
   readonly toChapter: (bookId: string, num: number) => void;
   readonly toBook: (bookId: string) => void;
   readonly toBookSection: (bookId: string, section: string) => void;
+  readonly toBookSettings: (bookId: string) => void;
   readonly toServices: () => void;
   readonly toAudit: () => void;
 }
@@ -42,6 +43,10 @@ export function BookWorkspace({ bookId, section, nav, theme, t, sse }: BookWorks
   const bookTitle = bookData?.book.title ?? bookId;
 
   const handleSectionChange = (s: BookSection) => {
+    if (s === "settings") {
+      nav.toBookSettings(bookId);
+      return;
+    }
     nav.toBookSection(bookId, s);
   };
 
@@ -108,6 +113,8 @@ function SectionRenderer({
       return <BookRuntimeSection {...commonProps} />;
     case "sources":
       return <BookSourceSection {...commonProps} />;
+    case "settings":
+      return null; // handled by handleSectionChange redirect
     default:
       return <BookOverviewSection {...commonProps} />;
   }

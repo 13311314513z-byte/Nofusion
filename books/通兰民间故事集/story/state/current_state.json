@@ -1,0 +1,53 @@
+{
+  "chapter": 2,
+  "facts": [
+    {
+      "subject": "protagonist",
+      "predicate": "当前冲突",
+      "object": "七号库秘密升级为有实物证据（通风口痕迹、烟头、钥匙凹痕），跟踪者威胁持续存在，程时一未完全告知自身底细",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前敌我",
+      "object": "程时一（信任但信息不对称），未知抽烟者（监视者）×1，黄队长（可周旋），保甲所（潜在威胁）",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前目标",
+      "object": "分析新线索，查明烟头来源和数字17含义，准备下一步行动",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前位置",
+      "object": "中和药房院子",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "当前限制",
+      "object": "被跟踪监视，距腊月廿五清库还有12天，伤口可能暴露行踪",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    },
+    {
+      "subject": "protagonist",
+      "predicate": "主角状态",
+      "object": "已完成夜间探查，获得烟头物证和数字'17'线索，确认被持续跟踪，手指受轻伤",
+      "validFromChapter": 2,
+      "validUntilChapter": null,
+      "sourceChapter": 2
+    }
+  ]
+}

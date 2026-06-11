@@ -22,9 +22,10 @@
     "dev": "node scripts/dev.mjs",
     "dev:client": "vite --host --port 4577",
     "dev:server": "node scripts/dev-server.mjs",
-    "build": "npm run build:client && npm run build:server",
+    "build": "npm run build:client && npm run build:server && npm run build:verify",
     "build:client": "vite build",
-    "build:server": "tsc -p tsconfig.server.json",
+    "build:server": "node -e \"require('fs').rmSync('tsconfig.server.tsbuildinfo',{force:true});require('fs').rmSync('dist/api',{recursive:true,force:true})\" && tsc -p tsconfig.server.json",
+    "build:verify": "node -e \"const fs=require('fs');['dist/index.html','dist/api/index.js','dist/api/index.d.ts'].forEach(f=>{if(!fs.existsSync(f)){console.error('Missing: '+f);process.exit(1)}});console.log('Build artifacts verified')\"",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit"

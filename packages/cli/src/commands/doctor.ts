@@ -94,8 +94,10 @@ async function fetchDoctorModels(
 export const doctorCommand = new Command("doctor")
   .description("Check environment and project health")
   .option("--repair-node-runtime", "Write .nvmrc and .node-version pinned to Node 22 for this project")
+  .option("--skip-connectivity", "Skip API connectivity tests (faster, avoids timeout on downed endpoints)")
+  .option("--connectivity-timeout <ms>", "Per-probe timeout in ms", "5000")
   .option("--json", "Output JSON")
-  .action(async (opts: { repairNodeRuntime?: boolean; json?: boolean }) => {
+  .action(async (opts: { repairNodeRuntime?: boolean; skipConnectivity?: boolean; connectivityTimeout?: string; json?: boolean }) => {
     const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
     const root = findProjectRoot();
 
@@ -281,7 +283,18 @@ export const doctorCommand = new Command("doctor")
           detail: `provider=${llmConfig.provider} model=${llmConfig.model} stream=${llmConfig.stream ?? true} baseUrl=${llmConfig.baseUrl}`,
         });
 
-        log("\n  [..] Testing API connectivity...");
+        if (!opts.skipConnectivity) {
+          log("\n  [..] Testing API connectivity...");
+        } else {
+          log("\n  [..] Skipping API connectivity (--skip-connectivity)");
+          checks.push({
+            name: "API Connectivity",
+            ok: false,
+            detail: "Skipped via --skip-connectivity",
+          });
+        }
+
+        if (opts.skipConnectivity) return;
 
         let connected = false;
         let detectedDetail = "";
@@ -301,8 +314,15 @@ export const doctorCommand = new Command("doctor")
           ? buildDoctorProbePlans(llmConfig.apiFormat, llmConfig.stream)
           : [{ apiFormat: (llmConfig.apiFormat ?? "chat") as "chat" | "responses", stream: llmConfig.stream ?? true }];
 
+        const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "5000", 10) || 5000);
+        // Total budget across all probe attempts — stop early if exhausted
+        const totalBudget = Math.max(probeTimeout, modelCandidates.length * plans.length * (probeTimeout + 500));
+        const startTime = Date.now();
+
         for (const model of modelCandidates) {
+          if (connected || Date.now() - startTime > totalBudget) break;
           for (const plan of plans) {
+            if (connected || Date.now() - startTime > totalBudget) break;
             try {
               const client = createLLMClient({
                 ...llmConfig,
@@ -310,9 +330,15 @@ export const doctorCommand = new Command("doctor")
                 apiFormat: plan.apiFormat,
                 stream: plan.stream,
               });
-              const response = await chatCompletion(client, model, [
+              const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "5000", 10) || 5000);
+              // Use Promise.race for timeout since chatCompletion options don't support signal
+              const probePromise = chatCompletion(client, model, [
                 { role: "user", content: "Say OK" },
               ], { maxTokens: 16 });
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error(`Probe timed out after ${probeTimeout}ms`)), probeTimeout)
+              );
+              const response = await Promise.race([probePromise, timeoutPromise]);
 
               connected = true;
               detectedDetail = `OK (model: ${model}, apiFormat=${plan.apiFormat}, stream=${plan.stream}, tokens: ${response.usage.totalTokens})`;

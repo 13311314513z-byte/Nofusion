@@ -1,0 +1,43 @@
+{
+  "chapter": 2,
+  "plannerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\author_intent.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\current_focus.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\outline\\story_frame.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\outline\\volume_map.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\chapter_summaries.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\book_rules.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\current_state.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\pending_hooks.md",
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\memory.db"
+  ],
+  "composerInputs": [
+    "C:\\Users\\white\\Downloads\\Nofusion-main\\books\\通兰民间故事集\\story\\runtime\\chapter-0002.intent.md"
+  ],
+  "selectedSources": [
+    "runtime/chapter_memo",
+    "story/current_focus.md",
+    "story/audit_drift.md",
+    "story/current_state.md",
+    "story/outline/story_frame.md",
+    "story/outline/volume_map.md",
+    "story/chapter_summaries.md#recent_titles",
+    "story/chapter_summaries.md#recent_mood_type_trail",
+    "runtime/hook_debt#H009",
+    "runtime/hook_debt#H010",
+    "story/current_state.md#当前目标",
+    "story/current_state.md#当前冲突",
+    "story/current_state.md#主角状态",
+    "story/current_state.md#当前限制",
+    "story/chapter_summaries.md#1",
+    "story/pending_hooks.md#H007",
+    "story/pending_hooks.md#H008",
+    "story/pending_hooks.md#H009",
+    "story/pending_hooks.md#H010",
+    "story/pending_hooks.md#H001",
+    "story/pending_hooks.md#H002",
+    "story/pending_hooks.md#H003",
+    "story/pending_hooks.md#H004"
+  ],
+  "notes": []
+}

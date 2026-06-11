@@ -1,0 +1,73 @@
+layers:
+  - id: L1
+    name: hard_facts
+    precedence: 100
+    scope: global
+  - id: L2
+    name: author_intent
+    precedence: 80
+    scope: book
+  - id: L3
+    name: planning
+    precedence: 60
+    scope: arc
+  - id: L4
+    name: current_task
+    precedence: 70
+    scope: local
+sections:
+  hard:
+    - story_frame
+    - current_state
+    - book_rules
+    - roles
+  soft:
+    - author_intent
+    - current_focus
+    - volume_map
+  diagnostic:
+    - anti_ai_checks
+    - continuity_audit
+    - style_regression_checks
+overrideEdges:
+  - from: L4
+    to: L3
+    allowed: true
+    scope: current_chapter
+  - from: L4
+    to: L2
+    allowed: false
+    scope: current_chapter
+  - from: L4
+    to: L1
+    allowed: false
+    scope: current_chapter
+activeOverrides:
+  - from: L4
+    to: L3
+    target: chapter:2/mustAvoid
+    reason: 禁止任何无动机的巧合推动剧情
+  - from: L4
+    to: L3
+    target: chapter:2/mustAvoid
+    reason: 禁止配角为推进主剧情降智
+  - from: L4
+    to: L3
+    target: chapter:2/mustAvoid
+    reason: 禁止主角在无积累下获得任何“翻盘”能力
+  - from: L4
+    to: L3
+    target: chapter:2/mustAvoid
+    reason: 禁止一次性交代所有后台信息，必须通过碎片逐步释放
+  - from: L4
+    to: L3
+    target: chapter:2/mustAvoid
+    reason: 禁止人物对白中出现大段伪满体制说明，必须通过行动与细节展示
+  - from: L4
+    to: L3
+    target: chapter:2/styleEmphasis
+    reason: 8岁时（1931年10月）在吉林县乡道上，母亲（养尊处优的女性，背后两处刀伤致死）尸体旁被程时一带回
+  - from: L4
+    to: L3
+    target: chapter:2/styleEmphasis
+    reason: 在百子药斗下长大，先认药名，再认人情，再认城里各条路

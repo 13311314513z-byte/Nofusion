@@ -1,0 +1,94 @@
+{
+  "hooks": [
+    {
+      "hookId": "H009",
+      "startChapter": 1,
+      "type": "前台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷二中段",
+      "payoffTiming": "near-term",
+      "notes": "核心悬念，需尽快推进"
+    },
+    {
+      "hookId": "H001",
+      "startChapter": 0,
+      "type": "后台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷四中段",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H002",
+      "startChapter": 0,
+      "type": "后台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷三末",
+      "payoffTiming": "slow-burn",
+      "notes": "无"
+    },
+    {
+      "hookId": "H003",
+      "startChapter": 0,
+      "type": "后台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷四前段",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H004",
+      "startChapter": 0,
+      "type": "后台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷二中段",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H005",
+      "startChapter": 0,
+      "type": "前台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷四末",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H007",
+      "startChapter": 1,
+      "type": "后台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷三初",
+      "payoffTiming": "mid-arc",
+      "notes": "无"
+    },
+    {
+      "hookId": "H008",
+      "startChapter": 1,
+      "type": "前台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷三中",
+      "payoffTiming": "near-term",
+      "notes": "无"
+    },
+    {
+      "hookId": "H010",
+      "startChapter": 1,
+      "type": "前台",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "expectedPayoff": "卷二初",
+      "payoffTiming": "near-term",
+      "notes": "跟踪者线索，与H009关联"
+    }
+  ]
+}
