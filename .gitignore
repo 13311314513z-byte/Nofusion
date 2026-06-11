@@ -1,9 +1,9 @@
 .env
 node_modules/
 .DS_Store
-.inkos/secrets.json
-.inkos/sessions/
-books/**/story/memory.db
+.inkos/
+tmp-test-logs/
+.tmp-test-logs/
 books/
 dist/
 coverage/
