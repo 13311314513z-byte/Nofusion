@@ -301,6 +301,7 @@ export { analyzeSensitiveWords, type SensitiveWordResult, type SensitiveWordMatc
 export { detectAIContent, type DetectionResult } from "./agents/detector.js";
 export { analyzeStyle } from "./agents/style-analyzer.js";
 export { analyzeStyleFingerprint, type StyleFingerprint } from "./agents/style-fingerprint.js";
+export { Interviewer, type InterviewQuestion, type InterviewerInput, type InterviewerOutput } from "./agents/interviewer.js";
 export {
   detectIntentRepetition,
   detectRepeatedDescriptions,
@@ -445,7 +446,7 @@ export { summarizePendingHookHealth, type HookHealthSummary } from "./utils/hook
 export { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filterCharacterMatrix } from "./utils/context-filter.js";
 export { extractPOVFromOutline, filterMatrixByPOV, filterHooksByPOV } from "./utils/pov-filter.js";
 export { ConsolidatorAgent } from "./agents/consolidator.js";
-export { MemoryDB, type Fact, type StoredSummary } from "./state/memory-db.js";
+export { MemoryDB, type Fact, type StoredSummary, type IntentCommitment } from "./state/memory-db.js";
 export { StateValidatorAgent } from "./agents/state-validator.js";
 export { loadRuntimeStateSnapshot, buildRuntimeStateArtifacts, saveRuntimeStateSnapshot, loadNarrativeMemorySeed, loadSnapshotCurrentStateFacts, type RuntimeStateArtifacts, type NarrativeMemorySeed } from "./state/runtime-state-store.js";
 export { splitChapters, type SplitChapter } from "./utils/chapter-splitter.js";
@@ -469,6 +470,26 @@ export {
   type ChapterGoalCard,
   type ChapterGoalsIndex,
 } from "./models/chapter-goal.js";
+export {
+  loadChapterIntents,
+  saveChapterIntents,
+  getChapterIntent,
+  upsertChapterIntent,
+  removeChapterIntent,
+  type AuthorChapterIntent,
+  type ChapterIntentsIndex,
+  type AuthorScenePlan,
+  type AuthorCharacterState,
+} from "./models/chapter-intent.js";
+export {
+  buildAuthorIntentBlock,
+  buildAuthorCommitmentChecklist,
+  buildWriterIntentBrief,
+} from "./utils/intent-injection.js";
+export {
+  generateSuggestions,
+  type Suggestion,
+} from "./utils/suggestion-generator.js";
 export {
   listRoleCards,
   loadRoleCard,

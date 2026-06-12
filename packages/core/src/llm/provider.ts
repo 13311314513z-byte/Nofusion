@@ -723,6 +723,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
   resolved: { readonly temperature: number; readonly maxTokens: number; readonly extra: Record<string, unknown> },
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   const baseUrl = client._piModel?.baseUrl ?? "";
   const errorCtx = { baseUrl, model, service: client.service };
@@ -750,6 +751,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
       ...(client._piModel?.headers ?? {}),
     }) ?? { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   }, client.proxyUrl);
 
   if (!response.ok) {
@@ -827,9 +829,10 @@ async function chatCompletionViaCustomOpenAICompatible(
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
   allowSystemRoleFallback = true,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   if (client.provider === "anthropic") {
-    return chatCompletionViaCustomAnthropicCompatible(client, model, messages, resolved, onStreamProgress, onTextDelta);
+    return chatCompletionViaCustomAnthropicCompatible(client, model, messages, resolved, onStreamProgress, onTextDelta, signal);
   }
   const baseUrl = client._piModel?.baseUrl ?? "";
   const headers = buildCustomHeaders(client);
@@ -853,6 +856,7 @@ async function chatCompletionViaCustomOpenAICompatible(
       method: "POST",
       headers,
       body: JSON.stringify(payload),
+      signal,
     }, client.proxyUrl);
     if (!response.ok) {
       throw wrapLLMError(new Error(await readErrorResponse(response)), errorCtx);
@@ -943,6 +947,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     method: "POST",
     headers,
     body: JSON.stringify(payload),
+    signal,
   }, client.proxyUrl);
   if (!response.ok) {
     const detail = await readErrorResponse(response);
@@ -955,6 +960,7 @@ async function chatCompletionViaCustomOpenAICompatible(
         onStreamProgress,
         onTextDelta,
         false,
+        signal,
       );
     }
     throw wrapLLMError(new Error(detail), errorCtx);
@@ -1046,6 +1052,7 @@ export async function chatCompletion(
     readonly webSearch?: boolean;
     readonly onStreamProgress?: OnStreamProgress;
     readonly onTextDelta?: (text: string) => void;
+    readonly signal?: AbortSignal;
   },
 ): Promise<LLMResponse> {
   // C1 (v2.0.0)：删除 maxTokensCap 机制。per-call 显式传的 maxTokens 永远不被裁剪。
@@ -1060,15 +1067,19 @@ export async function chatCompletion(
   };
   const onStreamProgress = options?.onStreamProgress;
   const onTextDelta = options?.onTextDelta;
+  const signal = options?.signal;
   const errorCtx = { baseUrl: client._piModel?.baseUrl ?? "(unknown)", model, service: client.service };
 
   try {
     return await withTransientLLMRetry(
       async () => {
-        if (shouldUseNativeCustomTransport(client)) {
-          return chatCompletionViaCustomOpenAICompatible(client, model, messages, resolved, onStreamProgress, onTextDelta);
+        if (signal?.aborted) {
+          throw new Error(signal.reason instanceof Error ? signal.reason.message : "Request aborted");
         }
-        return chatCompletionViaPiAi(client, model, messages, resolved, onStreamProgress, onTextDelta);
+        if (shouldUseNativeCustomTransport(client)) {
+          return chatCompletionViaCustomOpenAICompatible(client, model, messages, resolved, onStreamProgress, onTextDelta, true, signal);
+        }
+        return chatCompletionViaPiAi(client, model, messages, resolved, onStreamProgress, onTextDelta, signal);
       },
       // Retrying after UI text deltas have been emitted can duplicate visible text.
       { enabled: !onTextDelta },
@@ -1220,6 +1231,7 @@ async function chatCompletionViaPiAi(
   resolved: { readonly temperature: number; readonly maxTokens: number; readonly extra: Record<string, unknown> },
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   const piModel = resolvePiModel(client, model);
   const context = toPiContext(messages);

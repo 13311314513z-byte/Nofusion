@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { localizeKnownRuntimeMessage } from "../lib/error-copy";
 
 const BASE = "/api/v1";
@@ -41,6 +41,30 @@ export function deriveInvalidationPaths(path: string): ReadonlyArray<string> {
   const chapterAction = normalized.match(/^\/api\/v1\/books\/([^/]+)\/chapters\/\d+\/(approve|reject)$/);
   if (chapterAction) {
     return ["/api/v1/books", `/api/v1/books/${chapterAction[1]}`];
+  }
+
+  // PUT /books/:id/chapters/:num — invalidate chapter detail + book detail
+  const chapterSave = normalized.match(/^\/api\/v1\/books\/([^/]+)\/chapters\/(\d+)$/);
+  if (chapterSave) {
+    return [`/api/v1/books`, `/api/v1/books/${chapterSave[1]}`, normalized];
+  }
+
+  // PUT /books/:id/truth/:file — invalidate truth detail + truth list
+  const truthWrite = normalized.match(/^\/api\/v1\/books\/([^/]+)\/truth\/(.+)$/);
+  if (truthWrite) {
+    return [`/api/v1/books/${truthWrite[1]}/truth`, normalized];
+  }
+
+  // DELETE /books/:id/roles/:roleId — invalidate roles list
+  const roleDelete = normalized.match(/^\/api\/v1\/books\/([^/]+)\/roles\/([^/]+)$/);
+  if (roleDelete) {
+    return [`/api/v1/books`, `/api/v1/books/${roleDelete[1]}`, `/api/v1/books/${roleDelete[1]}/roles`];
+  }
+
+  // DELETE /books/:id/sources/:sourceId — invalidate sources list
+  const sourceDelete = normalized.match(/^\/api\/v1\/books\/([^/]+)\/sources\/([^/]+)$/);
+  if (sourceDelete) {
+    return [`/api/v1/books/${sourceDelete[1]}/sources`];
   }
 
   if (/^\/api\/v1\/daemon\/(start|stop)$/.test(normalized)) {
@@ -87,7 +111,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 export async function fetchJson<T>(
   path: string,
   init: RequestInit = {},
-  deps?: { readonly fetchImpl?: typeof fetch },
+  deps?: { readonly fetchImpl?: typeof fetch; readonly signal?: AbortSignal },
 ): Promise<T> {
   const url = buildApiUrl(path);
   if (!url) {
@@ -95,7 +119,7 @@ export async function fetchJson<T>(
   }
 
   const fetchImpl = deps?.fetchImpl ?? fetch;
-  const res = await fetchImpl(url, init);
+  const res = await fetchImpl(url, { ...init, signal: deps?.signal ?? init.signal });
 
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
@@ -129,6 +153,8 @@ export function useApi<T>(path: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const refetch = useCallback(async () => {
     if (!path) {
       setData(null);
@@ -144,20 +170,34 @@ export function useApi<T>(path: string | null) {
       return;
     }
 
+    // Cancel any in-flight request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
-      const json = await fetchJson<T>(url);
-      setData(json);
+      const json = await fetchJson<T>(url, {}, { signal: controller.signal });
+      // Only update state if the request wasn't aborted
+      if (!controller.signal.aborted) {
+        setData(json);
+      }
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [path]);
 
   useEffect(() => {
     refetch();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [refetch]);
 
   useEffect(() => {

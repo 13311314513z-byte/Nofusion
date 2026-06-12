@@ -354,7 +354,7 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
             className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50"
           >
             {bankModelsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={14} />}
-            {bankModelsLoading ? "检测中…" : "一键检测全部"}
+            {bankModelsLoading ? "检测中…" : "刷新模型列表"}
           </button>
           <button
             onClick={nav.toAudit}

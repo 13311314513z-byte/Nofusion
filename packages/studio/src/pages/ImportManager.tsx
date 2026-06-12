@@ -25,13 +25,13 @@ interface FoundationSourceDraft {
 }
 
 interface FoundationPlan {
-  readonly planId: string;
+  readonly planId: string | null;
   readonly warnings: string[];
   readonly roleChanges: {
     readonly added: string[];
     readonly updated: string[];
     readonly removed: string[];
-  };
+  } | null;
   readonly bundle: {
     readonly sources: ReadonlyArray<{ readonly sourceName: string; readonly charCount: number; readonly purpose: string }>;
     readonly totalChars: number;
@@ -213,6 +213,10 @@ export function ImportManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TF
 
   const handleCommitFoundation = async () => {
     if (!foundationBookId || !foundationPlan) return;
+    if (!foundationPlan.planId) {
+      setStatus("没有可提交的架构变更（AI 未生成修改建议）。");
+      return;
+    }
     setLoading(true);
     setStatus("");
     try {
@@ -557,10 +561,10 @@ export function ImportManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TF
                   共 {foundationPlan.bundle.sources.length} 份资料，{foundationPlan.bundle.totalChars.toLocaleString()} 字。
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3 text-xs">
-                  <div>新增角色：{foundationPlan.roleChanges.added.join("、") || "无"}</div>
-                  <div>更新角色：{foundationPlan.roleChanges.updated.join("、") || "无"}</div>
-                  <div className={foundationPlan.roleChanges.removed.length ? "text-destructive" : ""}>
-                    移除角色：{foundationPlan.roleChanges.removed.join("、") || "无"}
+                  <div>新增角色：{foundationPlan.roleChanges ? foundationPlan.roleChanges.added.join("、") : "无"}</div>
+                  <div>更新角色：{foundationPlan.roleChanges ? foundationPlan.roleChanges.updated.join("、") : "无"}</div>
+                  <div className={foundationPlan.roleChanges?.removed?.length ? "text-destructive" : ""}>
+                    移除角色：{foundationPlan.roleChanges ? foundationPlan.roleChanges.removed.join("、") : "无"}
                   </div>
                 </div>
                 {foundationPlan.warnings.map((warning) => (

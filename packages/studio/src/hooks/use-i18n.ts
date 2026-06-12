@@ -136,6 +136,7 @@ const strings = {
   "book.polish": { zh: "打磨", en: "Polish" },
   "book.rework": { zh: "重作", en: "Rework" },
   "book.antiDetect": { zh: "反检测", en: "Anti-Detect" },
+  "book.statusIncubating": { zh: "孵化中", en: "Incubating" },
   "book.statusActive": { zh: "进行中", en: "Active" },
   "book.statusPaused": { zh: "已暂停", en: "Paused" },
   "book.statusOutlining": { zh: "大纲中", en: "Outlining" },

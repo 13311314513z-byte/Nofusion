@@ -26,7 +26,9 @@ import {
   ChevronDown,
   ChevronUp,
   Stethoscope,
+  History,
 } from "lucide-react";
+import { ChapterVersionModal } from "../../components/ChapterVersionModal";
 
 interface ChapterMeta {
   readonly number: number;
@@ -338,6 +340,9 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
   const [metadataDrafts, setMetadataDrafts] = useState<Record<number, ChapterMetadataDraft>>({});
   const [savingMetadata, setSavingMetadata] = useState<ReadonlyArray<number>>([]);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingChapterActions, setPendingChapterActions] = useState<ReadonlyArray<number>>([]);
+  const [versionModalChapter, setVersionModalChapter] = useState<number | null>(null);
+  const [versionModalTitle, setVersionModalTitle] = useState("");
   const [metadataMessages, setMetadataMessages] = useState<Record<number, string>>({});
   const [styleScores, setStyleScores] = useState<Record<number, StyleScoreEntry>>({});
   const [sortBy, setSortBy] = useState<"default" | "style-drift">("default");
@@ -933,22 +938,30 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
                           <>
                             <button
                               onClick={async () => {
+                                if (pendingChapterActions.includes(ch.number)) return;
+                                setPendingChapterActions((prev) => [...prev, ch.number]);
                                 setActionError(null);
                                 try { await postApi(`/books/${bookId}/chapters/${ch.number}/approve`); refetch(); }
                                 catch (e) { setActionError(e instanceof Error ? e.message : "Approve failed"); }
+                                finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                               }}
-                              className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                              disabled={pendingChapterActions.includes(ch.number)}
+                              className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm disabled:opacity-30"
                               title={t("book.approve")}
                             >
                               <Check size={14} />
                             </button>
                             <button
                               onClick={async () => {
+                                if (pendingChapterActions.includes(ch.number)) return;
+                                setPendingChapterActions((prev) => [...prev, ch.number]);
                                 setActionError(null);
                                 try { await postApi(`/books/${bookId}/chapters/${ch.number}/reject`); refetch(); }
                                 catch (e) { setActionError(e instanceof Error ? e.message : "Reject failed"); }
+                                finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                               }}
-                              className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
+                              disabled={pendingChapterActions.includes(ch.number)}
+                              className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm disabled:opacity-30"
                               title={t("book.reject")}
                             >
                               <X size={14} />
@@ -1002,6 +1015,8 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
                         )}
                         <button
                           onClick={async () => {
+                            if (pendingChapterActions.includes(ch.number)) return;
+                            setPendingChapterActions((prev) => [...prev, ch.number]);
                             setActionError(null);
                             try {
                               const result = await postApi<{ passed?: boolean; issues?: unknown[] }>(`/books/${bookId}/audit/${ch.number}`, {});
@@ -1011,9 +1026,12 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
                               refetch();
                             } catch (e) {
                               setActionError(e instanceof Error ? e.message : "Audit failed");
+                            } finally {
+                              setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number));
                             }
                           }}
-                          className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm"
+                          disabled={pendingChapterActions.includes(ch.number)}
+                          className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm disabled:opacity-50"
                           title={t("book.audit")}
                         >
                           <ShieldCheck size={14} />
@@ -1037,6 +1055,13 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
                           {syncingChapters.includes(ch.number)
                             ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground/20 border-t-muted-foreground rounded-full animate-spin" />
                             : <RefreshCw size={14} />}
+                        </button>
+                        <button
+                          onClick={() => { setVersionModalChapter(ch.number); setVersionModalTitle(ch.title); }}
+                          className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-all shadow-sm"
+                          title="版本历史"
+                        >
+                          <History size={14} />
                         </button>
                         <button
                           onClick={() => handleStyleDiagnostics(ch.number, ch.title)}
@@ -1203,6 +1228,15 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
             )}
           </div>
         </div>
+      )}
+      {versionModalChapter !== null && (
+        <ChapterVersionModal
+          bookId={bookId}
+          chapterNumber={versionModalChapter}
+          chapterTitle={versionModalTitle}
+          onClose={() => { setVersionModalChapter(null); setVersionModalTitle(""); }}
+          onRestore={() => refetch()}
+        />
       )}
     </div>
   );

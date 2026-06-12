@@ -27,6 +27,8 @@ import type { RadarSource } from "../agents/radar-source.js";
 import { readGenreProfile } from "../agents/rules-reader.js";
 import { analyzeAITells } from "../agents/ai-tells.js";
 import { analyzeSensitiveWords } from "../agents/sensitive-words.js";
+import { loadChapterIntents, getChapterIntent } from "../models/chapter-intent.js";
+import { validateAuthorIntentInContent } from "../agents/post-write-validator.js";
 import { StateManager } from "../state/manager.js";
 import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
 import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
@@ -327,7 +329,12 @@ interface MergedAuditEvaluation {
 
 export interface ImportChaptersInput {
   readonly bookId: string;
-  readonly chapters: ReadonlyArray<{ readonly title: string; readonly content: string }>;
+  readonly chapters: ReadonlyArray<{
+    readonly title: string;
+    readonly content: string;
+    /** Optional target chapter number from the import plan. If omitted, sequential numbering starts from resumeFrom. */
+    readonly targetNumber?: number;
+  }>;
   readonly resumeFrom?: number;
   /** "continuation" (default) = pick up where the text left off, no new spacetime.
    *  "series" = shared universe but independent new story, requires new spacetime. */
@@ -1874,6 +1881,7 @@ export class PipelineRunner {
     const {
       normalizePostWriteSurface,
       validatePostWrite: postWriteValidate,
+      validateAuthorIntentInContent,
     } = await import("../agents/post-write-validator.js");
     const { validateHookLedger } = await import("../utils/hook-ledger-validator.js");
     const { readBookRules } = await import("../agents/rules-reader.js");
@@ -1920,7 +1928,7 @@ export class PipelineRunner {
       addUsage: PipelineRunner.addUsage,
       analyzeAITells: (content) => analyzeAITells(content, pipelineLang),
       analyzeSensitiveWords: (content) => analyzeSensitiveWords(content, undefined, pipelineLang),
-      runPostWriteChecks: (content) => {
+      runPostWriteChecks: async (content) => {
         const baseIssues = postWriteValidate(content, gp, parsedBookRules, pipelineLang)
           .filter((v) => v.severity === "error")
           .map((v) => ({
@@ -1934,7 +1942,24 @@ export class PipelineRunner {
         const ledgerIssues = memoBody
           ? validateHookLedger(memoBody, content)
           : [];
-        return [...baseIssues, ...ledgerIssues];
+        // Check author's intent commitments (key moment, core narrative)
+        const chapterIntentsIndex = await loadChapterIntents(bookDir);
+        const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, chapterNumber);
+        const intentIssues = chapterIntent
+          ? validateAuthorIntentInContent(
+              content,
+              chapterIntent.keyMoment,
+              chapterIntent.coreNarrative,
+              chapterIntent.readerTakeaway,
+            ).filter((v) => v.severity === "warning")
+            .map((v) => ({
+              severity: "warning" as const,
+              category: v.rule,
+              description: v.description,
+              suggestion: v.suggestion,
+            }))
+          : [];
+        return [...baseIssues, ...ledgerIssues, ...intentIssues];
       },
       maxReviewIterations: this.config.writingReviewRetries,
       logWarn: (message) => this.logWarn(pipelineLang, message),
@@ -2881,7 +2906,8 @@ ${matrix}`,
 
       for (let i = startFrom - 1; i < input.chapters.length; i++) {
         const ch = input.chapters[i]!;
-        const chapterNumber = i + 1;
+        // Use the plan's targetNumber when provided, otherwise fall back to sequential numbering
+        const chapterNumber = ch.targetNumber ?? i + 1;
         const governedInput = await this.prepareWriteInput(book, bookDir, chapterNumber);
 
         log?.info(this.localize(resolvedLanguage, {
@@ -2947,10 +2973,16 @@ ${matrix}`,
 
       if (input.chapters.length > 0) {
         await this.markBookActiveIfNeeded(input.bookId);
-        await this.syncCurrentStateFactHistory(input.bookId, input.chapters.length);
+        // Use the actual max chapter number for state sync, not array length
+        const maxChapterNumber = Math.max(...input.chapters.map((ch) => ch.targetNumber ?? 0), input.chapters.length);
+        await this.syncCurrentStateFactHistory(input.bookId, maxChapterNumber);
       }
 
-      const nextChapter = input.chapters.length + 1;
+      // Compute nextChapter from the actual target numbers, not array length
+      const maxTargetNumber = input.chapters.reduce(
+        (max, ch) => Math.max(max, ch.targetNumber ?? 0), 0
+      );
+      const nextChapter = maxTargetNumber > 0 ? maxTargetNumber + 1 : input.chapters.length + 1;
       log?.info(this.localize(resolvedLanguage, {
         zh: `完成。已导入 ${importedCount} 章，共 ${formatLengthCount(totalWords, countingMode)}。下一章：${nextChapter}`,
         en: `Done. ${importedCount} chapters imported, ${formatLengthCount(totalWords, countingMode)}. Next chapter: ${nextChapter}`,

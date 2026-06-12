@@ -213,8 +213,10 @@ const ZH_PATTERNS: ReadonlyArray<RhetoricPattern> = [
     category: "anaphora",
     label: "首语重复",
     patterns: [
-      // 连续两段以相同2-4字词开头
-      /^(.){2,4}(?:[\s\S]*?)^\1{2,4}/gm,
+      // 连续两段以相同2-4字/词开头（只匹配 CJK 或字母，避免空格/标点误报）
+      // CJK 与 \b 不兼容，改用负向前瞻确保 CJK 前缀后不接汉字；英文分支仍使用 \b
+      /^([\u4e00-\u9fff]{2,4})(?![\u4e00-\u9fff])([\s\S]*?)\n\n[\s\S]{0,200}\n\1(?![\u4e00-\u9fff])/gm,
+      /^([a-zA-Z]{2,4})\b([\s\S]*?)\n\n[\s\S]{0,200}\n\1\b/gm,
     ],
     minCount: 2,
     severityThresholds: [3, 6],

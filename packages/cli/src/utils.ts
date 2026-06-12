@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve, parse } from "node:path";
 import { createLLMClient, StateManager, createLogger, createStderrSink, createJsonLineSink, resolveEffectiveLLMConfig, loadLLMEnvLayers, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH, type EffectiveLLMConfigResult, type LLMConfigCliOverrides, type ProjectConfig, type PipelineConfig, type LogSink } from "@actalk/inkos-core";
 import { formatSqliteMemorySupportWarning } from "./runtime-requirements.js";
 
@@ -27,8 +28,19 @@ export async function resolveContext(opts: {
   return undefined;
 }
 
-export function findProjectRoot(): string {
-  return process.cwd();
+export function findProjectRoot(startDir?: string): string {
+  let dir = startDir ? resolve(startDir) : process.cwd();
+  const { root } = parse(dir);
+  while (dir !== root) {
+    try {
+      if (existsSync(join(dir, "inkos.json"))) return dir;
+    } catch {
+      // Continue searching up
+    }
+    dir = resolve(dir, "..");
+  }
+  // Fallback to cwd if no inkos.json found
+  return startDir ? resolve(startDir) : process.cwd();
 }
 
 export async function loadConfig(options?: {

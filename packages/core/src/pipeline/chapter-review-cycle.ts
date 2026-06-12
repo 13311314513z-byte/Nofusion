@@ -101,7 +101,7 @@ export async function runChapterReviewCycle(params: {
     issues: ReadonlyArray<AuditIssue>;
   };
   /** Re-run deterministic post-write checks (chapter-ref, paragraph shape, etc.) on any content. */
-  readonly runPostWriteChecks?: (content: string) => ReadonlyArray<AuditIssue>;
+  readonly runPostWriteChecks?: (content: string) => ReadonlyArray<AuditIssue> | Promise<ReadonlyArray<AuditIssue>>;
   readonly maxReviewIterations?: number;
   readonly logWarn: (message: { zh: string; en: string }) => void;
   readonly logStage: (message: { zh: string; en: string }) => void;
@@ -170,9 +170,12 @@ export async function runChapterReviewCycle(params: {
 
     // Deterministic post-write checks: run every round, not just the first.
     // If runPostWriteChecks is provided, use it; otherwise fall back to initial postWriteErrors.
-    const postWriteIssues = params.runPostWriteChecks
+    const postWriteResult = params.runPostWriteChecks
       ? params.runPostWriteChecks(content)
       : initialPostWriteIssues;
+    const postWriteIssues = postWriteResult instanceof Promise
+      ? await postWriteResult
+      : postWriteResult;
 
     const allIssues: AuditIssue[] = [
       ...llmAudit.issues,

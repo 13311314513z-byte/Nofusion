@@ -8,6 +8,8 @@ import { getFanficDimensionConfig, FANFIC_DIMENSIONS } from "./fanfic-dimensions
 import { readFile, readdir } from "node:fs/promises";
 import { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filterCharacterMatrix } from "../utils/context-filter.js";
 import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
+import { loadChapterIntents, getChapterIntent } from "../models/chapter-intent.js";
+import { buildAuthorCommitmentChecklist } from "../utils/intent-injection.js";
 import {
   readVolumeMap,
   readCharacterContext,
@@ -608,6 +610,9 @@ overall_score 评分校准：
         : `\n## 文风指南\n${styleGuide}${options?.distillationRules && options.distillationRules.length > 0 ? `\n\n### 蒸馏规则\n${options.distillationRules.join("\n")}` : ""}`
       : "";
 
+    // Load author's pre-writing commitments (from chapter_intents.json)
+    const authorCommitmentBlock = await this.loadAuthorCommitments(bookDir, chapterNumber, isEnglish);
+
     const prevChapterBlock = previousChapter
       ? isEnglish
         ? `\n## Previous Chapter Full Text (for transition checks)\n${previousChapter}\n`
@@ -620,7 +625,7 @@ overall_score 评分校准：
 ## Current State Card
 ${currentState}
 ${ledgerBlock}
-${hooksBlock}${volumeSummariesBlock}${subplotBlock}${emotionalBlock}${matrixBlock}${summariesBlock}${canonBlock}${fanficCanonBlock}${reducedControlBlock}${memoBlock}${prevChapterBlock}${styleGuideBlock}
+${hooksBlock}${volumeSummariesBlock}${subplotBlock}${emotionalBlock}${matrixBlock}${summariesBlock}${canonBlock}${fanficCanonBlock}${reducedControlBlock}${memoBlock}${authorCommitmentBlock}${prevChapterBlock}${styleGuideBlock}
 
 ## Chapter Content Under Review
 ${chapterContent}`
@@ -629,7 +634,7 @@ ${chapterContent}`
 ## 当前状态卡
 ${currentState}
 ${ledgerBlock}
-${hooksBlock}${volumeSummariesBlock}${subplotBlock}${emotionalBlock}${matrixBlock}${summariesBlock}${canonBlock}${fanficCanonBlock}${reducedControlBlock}${memoBlock}${prevChapterBlock}${styleGuideBlock}
+${hooksBlock}${volumeSummariesBlock}${subplotBlock}${emotionalBlock}${matrixBlock}${summariesBlock}${canonBlock}${fanficCanonBlock}${reducedControlBlock}${memoBlock}${authorCommitmentBlock}${prevChapterBlock}${styleGuideBlock}
 
 ## 待审章节内容
 ${chapterContent}`;
@@ -762,6 +767,31 @@ ${selectedContext || "- none"}
 
 ### 当前覆盖
 ${overrides}\n`;
+  }
+
+  /**
+   * Load the author's pre-writing commitments for this chapter and format
+   * them as a checklist block for the auditor prompt. Returns empty string
+   * if no commitments exist.
+   */
+  private async loadAuthorCommitments(
+    bookDir: string,
+    chapterNumber: number,
+    isEnglish: boolean,
+  ): Promise<string> {
+    try {
+      const index = await loadChapterIntents(bookDir);
+      const intent = index.intents.find((i) => i.chapterNumber === chapterNumber);
+      if (!intent) return "";
+      const checklist = buildAuthorCommitmentChecklist(intent);
+      if (!checklist) return "";
+      const header = isEnglish
+        ? "\n## Author's Intent Checklist (verify each item)\n"
+        : "\n## 作者意图承诺清单（请逐项核对）\n";
+      return `${header}${checklist}\n`;
+    } catch {
+      return "";
+    }
   }
 
   private extractBalancedJson(text: string): string | null {

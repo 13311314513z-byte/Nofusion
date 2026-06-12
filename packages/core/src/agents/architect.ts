@@ -70,14 +70,17 @@ export interface ArchitectRole {
 function extractYamlFrontmatter(raw: string): { frontmatter: string | null; body: string } {
   if (!raw) return { frontmatter: null, body: "" };
   const stripped = raw.replace(/^```(?:md|markdown|yaml)?\s*\n/, "").replace(/\n```\s*$/, "");
-  const leadingMatch = stripped.match(/^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
-  if (!leadingMatch) {
-    return { frontmatter: null, body: stripped };
-  }
-  return {
-    frontmatter: `---\n${leadingMatch[1]}\n---`,
-    body: leadingMatch[2].trim(),
-  };
+  // Use indexOf for YAML frontmatter detection to avoid ReDoS on large inputs.
+  // Only recognises a frontmatter block that starts on the FIRST non-empty line.
+  const startMatch = stripped.match(/^\s*---\s*\n/);
+  if (!startMatch) return { frontmatter: null, body: stripped };
+  const startIdx = startMatch.index! + startMatch[0].length;
+  const endMarker = "\n---";
+  const endIdx = stripped.indexOf(endMarker, startIdx);
+  if (endIdx === -1) return { frontmatter: null, body: stripped };
+  const frontmatter = `---\n${stripped.slice(startIdx, endIdx)}\n---`;
+  const body = stripped.slice(endIdx + endMarker.length).replace(/^\s*\n?/, "").trim();
+  return { frontmatter, body };
 }
 
 export interface ArchitectOutput {

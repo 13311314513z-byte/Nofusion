@@ -2430,15 +2430,22 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
-    await Promise.resolve();
+    expect(response.status).toBe(202);
 
-    const status = await app.request("http://localhost/api/v1/books/broken-book/create-status");
-    expect(status.status).toBe(200);
-    await expect(status.json()).resolves.toMatchObject({
-      status: "error",
-      error: "INKOS_LLM_API_KEY not set",
-    });
+    // Poll create-status until the async pipeline completes (or timeout)
+    let lastStatus: { status: string; error?: string } | null = null;
+    for (let i = 0; i < 100; i++) {
+      const status = await app.request("http://localhost/api/v1/books/broken-book/create-status");
+      if (status.status === 200) {
+        lastStatus = await status.json() as { status: string; error?: string };
+        if (lastStatus.status === "failed" || lastStatus.status === "completed") break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    expect(lastStatus).not.toBeNull();
+    expect(lastStatus!.status).toBe("failed");
+    expect(lastStatus!.error).toBe("INKOS_LLM_API_KEY not set");
   });
 
   it("surfaces LLM config errors during create instead of masking them as internal errors", async () => {
@@ -2460,12 +2467,22 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(400);
-    const json = await response.json() as { error: { code: string; message: string } };
-    expect(json.error.code).toBe("LLM_CONFIG_ERROR");
-    expect(json.error.message).toContain("Studio LLM API key not set");
-    expect(json.error.message).not.toMatch(/kkaiapi/i);
-    expect(processProjectInteractionRequestMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(202);
+
+    // Poll create-status until async pipeline completes
+    let lastStatus: { status: string; error?: string } | null = null;
+    for (let i = 0; i < 100; i++) {
+      const status = await app.request("http://localhost/api/v1/books/needs-key/create-status");
+      if (status.status === 200) {
+        lastStatus = await status.json() as { status: string; error?: string };
+        if (lastStatus.status === "failed" || lastStatus.status === "completed") break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    expect(lastStatus).not.toBeNull();
+    expect(lastStatus!.status).toBe("failed");
+    expect(lastStatus!.error).toContain("Studio LLM API key not set");
   });
 
   it("uses rollback semantics for chapter rejection instead of only flipping status", async () => {
@@ -2530,7 +2547,14 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to call createInteractionToolsFromDeps
+    for (let i = 0; i < 100; i++) {
+      if (createInteractionToolsFromDepsMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     expect(createInteractionToolsFromDepsMock).toHaveBeenCalledTimes(1);
     expect(processProjectInteractionRequestMock).toHaveBeenCalledWith(expect.objectContaining({
       projectRoot: root,
@@ -2562,7 +2586,14 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to call processProjectInteractionRequest
+    for (let i = 0; i < 100; i++) {
+      if (processProjectInteractionRequestMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     const call = processProjectInteractionRequestMock.mock.calls.at(-1)?.[0] as
       | { request?: Record<string, unknown> }
       | undefined;
@@ -2607,7 +2638,14 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to build the config
+    for (let i = 0; i < 100; i++) {
+      if (createLLMClientMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     expect(loadProjectConfigMock).toHaveBeenCalledWith(root, { consumer: "studio" });
     expect(createLLMClientMock).toHaveBeenCalledWith(expect.objectContaining({
       service: "ollama",

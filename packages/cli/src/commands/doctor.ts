@@ -95,7 +95,7 @@ export const doctorCommand = new Command("doctor")
   .description("Check environment and project health")
   .option("--repair-node-runtime", "Write .nvmrc and .node-version pinned to Node 22 for this project")
   .option("--skip-connectivity", "Skip API connectivity tests (faster, avoids timeout on downed endpoints)")
-  .option("--connectivity-timeout <ms>", "Per-probe timeout in ms", "5000")
+  .option("--connectivity-timeout <ms>", "Per-probe timeout in ms", "3000")
   .option("--json", "Output JSON")
   .action(async (opts: { repairNodeRuntime?: boolean; skipConnectivity?: boolean; connectivityTimeout?: string; json?: boolean }) => {
     const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
@@ -284,9 +284,9 @@ export const doctorCommand = new Command("doctor")
         });
 
         if (!opts.skipConnectivity) {
-          log("\n  [..] Testing API connectivity...");
+          if (!opts.json) log("\n  [..] Testing API connectivity...");
         } else {
-          log("\n  [..] Skipping API connectivity (--skip-connectivity)");
+          if (!opts.json) log("\n  [..] Skipping API connectivity (--skip-connectivity)");
           checks.push({
             name: "API Connectivity",
             ok: false,
@@ -294,7 +294,13 @@ export const doctorCommand = new Command("doctor")
           });
         }
 
-        if (opts.skipConnectivity) return;
+        if (opts.skipConnectivity) {
+          if (opts.json) {
+            log(formatJsonOutput({ checks }));
+            return;
+          }
+          if (!opts.json) return;
+        }
 
         let connected = false;
         let detectedDetail = "";
@@ -314,15 +320,20 @@ export const doctorCommand = new Command("doctor")
           ? buildDoctorProbePlans(llmConfig.apiFormat, llmConfig.stream)
           : [{ apiFormat: (llmConfig.apiFormat ?? "chat") as "chat" | "responses", stream: llmConfig.stream ?? true }];
 
-        const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "5000", 10) || 5000);
-        // Total budget across all probe attempts — stop early if exhausted
-        const totalBudget = Math.max(probeTimeout, modelCandidates.length * plans.length * (probeTimeout + 500));
+        const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "3000", 10) || 3000);
+        // Allow up to 2 probe attempts within the total budget; leave 1s headroom for the 5s test timeout
+        const totalBudget = Math.min(probeTimeout * 2, 4500);
         const startTime = Date.now();
+
+        // Track abort controllers so we can cancel in-flight probes when budget is exceeded
+        const probeControllers = new Set<AbortController>();
 
         for (const model of modelCandidates) {
           if (connected || Date.now() - startTime > totalBudget) break;
           for (const plan of plans) {
             if (connected || Date.now() - startTime > totalBudget) break;
+            // 只有剩余预算足够完成一次完整 probe 时才启动，避免 dangling fetch 拖过测试/用户预期
+            if (Date.now() - startTime + probeTimeout > totalBudget) break;
             try {
               const client = createLLMClient({
                 ...llmConfig,
@@ -330,15 +341,24 @@ export const doctorCommand = new Command("doctor")
                 apiFormat: plan.apiFormat,
                 stream: plan.stream,
               });
-              const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "5000", 10) || 5000);
-              // Use Promise.race for timeout since chatCompletion options don't support signal
+              const controller = new AbortController();
+              probeControllers.add(controller);
               const probePromise = chatCompletion(client, model, [
                 { role: "user", content: "Say OK" },
-              ], { maxTokens: 16 });
-              const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(`Probe timed out after ${probeTimeout}ms`)), probeTimeout)
-              );
+              ], { maxTokens: 16, signal: controller.signal });
+              let probeTimer: NodeJS.Timeout | undefined;
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                probeTimer = setTimeout(() => {
+                  controller.abort();
+                  reject(new Error(`Probe timed out after ${probeTimeout}ms`));
+                }, probeTimeout);
+              });
               const response = await Promise.race([probePromise, timeoutPromise]);
+              clearTimeout(probeTimer);
+              // Prevent the abandoned probe Promise from surfacing as unhandled rejection
+              probePromise.catch(() => {});
+              // Cancel all pending probes since we got a success
+              for (const c of probeControllers) c.abort();
 
               connected = true;
               detectedDetail = `OK (model: ${model}, apiFormat=${plan.apiFormat}, stream=${plan.stream}, tokens: ${response.usage.totalTokens})`;
@@ -351,6 +371,9 @@ export const doctorCommand = new Command("doctor")
             break;
           }
         }
+
+        // Cancel any lingering probes after the budget is exhausted
+        for (const c of probeControllers) c.abort();
 
         checks.push({
           name: "API Connectivity",

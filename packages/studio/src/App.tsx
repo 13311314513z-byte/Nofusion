@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useHashRoute } from "./hooks/use-hash-route";
 import type { HashRoute } from "./hooks/use-hash-route";
 import { Sidebar } from "./components/Sidebar";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Dashboard } from "./pages/Dashboard";
 import { ChatPage } from "./pages/ChatPage";
 import { BookDetail } from "./pages/BookDetail";
@@ -175,6 +176,7 @@ export function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 relative overflow-y-auto scroll-smooth">
+          <ErrorBoundary>
           {route.page === "dashboard" && (
             <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
               <Dashboard nav={nav} sse={sse} theme={theme} t={t} />
@@ -313,6 +315,7 @@ export function App() {
               <CoverConfigPage t={t as unknown as (key: string) => string} />
             </div>
           )}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

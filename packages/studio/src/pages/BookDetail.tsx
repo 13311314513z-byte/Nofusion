@@ -100,7 +100,7 @@ interface RolesData {
 
 type ReviseMode = "spot-fix" | "polish" | "rewrite" | "rework" | "anti-detect";
 type ExportFormat = "txt" | "md" | "epub";
-type BookStatus = "active" | "paused" | "outlining" | "completed" | "dropped";
+type BookStatus = "incubating" | "active" | "paused" | "outlining" | "completed" | "dropped";
 
 interface Nav {
   toDashboard: () => void;
@@ -161,6 +161,7 @@ export function BookDetail({
   const [revisingChapters, setRevisingChapters] = useState<ReadonlyArray<number>>([]);
   const [syncingChapters, setSyncingChapters] = useState<ReadonlyArray<number>>([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [pendingChapterActions, setPendingChapterActions] = useState<ReadonlyArray<number>>([]);
   const [settingsWordCount, setSettingsWordCount] = useState<number | null>(null);
   const [settingsTargetChapters, setSettingsTargetChapters] = useState<number | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<BookStatus | null>(null);
@@ -787,6 +788,7 @@ export function BookDetail({
               onChange={(e) => setSettingsStatus(e.target.value as BookStatus)}
               className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50"
             >
+              <option value="incubating">{t("book.statusIncubating")}</option>
               <option value="active">{t("book.statusActive")}</option>
               <option value="paused">{t("book.statusPaused")}</option>
               <option value="outlining">{t("book.statusOutlining")}</option>
@@ -1095,20 +1097,28 @@ export function BookDetail({
                         <>
                           <button
                             onClick={async () => {
+                              if (pendingChapterActions.includes(ch.number)) return;
+                              setPendingChapterActions((prev) => [...prev, ch.number]);
                               try { await postApi(`/books/${bookId}/chapters/${ch.number}/approve`); refetch(); }
                               catch (e) { alert(e instanceof Error ? e.message : "Approve failed"); }
+                              finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                             }}
-                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                            disabled={pendingChapterActions.includes(ch.number)}
+                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm disabled:opacity-30"
                             title={t("book.approve")}
                           >
                             <Check size={14} />
                           </button>
                           <button
                             onClick={async () => {
+                              if (pendingChapterActions.includes(ch.number)) return;
+                              setPendingChapterActions((prev) => [...prev, ch.number]);
                               try { await postApi(`/books/${bookId}/chapters/${ch.number}/reject`); refetch(); }
                               catch (e) { alert(e instanceof Error ? e.message : "Reject failed"); }
+                              finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                             }}
-                            className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
+                            disabled={pendingChapterActions.includes(ch.number)}
+                            className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm disabled:opacity-30"
                             title={t("book.reject")}
                           >
                             <X size={14} />
@@ -1117,15 +1127,20 @@ export function BookDetail({
                       )}
                       <button
                         onClick={async () => {
+                          if (pendingChapterActions.includes(ch.number)) return;
+                          setPendingChapterActions((prev) => [...prev, ch.number]);
                           try {
                             const auditResult = await fetchJson<{ passed?: boolean; issues?: unknown[] }>(`/books/${bookId}/audit/${ch.number}`, { method: "POST" });
                             alert(auditResult.passed ? "Audit passed" : `Audit failed: ${auditResult.issues?.length ?? 0} issues`);
                             refetch();
                           } catch (e) {
                             alert(e instanceof Error ? e.message : "Audit failed");
+                          } finally {
+                            setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number));
                           }
                         }}
-                        className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm"
+                        disabled={pendingChapterActions.includes(ch.number)}
+                        className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm disabled:opacity-50"
                         title={t("book.audit")}
                       >
                         <ShieldCheck size={14} />

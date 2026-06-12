@@ -250,9 +250,11 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
                       <div className={`w-2 h-2 rounded-full ${
                         book.status === "active" ? "bg-emerald-500" :
                         book.status === "paused" ? "bg-amber-500" :
+                        book.status === "incubating" ? "bg-sky-500" :
                         "bg-muted-foreground"
                       }`} />
                       <span>{
+                        book.status === "incubating" ? t("book.statusIncubating") :
                         book.status === "active" ? t("book.statusActive") :
                         book.status === "paused" ? t("book.statusPaused") :
                         book.status === "outlining" ? t("book.statusOutlining") :

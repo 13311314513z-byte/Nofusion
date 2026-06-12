@@ -12,7 +12,7 @@ import {
   pickValidValue,
   resolveDraftInstruction,
   waitForBookReady,
-} from "./BookCreate";
+} from "./book-create-utils";
 
 describe("pickValidValue", () => {
   it("keeps the current value when it is still available", () => {
@@ -151,7 +151,7 @@ describe("waitForBookReady", () => {
       fetchBook: async () => {
         throw new Error("Book not found");
       },
-      fetchStatus: async () => ({ status: "error", error: "INKOS_LLM_API_KEY not set" }),
+      fetchStatus: async () => ({ status: "failed", error: "INKOS_LLM_API_KEY not set" }),
       delayMs: 0,
       waitImpl: async () => undefined,
     })).rejects.toThrow("INKOS_LLM_API_KEY not set");

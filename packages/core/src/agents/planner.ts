@@ -16,6 +16,16 @@ import {
   gatherPlanningMaterials,
   loadPlanningSeedMaterials,
 } from "../utils/planning-materials.js";
+import {
+  loadChapterGoals,
+  type ChapterGoalCard,
+} from "../models/chapter-goal.js";
+import {
+  loadChapterIntents,
+  getChapterIntent,
+  type AuthorChapterIntent,
+} from "../models/chapter-intent.js";
+import { buildAuthorIntentBlock } from "../utils/intent-injection.js";
 import { parseMemo, PlannerParseError } from "../utils/chapter-memo-parser.js";
 import {
   buildPlannerUserMessage,
@@ -42,6 +52,69 @@ export interface PlanChapterInput {
   readonly bookDir: string;
   readonly chapterNumber: number;
   readonly externalContext?: string;
+}
+
+/** Find the ChapterGoalCard for a specific chapter number. */
+function getChapterGoalForChapter(
+  goals: ReadonlyArray<ChapterGoalCard>,
+  chapterNumber: number,
+): ChapterGoalCard | undefined {
+  return goals.find((g) => g.chapterNumber === chapterNumber);
+}
+
+/**
+ * Build a prompt block from the chapter goal card for injection into the memo template.
+ */
+function buildChapterGoalBlock(
+  goal: ChapterGoalCard | undefined,
+  language: "zh" | "en",
+): string {
+  if (!goal) return "";
+  const lines: string[] = [];
+  const label = language === "en" ? "## Chapter Goal (user-set)" : "## 本章目标（用户设定）";
+
+  if (goal.mainConflict) {
+    lines.push(language === "en" ? `- Core conflict: ${goal.mainConflict}` : `- 核心矛盾：${goal.mainConflict}`);
+  }
+  if (goal.targetMood) {
+    lines.push(language === "en" ? `- Target mood: ${goal.targetMood}` : `- 目标氛围：${goal.targetMood}`);
+  }
+  if (goal.requiredBeats?.length) {
+    const beatLabel = language === "en" ? "Required beats (MUST include)" : "必达事件（必须包含）";
+    lines.push(`- ${beatLabel}:`);
+    for (const beat of goal.requiredBeats) {
+      lines.push(`  - ${beat}`);
+    }
+  }
+  if (goal.forbiddenMoves?.length) {
+    const forbidLabel = language === "en" ? "Forbidden moves (MUST avoid)" : "禁用动作（严禁出现）";
+    lines.push(`- ${forbidLabel}:`);
+    for (const move of goal.forbiddenMoves) {
+      lines.push(`  - ${move}`);
+    }
+  }
+  if (goal.targetChars && goal.targetChars > 0) {
+    lines.push(language === "en" ? `- Target length: ~${goal.targetChars} characters` : `- 目标字数：约 ${goal.targetChars} 字`);
+  }
+  if (goal.povCharacter) {
+    lines.push(language === "en" ? `- POV: ${goal.povCharacter}` : `- 视角：${goal.povCharacter}`);
+  }
+  if (goal.location) {
+    lines.push(language === "en" ? `- Location: ${goal.location}` : `- 地点：${goal.location}`);
+  }
+  if (goal.timeOfDay) {
+    lines.push(language === "en" ? `- Time of day: ${goal.timeOfDay}` : `- 时段：${goal.timeOfDay}`);
+  }
+  if (goal.hookIdsToAdvance?.length) {
+    const hookLabel = language === "en" ? "Hooks to advance in this chapter" : "本章需推进的伏笔";
+    lines.push(`- ${hookLabel}:`);
+    for (const hookId of goal.hookIdsToAdvance) {
+      lines.push(`  - ${hookId}`);
+    }
+  }
+
+  if (lines.length === 0) return "";
+  return `\n${label}\n${lines.join("\n")}\n`;
 }
 
 export interface PlanChapterOutput {
@@ -83,6 +156,18 @@ export class PlannerAgent extends BaseAgent {
       chapterNumber: input.chapterNumber,
     });
     const outlineNode = this.findOutlineNode(seedMaterials.volumeOutline, input.chapterNumber);
+    // Load chapter goals from chapter_goals.json — inject user-set constraints
+    // (requiredBeats, forbiddenMoves, targetChars, hookIdsToAdvance) into the
+    // planner's intent and memo prompt so they actually influence writing.
+    const chapterGoalsIndex = await loadChapterGoals(input.bookDir);
+    const chapterGoal = getChapterGoalForChapter(chapterGoalsIndex.goals, input.chapterNumber);
+    // Load author's chapter intent (from chapter_intents.json) — inject the
+    // author's pre-writing answers (core narrative, reader takeaway, key moment)
+    // into the memo prompt so the LLM reads "the author wants this" before it
+    // writes anything.
+    const chapterIntentsIndex = await loadChapterIntents(input.bookDir);
+    const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, input.chapterNumber);
+    const authorIntentBlock = chapterIntent ? buildAuthorIntentBlock(chapterIntent) : "";
     const goal = this.deriveGoal(
       input.externalContext,
       seedMaterials.currentFocus,
@@ -100,6 +185,19 @@ export class PlannerAgent extends BaseAgent {
     const mustKeep = this.collectMustKeep(seedMaterials.currentState, seedMaterials.storyBible);
     const mustAvoid = this.collectMustAvoid(seedMaterials.currentFocus, prohibitions);
     const styleEmphasis = this.collectStyleEmphasis(seedMaterials.authorIntent, seedMaterials.currentFocus);
+    // Inject chapter goal constraints into mustKeep/mustAvoid
+    if (chapterGoal) {
+      if (chapterGoal.requiredBeats?.length) {
+        for (const beat of chapterGoal.requiredBeats) {
+          if (!mustKeep.includes(beat)) mustKeep.push(beat);
+        }
+      }
+      if (chapterGoal.forbiddenMoves?.length) {
+        for (const move of chapterGoal.forbiddenMoves) {
+          if (!mustAvoid.includes(move)) mustAvoid.push(move);
+        }
+      }
+    }
     const materials = await gatherPlanningMaterials({
       bookDir: input.bookDir,
       chapterNumber: input.chapterNumber,
@@ -140,6 +238,9 @@ export class PlannerAgent extends BaseAgent {
       previousEndingExcerpt: seedMaterials.previousEndingExcerpt,
       brief: seedMaterials.brief,
       chapterContext: input.externalContext,
+      // Pass chapter goal so the memo LLM prompt can render requiredBeats / forbiddenMoves
+      chapterGoal,
+      authorIntentBlock,
       recyclableHooks: memorySelection.recyclableHooks,
       // Phase hotfix 4: thread book language through so the planner uses
       // English prompts (system + user template + golden opening guidance)
@@ -189,6 +290,10 @@ export class PlannerAgent extends BaseAgent {
     readonly chapterContext?: string;
     readonly recyclableHooks?: ReadonlyArray<StoredHook>;
     readonly language?: "zh" | "en";
+    /** Optional chapter goal card — used to inject requiredBeats / forbiddenMoves / targetChars into the memo prompt. */
+    readonly chapterGoal?: ChapterGoalCard;
+    /** Optional author intent block — pre-formatted markdown from chapter_intents.json. */
+    readonly authorIntentBlock?: string;
   }): Promise<ChapterMemo> {
     const [characterMatrix, subplotBoard, emotionalArcs, pendingHooks, bookRulesRaw] = await Promise.all([
       readCharacterMatrix(input.storyDir),
@@ -232,6 +337,8 @@ export class PlannerAgent extends BaseAgent {
       bookRulesRelevant: bookRulesRaw.trim().length > 0 ? bookRulesRaw.trim() : noBookRules,
       brief: input.brief ?? "",
       chapterContext: input.chapterContext ?? "",
+      chapterGoalBlock: buildChapterGoalBlock(input.chapterGoal, language),
+      authorIntentBlock: input.authorIntentBlock,
       language,
     });
 

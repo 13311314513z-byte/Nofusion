@@ -79,6 +79,14 @@ import {
   getChapterGoal,
   upsertChapterGoal,
   removeChapterGoal,
+  loadChapterIntents,
+  saveChapterIntents,
+  getChapterIntent,
+  upsertChapterIntent,
+  removeChapterIntent,
+  buildAuthorIntentBlock,
+  generateSuggestions,
+  type AuthorChapterIntent,
   listRoleCards,
   loadRoleCard,
   saveRoleCard,
@@ -791,7 +799,7 @@ async function withPipeline<T>(
 type EventHandler = (event: string, data: unknown) => void;
 const subscribers = new Set<EventHandler>();
 const bookCreateStatus = new Map<string, {
-  status: "creating" | "error" | "completed";
+  status: "queued" | "creating" | "completed" | "failed";
   error?: string;
   phase?: string;
   createdAt: number;
@@ -800,6 +808,7 @@ const bookCreateStatus = new Map<string, {
 }>();
 const BOOK_CREATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟超时
 const BOOK_CREATE_TTL_MS = 60 * 1000; // 完成后保留 60 秒
+const BOOK_CREATE_IN_PROGRESS_TTL_MS = BOOK_CREATE_TIMEOUT_MS + 60 * 1000; // queued/creating 状态保留到创建超时后再加 1 分钟缓冲
 
 // 定期清理过期状态（保存 timer 引用以便进程退出时清理）
 const bookCreateCleanupTimer = setInterval(() => {
@@ -1592,20 +1601,71 @@ async function probeServiceCapabilities(args: {
 
 // --- Server factory ---
 
+// Foundation plan persistence directory
+const PLANS_DIR = ".inkos/plans";
+
+async function loadPersistedFoundationPlans(root: string): Promise<Map<string, FoundationPlanEntry>> {
+  const plans = new Map<string, FoundationPlanEntry>();
+  const plansDir = join(root, PLANS_DIR);
+  try {
+    const files = await readdir(plansDir);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const raw = await readFile(join(plansDir, file), "utf-8");
+        const entry = JSON.parse(raw) as FoundationPlanEntry;
+        if (entry.expiresAt > Date.now()) {
+          plans.set(file.replace(/\.json$/, ""), entry);
+        }
+      } catch {
+        // Skip corrupted files
+      }
+    }
+  } catch {
+    // Directory doesn't exist yet
+  }
+  return plans;
+}
+
+async function persistFoundationPlan(root: string, planId: string, entry: FoundationPlanEntry): Promise<void> {
+  const plansDir = join(root, PLANS_DIR);
+  await mkdir(plansDir, { recursive: true }).catch(() => {});
+  await writeFile(join(plansDir, `${planId}.json`), JSON.stringify(entry), "utf-8");
+}
+
+async function removePersistedFoundationPlan(root: string, planId: string): Promise<void> {
+  await rm(join(root, PLANS_DIR, `${planId}.json`), { force: true }).catch(() => {});
+}
+
+interface FoundationPlanEntry {
+  readonly bookId: string;
+  readonly mode: "supplement" | "rebuild";
+  readonly proposed: ArchitectOutput;
+  readonly foundationRevision: string;
+  readonly sourceBundle: FoundationSourceBundle;
+  readonly expiresAt: number;
+}
+
 export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   const app = new Hono();
-  const foundationPlans = new Map<string, {
-    readonly bookId: string;
-    readonly mode: "supplement" | "rebuild";
-    readonly proposed: ArchitectOutput;
-    readonly foundationRevision: string;
-    readonly sourceBundle: FoundationSourceBundle;
-    readonly expiresAt: number;
-  }>();
+  // Load persisted plans on startup; expired ones are filtered out automatically
+  const foundationPlans = new Map<string, FoundationPlanEntry>();
+  let foundationPlansLoaded = false;
+  const foundationPlansPromise = loadPersistedFoundationPlans(root)
+    .then((loaded) => {
+      for (const [id, entry] of loaded) foundationPlans.set(id, entry);
+      foundationPlansLoaded = true;
+    })
+    .catch((e) => {
+      foundationPlansLoaded = true;
+      console.error("[studio] Failed to load persisted foundation plans:", e);
+    });
   const state = new StateManager(root);
   let cachedConfig = initialConfig;
 
-  app.use("/*", cors());
+  // CORS: only allow the Studio's own origin. When behind a proxy, set STUDIO_ORIGIN.
+  const allowedOrigin = process.env.STUDIO_ORIGIN || "http://localhost:4577";
+  app.use("/*", cors({ origin: allowedOrigin, credentials: true }));
 
   // Structured error handler — ApiError returns typed JSON, others return 500
   app.onError((error, c) => {
@@ -1798,7 +1858,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
 
     broadcast("book:creating", { bookId, title: body.title });
-    bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+    // 先设为 queued，消费者轮询时可见
+    bookCreateStatus.set(bookId, { status: "queued", createdAt: Date.now(), ttlMs: BOOK_CREATE_IN_PROGRESS_TTL_MS });
 
     const blurb = [body.blurb?.trim(), sourceBundle?.contextBlock.trim()]
       .filter((part): part is string => Boolean(part))
@@ -1808,6 +1869,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     // Note: buildPipelineConfig 可能因配置加载失败而抛异常，必须 try/catch
     (async () => {
       try {
+        // 从 queued → creating
+        bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_IN_PROGRESS_TTL_MS });
         const pipelineConfig = await buildPipelineConfig();
         withPipeline("create-book", pipelineConfig, async (pipeline) => {
           const tools = createInteractionToolsFromDeps(pipeline, state);
@@ -1867,18 +1930,19 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
             broadcast("book:created", { bookId: createdBookId, ...(book ? { book } : {}) });
           } catch (e: unknown) {
             const error = e instanceof Error ? e.message : String(e);
-            bookCreateStatus.set(bookId, { status: "error", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+            bookCreateStatus.set(bookId, { status: "failed", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
             broadcast("book:error", { bookId, error });
           }
         }).catch(() => { /* fire-and-forget 的异常已被内部 catch 处理 */ });
       } catch (e: unknown) {
         const error = e instanceof Error ? e.message : String(e);
-        bookCreateStatus.set(bookId, { status: "error", error: `管道初始化失败: ${error}`, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+        bookCreateStatus.set(bookId, { status: "failed", error: `管道初始化失败: ${error}`, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
         broadcast("book:error", { bookId, error: `管道初始化失败: ${error}` });
       }
     })();
 
-    return c.json({ status: "creating", bookId });
+    // 返回 202 + jobId，符合异步 Job 契约
+    return c.json({ jobId: bookId, status: "queued" }, 202);
   });
 
   app.get("/api/v1/books/:id/create-status", async (c) => {
@@ -1919,46 +1983,106 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
-  // --- Chapter Save (with version backup) ---
+  // --- Chapter Save (with version backup, content hash, concurrency protection) ---
+
+  const MAX_CHAPTER_VERSIONS = 50;
+  // In-memory lock per chapter to prevent concurrent writes
+  const chapterLocks = new Map<string, Promise<void>>();
+
+  function withChapterLock<T>(bookId: string, chapterNum: number, fn: () => Promise<T>): Promise<T> {
+    const key = `${bookId}:${chapterNum}`;
+    const previous = chapterLocks.get(key) ?? Promise.resolve();
+    // If the previous lock rejected, still allow the next operation to proceed.
+    const next = previous
+      .catch(() => undefined)
+      .then(() => fn());
+    chapterLocks.set(key, next as Promise<void>);
+    // Clean up after completion
+    next.finally(() => {
+      if (chapterLocks.get(key) === (next as Promise<void>)) chapterLocks.delete(key);
+    });
+    return next;
+  }
 
   app.put("/api/v1/books/:id/chapters/:num", async (c) => {
     const id = c.req.param("id");
     const num = parseInt(c.req.param("num"), 10);
+    if (!Number.isFinite(num) || num < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    const body = await c.req.json<{ content?: unknown }>();
+    if (typeof body.content !== "string") {
+      return c.json({ error: "content must be a string" }, 400);
+    }
+    const content = body.content;
+    if (content.length > 10_000_000) {
+      return c.json({ error: "content too large" }, 413);
+    }
     const bookDir = state.bookDir(id);
     const chaptersDir = join(bookDir, "chapters");
-    const { content } = await c.req.json<{ content: string }>();
 
-    try {
-      const files = await readdir(chaptersDir);
-      const paddedNum = String(num).padStart(4, "0");
-      const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
-      if (!match) return c.json({ error: "Chapter not found" }, 404);
+    // Use per-chapter lock to prevent concurrent overwrites
+    return withChapterLock(id, num, async () => {
+      try {
+        const files = await readdir(chaptersDir);
+        const paddedNum = String(num).padStart(4, "0");
+        const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
+        if (!match) return c.json({ error: "Chapter not found" }, 404);
 
-      const { readFile: readFileFs, writeFile: writeFileFs, mkdir } = await import("node:fs/promises");
+        const { readFile: readFileFs, writeFile: writeFileFs, mkdir, unlink } = await import("node:fs/promises");
+        const chapterFilePath = join(chaptersDir, match);
 
-      // Save version backup before overwriting
-      const versionsDir = join(chaptersDir, "versions");
-      await mkdir(versionsDir, { recursive: true }).catch(() => {});
-      const oldContent = await readFileFs(join(chaptersDir, match), "utf-8").catch(() => "");
+        // Read current content
+        const oldContent = await readFileFs(chapterFilePath, "utf-8").catch(() => "");
 
-      let revisionCount = 0;
-      const existingVersions = await readdir(versionsDir).catch(() => []);
-      const versionPrefix = `${paddedNum}_v`;
-      for (const f of existingVersions) {
-        if (f.startsWith(versionPrefix) && f.endsWith(".md")) {
-          const revNum = parseInt(f.slice(versionPrefix.length, -3), 10);
-          if (!isNaN(revNum) && revNum > revisionCount) revisionCount = revNum;
+        // Skip backup if content is identical (content hash comparison)
+        if (oldContent === content) {
+          return c.json({ ok: true, chapterNumber: num, unchanged: true });
         }
+
+        // Save version backup before overwriting
+        const versionsDir = join(chaptersDir, "versions");
+        await mkdir(versionsDir, { recursive: true }).catch(() => {});
+
+        // Find existing versions and compute next revision number
+        const existingVersions = await readdir(versionsDir).catch(() => []);
+        const versionPrefix = `${paddedNum}_v`;
+        let revisionCount = 0;
+        const versionFiles: string[] = [];
+        for (const f of existingVersions) {
+          if (f.startsWith(versionPrefix) && f.endsWith(".md")) {
+            versionFiles.push(f);
+            const revNum = parseInt(f.slice(versionPrefix.length, -3), 10);
+            if (!isNaN(revNum) && revNum > revisionCount) revisionCount = revNum;
+          }
+        }
+        revisionCount++;
+
+        // Write the backup
+        await writeFileFs(join(versionsDir, `${paddedNum}_v${revisionCount}.md`), oldContent, "utf-8");
+
+        // Enforce version limit: remove oldest versions beyond MAX_CHAPTER_VERSIONS
+        if (versionFiles.length >= MAX_CHAPTER_VERSIONS) {
+          // Sort by numeric revision (not dictionary order) so v10 comes after v9
+          const sorted = [...versionFiles].sort((a, b) => {
+            const revA = parseInt(a.slice(versionPrefix.length, -3), 10);
+            const revB = parseInt(b.slice(versionPrefix.length, -3), 10);
+            return revA - revB;
+          });
+          const toRemove = sorted.slice(0, sorted.length - MAX_CHAPTER_VERSIONS + 1);
+          for (const stale of toRemove) {
+            await unlink(join(versionsDir, stale)).catch(() => {});
+          }
+        }
+
+        // Write new content
+        await writeFileFs(chapterFilePath, content, "utf-8");
+
+        return c.json({ ok: true, chapterNumber: num, revision: revisionCount });
+      } catch (e) {
+        return c.json({ error: String(e) }, 500);
       }
-      revisionCount++;
-
-      await writeFileFs(join(versionsDir, `${paddedNum}_v${revisionCount}.md`), oldContent, "utf-8");
-      await writeFileFs(join(chaptersDir, match), content, "utf-8");
-
-      return c.json({ ok: true, chapterNumber: num, revision: revisionCount });
-    } catch (e) {
-      return c.json({ error: String(e) }, 500);
-    }
+    });
   });
 
   // --- Chapter Versions API ---
@@ -2377,6 +2501,46 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ sources });
     } catch (error) {
       return c.json({ error: `Failed to list sources for "${id}": ${String(error)}` }, 500);
+    }
+  });
+
+  // POST /books/:id/sources — add a new foundation source from text
+  app.post("/api/v1/books/:id/sources", async (c) => {
+    const id = c.req.param("id");
+    let bodyJson: Record<string, unknown> | null = null;
+    try {
+      bodyJson = await c.req.json<Record<string, unknown>>();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    if (!bodyJson) return c.json({ error: "Invalid JSON body" }, 400);
+    const sourceName = typeof bodyJson.sourceName === "string" ? bodyJson.sourceName : "";
+    const text = typeof bodyJson.text === "string" ? bodyJson.text : "";
+    const fileType = typeof bodyJson.fileType === "string" ? bodyJson.fileType : "txt";
+    const purpose = typeof bodyJson.purpose === "string" ? bodyJson.purpose : "auto";
+    if (!sourceName.trim() || !text.trim()) {
+      return c.json({ error: "sourceName and text are required" }, 400);
+    }
+    if (!isDocumentFileType(fileType)) {
+      return c.json({ error: `Unsupported file type: ${fileType}` }, 400);
+    }
+    if (!isFoundationSourcePurpose(purpose)) {
+      return c.json({ error: `Unsupported purpose: ${purpose}` }, 400);
+    }
+    const release = await state.acquireBookLock(id);
+    try {
+      const sourceBundle = buildFoundationSourceBundle([{
+        sourceName: sourceName.trim(),
+        fileType,
+        text,
+        purpose,
+      }]);
+      await persistFoundationSourceBundle(state.bookDir(id), sourceBundle, "supplement");
+      return c.json({ ok: true, sourceName: sourceName.trim() });
+    } catch (error) {
+      return c.json({ error: String(error) }, 500);
+    } finally {
+      await release();
     }
   });
 
@@ -3802,7 +3966,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
                   const bookId = resolveArchitectBookIdFromArgs(exec.args);
                   if (bookId) {
                     const error = exec.error ?? "Book creation failed";
-                    bookCreateStatus.set(bookId, { status: "error", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+                    bookCreateStatus.set(bookId, { status: "failed", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
                     broadcast("book:error", { bookId, sessionId: streamSessionId, error });
                   }
                 }
@@ -4641,7 +4805,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.post("/api/v1/books/:id/export-save", async (c) => {
     const id = c.req.param("id");
     const { format, approvedOnly } = await c.req.json<{ format?: string; approvedOnly?: boolean }>().catch(() => ({ format: "txt", approvedOnly: false }));
+    // Runtime whitelist — prevent arbitrary file extension injection
+    const ALLOWED_EXPORT_FORMATS = new Set(["txt", "md", "html", "epub"]);
     const fmt = format ?? "txt";
+    if (!ALLOWED_EXPORT_FORMATS.has(fmt)) {
+      return c.json({ error: `不支持的导出格式 "${fmt}"，仅支持 txt/md/html/epub` }, 400);
+    }
 
     try {
       const result = await withPipeline("export-save", await buildPipelineConfig(), async (pipeline) => {
@@ -6125,10 +6294,16 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const chapters = plan.chapters.map((ch) => ({
         title: ch.title,
         content: ch.content,
+        targetNumber: ch.targetNumber,
       }));
+      // Determine resumeFrom: the minimum targetNumber tells the pipeline whether
+      // this is a fresh import (1) or an append to an existing book (>1).
+      // When resumeFrom > 1, the pipeline skips foundation generation and index clearing.
+      const resumeFrom = Math.min(...chapters.map((ch) => ch.targetNumber ?? 0));
+      const validResumeFrom = Number.isFinite(resumeFrom) && resumeFrom > 0 ? resumeFrom : 1;
 
       const result = await withPipeline("import-chapters", await buildPipelineConfig(), async (pipeline) => {
-        return pipeline.importChapters({ bookId: id, chapters });
+        return pipeline.importChapters({ bookId: id, chapters, resumeFrom: validResumeFrom });
       });
       broadcast("import:complete", { bookId: id, type: "chapters", count: result.importedCount });
       return c.json(result);
@@ -6238,6 +6413,10 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           sourceBundle,
           expiresAt: Date.now() + 30 * 60 * 1000,
         });
+        // Persist to disk so plans survive server restart
+        persistFoundationPlan(root, planId, foundationPlans.get(planId)!).catch((e) => {
+          console.error("[studio] Failed to persist foundation plan:", e);
+        });
         return c.json({
           planId,
           bundle: result.bundle,
@@ -6248,9 +6427,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       }
 
       return c.json({
+        planId: null,
         bundle: result.bundle,
         warnings: result.warnings,
         proposed: null,
+        roleChanges: null,
       });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -6261,9 +6442,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     const { planId } = await c.req.json<{ planId?: string }>();
     if (!planId) return c.json({ error: "planId is required" }, 400);
+    await foundationPlansPromise;
     const plan = foundationPlans.get(planId);
     if (!plan || plan.bookId !== id || plan.expiresAt < Date.now()) {
       foundationPlans.delete(planId);
+      removePersistedFoundationPlan(root, planId).catch((e) => {
+        console.error("[studio] Failed to remove expired foundation plan:", e);
+      });
       return c.json({ error: "foundation plan is missing or expired; generate a new preview" }, 409);
     }
 
@@ -6276,6 +6461,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           sourceBundle: plan.sourceBundle,
         });
         foundationPlans.delete(planId);
+        removePersistedFoundationPlan(root, planId).catch((e) => {
+          console.error("[studio] Failed to remove committed foundation plan:", e);
+        });
       });
       broadcast("import:complete", { bookId: id, type: "foundation" });
       return c.json({ ok: true });
@@ -6339,6 +6527,94 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const next = removeChapterGoal(index.goals, chapterNumber);
       await saveChapterGoals(bookDir, next);
       return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Chapter Intents (author interview) ---
+
+  app.get("/api/v1/books/:id/chapter-intents", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      return c.json(index);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.put("/api/v1/books/:id/chapter-intents/:chapterNumber", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    const body = await c.req.json<Partial<AuthorChapterIntent>>();
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      const existing = getChapterIntent(index.intents, chapterNumber);
+      const intent: AuthorChapterIntent = {
+        chapterNumber,
+        coreNarrative: body.coreNarrative ?? existing?.coreNarrative ?? "",
+        readerTakeaway: body.readerTakeaway ?? existing?.readerTakeaway ?? "",
+        keyMoment: body.keyMoment ?? existing?.keyMoment ?? "",
+        scenes: body.scenes ?? existing?.scenes ?? [],
+        characterStates: body.characterStates ?? existing?.characterStates ?? [],
+        requiredBeats: body.requiredBeats ?? existing?.requiredBeats ?? [],
+        forbiddenMoves: body.forbiddenMoves ?? existing?.forbiddenMoves ?? [],
+        pendingHookIds: body.pendingHookIds ?? existing?.pendingHookIds ?? [],
+        narrativePosition: body.narrativePosition ?? existing?.narrativePosition ?? "rising",
+        plotLine: body.plotLine ?? existing?.plotLine,
+        interviewCompletedAt: body.interviewCompletedAt ?? existing?.interviewCompletedAt,
+      };
+      const next = upsertChapterIntent(index.intents, intent);
+      await saveChapterIntents(bookDir, next);
+      return c.json({ ok: true, intent });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.delete("/api/v1/books/:id/chapter-intents/:chapterNumber", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      const next = removeChapterIntent(index.intents, chapterNumber);
+      await saveChapterIntents(bookDir, next);
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Chapter Intent Suggestions (rule-based, no LLM) ---
+
+  app.get("/api/v1/books/:id/chapter-intents/:chapterNumber/suggestions", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const suggestions = await generateSuggestions(bookDir, chapterNumber);
+      return c.json({ suggestions });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -6592,7 +6868,14 @@ export async function startStudioServer(
 
     // Serve static assets (js, css, etc.)
     app.get("/assets/*", async (c) => {
-      const filePath = joinPath(options.staticDir!, c.req.path);
+      const rawPath = c.req.path;
+      // Prevent path traversal: resolve + relative check
+      const resolved = resolve(options.staticDir!, "." + rawPath);
+      const rel = relative(options.staticDir!, resolved);
+      if (rel.startsWith("..") || rel.startsWith("/") || isAbsolute(rel)) {
+        return c.notFound();
+      }
+      const filePath = joinPath(options.staticDir!, rawPath);
       try {
         const content = await readFileFs(filePath);
         const ext = filePath.split(".").pop() ?? "";
@@ -6623,6 +6906,7 @@ export async function startStudioServer(
     }
   }
 
-  console.log(`InkOS Studio running on http://localhost:${port}`);
-  serve({ fetch: app.fetch, port });
+  const host = process.env.STUDIO_HOST || "127.0.0.1";
+  console.log(`InkOS Studio running on http://${host}:${port}`);
+  serve({ fetch: app.fetch, hostname: host, port });
 }

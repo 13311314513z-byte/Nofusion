@@ -867,3 +867,84 @@ function extractChineseTitleTerms(text: string): string[] {
 function capitalize(word: string): string {
   return word.length === 0 ? word : `${word[0]!.toUpperCase()}${word.slice(1)}`;
 }
+
+/**
+ * Validate that the author's key moments and core narrative appear in the content.
+ *
+ * Uses simple keyword matching: extracts meaningful terms from the author's intent
+ * (key moment, core narrative, reader takeaway) and checks if they appear in the
+ * generated chapter. This is a zero-LLM-cost heuristic — not perfect, but catches
+ * obvious misses like "the key moment character doesn't appear at all".
+ */
+export function validateAuthorIntentInContent(
+  content: string,
+  keyMoment: string,
+  coreNarrative: string,
+  readerTakeaway: string,
+): ReadonlyArray<PostWriteViolation> {
+  const violations: PostWriteViolation[] = [];
+
+  const contentLower = content.toLowerCase();
+
+  // Extract meaningful terms (Chinese characters 3+ long, or English words 4+ long)
+  function extractKeyTerms(text: string): string[] {
+    const terms: string[] = [];
+    // Extract consecutive CJK runs, then split on function words
+    const regex = /[\u4e00-\u9fff]+/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const segment = match[0];
+      const parts = segment.split(/[的了是在有和里与及或把被从到时]/);
+      for (const part of parts) {
+        if (part.length >= 2) terms.push(part);
+      }
+    }
+    // Also add individual 2-char bigrams that don't contain function words
+    const cjkOnly = text.replace(/[^\u4e00-\u9fff]/g, "");
+    for (let i = 0; i < cjkOnly.length - 1; i++) {
+      const bigram = cjkOnly.slice(i, i + 2);
+      if (!/[的了是在有和里与及或把被从到时]/.test(bigram)) {
+        terms.push(bigram);
+      }
+    }
+    // English: words 4+ chars
+    const engWords = text.match(/[A-Za-z]{4,}/g);
+    if (engWords) {
+      for (const w of engWords) {
+        terms.push(w.toLowerCase());
+      }
+    }
+    return [...new Set(terms)];
+  }
+
+  // ── Check key moment ──────────────────────────────────────
+  if (keyMoment) {
+    const terms = extractKeyTerms(keyMoment);
+    const matched = terms.filter((t) => contentLower.includes(t));
+    // Use 1/4 threshold to tolerate varied phrasing
+    if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+      violations.push({
+        rule: "关键画面缺失",
+        severity: "warning",
+        description: `作者设定的关键画面"${keyMoment.slice(0, 40)}${keyMoment.length > 40 ? "…" : ""}"未在正文中找到足够的关键词匹配`,
+        suggestion: "检查该场景是否被遗漏，或在适当位置加入相关描写",
+      });
+    }
+  }
+
+  // ── Check core narrative ──────────────────────────────────
+  if (coreNarrative && coreNarrative.length > 4) {
+    const terms = extractKeyTerms(coreNarrative);
+    const matched = terms.filter((t) => contentLower.includes(t));
+    if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+      violations.push({
+        rule: "核心叙述偏离",
+        severity: "warning",
+        description: `作者设定的核心"${coreNarrative.slice(0, 40)}${coreNarrative.length > 40 ? "…" : ""}"的关建词在正文中出现较少`,
+        suggestion: "检查本章是否偏离了作者设定的核心方向",
+      });
+    }
+  }
+
+  return violations;
+}
