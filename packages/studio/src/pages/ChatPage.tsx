@@ -296,7 +296,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
           chapterNumber={1}
           onNavigateToSection={(section) => {
             // nav may have toBookSection from BookWorkspace wrapper
-            const navAny = nav as Record<string, unknown>;
+            const navAny = nav as unknown as Record<string, unknown>;
             if (typeof navAny.toBookSection === "function") {
               (navAny.toBookSection as (bookId: string, section: string) => void)(activeBookId, section);
             }
