@@ -6770,6 +6770,163 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Chapter Intent Interview (rule-based + quantitative triggers) ---
+
+  app.get("/api/v1/books/:id/interview", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+
+      // Load existing intent to skip already-answered questions
+      const intentsIdx = await loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> }));
+      const existingIntent = getChapterIntent(intentsIdx.intents, chapterNumber);
+
+      // Load goals
+      const goalsIdx = await loadChapterGoals(bookDir).catch(() => ({ goals: [] as ReadonlyArray<ChapterGoalCard> }));
+      const chapterGoal = getChapterGoal(goalsIdx.goals, chapterNumber);
+
+      // Build interview questions
+      const questions: Array<{ id: string; question: string; context: string; level: number; prefill?: string }> = [];
+
+      // Level 1: Core (always ask if unanswered)
+      if (!existingIntent?.coreNarrative) {
+        questions.push({
+          id: "core_narrative",
+          question: "用一句话说清：这一章在讲什么？",
+          context: chapterGoal?.mainConflict
+            ? `已设定核心矛盾：「${chapterGoal.mainConflict}」`
+            : "还没有设定章节目标",
+          level: 1,
+        });
+      }
+      if (!existingIntent?.readerTakeaway) {
+        questions.push({
+          id: "reader_takeaway",
+          question: "读者读完这一章后，你最希望他们感受到什么？",
+          context: "思考读者的情感体验——紧张、释然、好奇、愤怒、温暖？",
+          level: 1,
+        });
+      }
+      if (!existingIntent?.keyMoment) {
+        questions.push({
+          id: "key_moment",
+          question: "这一章最重要的一个画面或瞬间是什么？",
+          context: "如果这一章只能让读者记住一个画面，那是什么？",
+          level: 1,
+        });
+      }
+
+      // Level 2: Scene planning
+      if (!existingIntent?.scenes || existingIntent.scenes.length === 0) {
+        questions.push({
+          id: "scene_count",
+          question: "这一章大概有几个场景？主要的场景切换是什么？",
+          context: chapterGoal?.location
+            ? `目标地点为「${chapterGoal.location}」`
+            : "可以用地点切换来划分场景",
+          level: 2,
+          prefill: chapterGoal?.location ?? undefined,
+        });
+      }
+
+      // Level 3: Character states
+      questions.push({
+        id: "character_emotion",
+        question: "这一章出场的角色中，谁的情绪变化最大？从什么变为什么？",
+        context: "角色的情绪变化是推动故事的情感引擎",
+        level: 3,
+      });
+
+      // Level 4: Constraints
+      questions.push({
+        id: "must_avoid",
+        question: "这一章绝对不能出现什么？",
+        context: "比如：主角不能示弱、秘密不能暴露、某角色不能出场",
+        level: 4,
+      });
+
+      // Quantitative creative triggers
+      const triggers: Array<{ type: string; message: string; severity: "info" | "warning" | "critical" }> = [];
+
+      // Trigger: overdue hooks
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const hooksPath = join(bookDir, "story", "state", "hooks.json");
+        const raw = await readFile(hooksPath, "utf-8");
+        const hooks = (JSON.parse(raw) as { hooks?: Array<{ hookId: string; status: string; halfLifeChapters?: number; lastAdvancedChapter: number }> }).hooks ?? [];
+        const overdue = hooks.filter((h) =>
+          h.status !== "resolved" && h.halfLifeChapters &&
+          (chapterNumber - h.lastAdvancedChapter) > h.halfLifeChapters
+        );
+        if (overdue.length > 0) {
+          triggers.push({
+            type: "hooks_overdue",
+            message: `${overdue.length} 条伏笔已逾期：${overdue.map((h) => h.hookId).join("、")}`,
+            severity: overdue.length >= 3 ? "critical" : "warning",
+          });
+        }
+        const activeCount = hooks.filter((h) => h.status !== "resolved").length;
+        if (activeCount === 0) {
+          triggers.push({
+            type: "hooks_empty",
+            message: "尚无活跃伏笔——建议在本章埋下至少一条新伏笔",
+            severity: "info",
+          });
+        }
+      } catch { /* hooks.json not found */ }
+
+      // Trigger: chapter goal status
+      if (!chapterGoal) {
+        triggers.push({
+          type: "goal_missing",
+          message: "未设定本章目标——建议先在「目标」面板填写核心矛盾和必达事件",
+          severity: "warning",
+        });
+      }
+
+      // Trigger: first chapter guidance
+      if (chapterNumber === 1) {
+        triggers.push({
+          type: "first_chapter",
+          message: "这是第一章——建议在此章建立世界观基调、引入主角、埋下至少一条伏笔",
+          severity: "info",
+        });
+      }
+
+      // Trigger: chapter interval — check for consecutive same-type chapters
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const summariesPath = join(bookDir, "story", "chapter_summaries.md");
+        const raw = await readFile(summariesPath, "utf-8");
+        // Count how many consecutive "过渡" or "transition" chapters precede this one
+        const lines = raw.split("\n");
+        let consecutiveTransition = 0;
+        for (const line of lines.reverse()) {
+          if (line.includes("过渡") || line.includes("transition")) consecutiveTransition++;
+          else break;
+        }
+        if (consecutiveTransition >= 3) {
+          triggers.push({
+            type: "rhythm_monotony",
+            message: `连续 ${consecutiveTransition} 章为过渡型——建议本章安排「高潮」或「转折」打破节奏单调`,
+            severity: "warning",
+          });
+        }
+      } catch { /* no summaries yet */ }
+
+      return c.json({ chapterNumber, questions, triggers });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // --- Role Cards ---
 
   app.get("/api/v1/books/:id/roles", async (c) => {

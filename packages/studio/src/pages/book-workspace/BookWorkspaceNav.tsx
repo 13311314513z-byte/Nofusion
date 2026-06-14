@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   MessageSquare,
+  MessageSquareHeart,
   Files,
   MapPinned,
   Users,
@@ -31,6 +32,7 @@ const MENU_ITEMS: { readonly key: BookSection; readonly icon: React.ElementType 
   { key: "truth", icon: BookOpen },
   { key: "summaries", icon: ListTree },
   { key: "goals", icon: Target },
+  { key: "intents", icon: MessageSquareHeart },
   { key: "audit", icon: ShieldCheck },
   { key: "export", icon: Download },
   { key: "fanfic", icon: Sparkles },

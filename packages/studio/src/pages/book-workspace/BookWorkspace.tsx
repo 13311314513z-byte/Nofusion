@@ -19,6 +19,7 @@ import { BookExportSection } from "./BookExportSection";
 import { BookFanficSection } from "./BookFanficSection";
 import { BookRuntimeSection } from "./BookRuntimeSection";
 import { BookSourceSection } from "./BookSourceSection";
+import { BookIntentsSection } from "./BookIntentsSection";
 
 interface NavLike {
   readonly toDashboard: () => void;
@@ -106,6 +107,8 @@ function SectionRenderer({
       return <BookSummariesSection {...commonProps} />;
     case "goals":
       return <BookGoalsSection {...commonProps} />;
+    case "intents":
+      return <BookIntentsSection {...commonProps} />;
     case "audit":
       return <BookAuditSection {...commonProps} />;
     case "export":
