@@ -7,6 +7,7 @@ import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
 import { deriveActiveBookIds, shouldRefetchBookCollections } from "../hooks/use-book-activity";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { WriteConfirmPanel } from "../components/author/WriteConfirmPanel";
 import {
   Plus,
   BookOpen,
@@ -131,6 +132,7 @@ function BookMenu({ bookId, bookTitle, nav, t, onDelete, onOpenChange }: {
 export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: ReadonlyArray<SSEMessage> }; theme: Theme; t: TFunction }) {
   const c = useColors(theme);
   const [menuOpenBookId, setMenuOpenBookId] = useState<string | null>(null);
+  const [writeConfirm, setWriteConfirm] = useState<{ bookId: string; chapterNumber: number; bookTitle: string } | null>(null);
   const { data, loading, error, refetch } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
   const writingBooks = useMemo(() => deriveActiveBookIds(sse.messages), [sse.messages]);
   const serviceStoreServices = useServiceStore((s) => s.services);
@@ -277,9 +279,12 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
 
                 <div className="flex items-center gap-3 shrink-0 ml-6">
                   <button
-                    onClick={async () => {
-                      try { await postApi(`/books/${book.id}/write-next`); }
-                      catch (e) { alert(e instanceof Error ? e.message : "Write failed"); }
+                    onClick={() => {
+                      setWriteConfirm({
+                        bookId: book.id,
+                        chapterNumber: book.chaptersWritten + 1,
+                        bookTitle: book.title,
+                      });
                     }}
                     disabled={isWriting}
                     className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-sm ${
@@ -370,6 +375,31 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
             })}
           </div>
         </div>
+      )}
+
+      {writeConfirm && (
+        <WriteConfirmPanel
+          open={true}
+          bookId={writeConfirm.bookId}
+          chapterNumber={writeConfirm.chapterNumber}
+          bookTitle={writeConfirm.bookTitle}
+          onConfirm={() => {
+            const bookId = writeConfirm.bookId;
+            setWriteConfirm(null);
+            postApi(`/books/${bookId}/write-next`).catch((e: unknown) => {
+              alert(e instanceof Error ? e.message : "Write failed");
+            });
+          }}
+          onCancel={() => setWriteConfirm(null)}
+          onViewGoals={() => {
+            nav.toBook(writeConfirm.bookId);
+            setWriteConfirm(null);
+          }}
+          onViewIntents={() => {
+            nav.toBook(writeConfirm.bookId);
+            setWriteConfirm(null);
+          }}
+        />
       )}
 
       <style>{`

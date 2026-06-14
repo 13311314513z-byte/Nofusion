@@ -2899,6 +2899,69 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Actions ---
 
+  /** Preview what context the Planner will use before actually writing. */
+  app.get("/api/v1/books/:id/write-preview", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+
+    const bookDir = state.bookDir(id);
+
+    try {
+      const [chapterGoalsIndex, chapterIntentsIndex] = await Promise.all([
+        loadChapterGoals(bookDir).catch(() => ({ goals: [] as ReadonlyArray<ChapterGoalCard> })),
+        loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> })),
+      ]);
+
+      const chapterGoal = getChapterGoal(chapterGoalsIndex.goals, chapterNumber);
+      const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, chapterNumber);
+
+      // Check hooks state for overdue hooks
+      let activeHooksCount = 0;
+      let overdueHookIds: string[] = [];
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const hooksJsonPath = join(bookDir, "story", "state", "hooks.json");
+        const raw = await readFile(hooksJsonPath, "utf-8");
+        const parsed = JSON.parse(raw) as { hooks?: Array<{ hookId: string; status: string; halfLifeChapters?: number; lastAdvancedChapter: number }> };
+        const hooks = parsed.hooks ?? [];
+        activeHooksCount = hooks.filter((h) => h.status !== "resolved").length;
+        overdueHookIds = hooks
+          .filter((h) => h.status !== "resolved" && h.halfLifeChapters && (chapterNumber - h.lastAdvancedChapter) > h.halfLifeChapters)
+          .map((h) => h.hookId);
+      } catch {
+        // hooks.json not found — skip hook stats
+      }
+
+      const contextSummary = {
+        hasGoal: !!chapterGoal,
+        goalMainConflict: chapterGoal?.mainConflict ?? null,
+        hasIntent: !!(chapterIntent?.coreNarrative),
+        intentCoreNarrative: chapterIntent?.coreNarrative ?? null,
+        activeHooksCount,
+        overdueHooksCount: overdueHookIds.length,
+        overdueHookIds,
+        hasPovCharacter: !!chapterGoal?.povCharacter,
+        povCharacter: chapterGoal?.povCharacter ?? null,
+        hasOpeningFrame: !!(chapterIntent as Record<string, unknown> | null)?.["openingFrame"],
+        hasClosingFrame: !!(chapterIntent as Record<string, unknown> | null)?.["closingFrame"],
+      };
+
+      const warnings: string[] = [];
+      if (!chapterGoal) warnings.push("未设定本章目标——建议先在「目标」面板填写");
+      if (!chapterIntent?.coreNarrative) warnings.push("未完成创作访谈——建议先回答核心三问");
+      if (overdueHookIds.length > 0) warnings.push(`${overdueHookIds.length} 条伏笔已逾期：${overdueHookIds.join("、")}`);
+
+      return c.json({ chapterNumber, contextSummary, warnings });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   app.post("/api/v1/books/:id/write-next", async (c) => {
     const id = c.req.param("id");
     await assertBookExists(state, id);
