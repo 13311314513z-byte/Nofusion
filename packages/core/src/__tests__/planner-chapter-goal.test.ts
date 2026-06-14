@@ -44,15 +44,10 @@ function createPlannerAgent(): PlannerAgent {
     chatCompletion: vi.fn(),
   } as unknown as LLMClient;
   return new PlannerAgent({
-    llm: mockClient,
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnValue({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }) },
-    modelId: "test-model",
-    provider: "test-provider",
-    language: "zh",
+    client: mockClient,
+    model: "test-model",
     projectRoot: tmpdir(),
-    genreProfileId: undefined,
-    fanficMode: undefined,
-    maxTokens: 4096,
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnValue({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }) },
   });
 }
 
@@ -127,7 +122,8 @@ describe("PlannerAgent → ChapterGoalCard integration", () => {
     // Mock the LLM to return a valid memo
     const mockChatCompletion = vi.spyOn(llmProvider, "chatCompletion").mockResolvedValue({
       content: buildValidMemo(5),
-    });
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as Awaited<ReturnType<typeof llmProvider.chatCompletion>>);
 
     const book: BookConfig = {
       id: "test-book",
@@ -172,7 +168,8 @@ describe("PlannerAgent → ChapterGoalCard integration", () => {
 
     const mockChatCompletion = vi.spyOn(llmProvider, "chatCompletion").mockResolvedValue({
       content: buildValidMemo(1),
-    });
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as Awaited<ReturnType<typeof llmProvider.chatCompletion>>);
 
     const book: BookConfig = {
       id: "test-book-2",

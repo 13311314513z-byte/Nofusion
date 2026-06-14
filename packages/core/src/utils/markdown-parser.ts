@@ -198,53 +198,54 @@ export function parseChapterGoalFromMarkdown(
   expectedChapterNumber: number,
 ): { goal: Partial<ChapterGoalCard>; warnings: string[] } {
   const warnings: string[] = [];
-  const goal: Partial<ChapterGoalCard> = {
+  // Use a mutable accumulator to avoid readonly field assignment errors
+  const acc: Record<string, unknown> = {
     chapterNumber: expectedChapterNumber,
   };
 
   // Title
   const titleSection = extractSection(markdown, "## 标题")
     || extractSection(markdown, "## Title");
-  if (titleSection) goal.title = titleSection;
+  if (titleSection) acc.title = titleSection;
 
   // Core conflict
   const conflictSection = extractSection(markdown, "## 核心矛盾")
     || extractSection(markdown, "## Core Conflict");
-  if (conflictSection) goal.mainConflict = conflictSection;
+  if (conflictSection) acc.mainConflict = conflictSection;
 
   // Target mood
   const moodSection = extractSection(markdown, "## 目标氛围")
     || extractSection(markdown, "## Target Mood");
-  if (moodSection) goal.targetMood = moodSection;
+  if (moodSection) acc.targetMood = moodSection;
 
   // Meta
   const metaSection = extractSection(markdown, "## 元信息")
     || extractSection(markdown, "## Meta");
   if (metaSection) {
     const kv = parseKeyValue(metaSection);
-    if (kv["POV"]) goal.povCharacter = kv["POV"];
-    if (kv["地点"] || kv["Location"]) goal.location = kv["地点"] || kv["Location"];
-    if (kv["时段"] || kv["Time of Day"]) goal.timeOfDay = kv["时段"] || kv["Time of Day"];
+    if (kv["POV"]) acc.povCharacter = kv["POV"];
+    if (kv["地点"] || kv["Location"]) acc.location = kv["地点"] || kv["Location"];
+    if (kv["时段"] || kv["Time of Day"]) acc.timeOfDay = kv["时段"] || kv["Time of Day"];
     if (kv["目标字数"] || kv["Target Length"]) {
       const charMatch = (kv["目标字数"] || kv["Target Length"] || "").match(/\d+/);
-      if (charMatch) goal.targetChars = Number(charMatch[0]);
+      if (charMatch) acc.targetChars = Number(charMatch[0]);
     }
   }
 
   // Required beats
   const beatsSection = extractSection(markdown, "## 必达事件")
     || extractSection(markdown, "## Required Beats");
-  if (beatsSection) goal.requiredBeats = parseBulletList(beatsSection);
+  if (beatsSection) acc.requiredBeats = parseBulletList(beatsSection);
 
   // Forbidden moves
   const forbiddenSection = extractSection(markdown, "## 禁用动作")
     || extractSection(markdown, "## Forbidden Moves");
-  if (forbiddenSection) goal.forbiddenMoves = parseBulletList(forbiddenSection);
+  if (forbiddenSection) acc.forbiddenMoves = parseBulletList(forbiddenSection);
 
   // Hooks to advance
   const hooksSection = extractSection(markdown, "## 需推进的伏笔")
     || extractSection(markdown, "## Hooks to Advance");
-  if (hooksSection) goal.hookIdsToAdvance = parseBulletList(hooksSection);
+  if (hooksSection) acc.hookIdsToAdvance = parseBulletList(hooksSection);
 
-  return { goal, warnings };
+  return { goal: acc as unknown as Partial<ChapterGoalCard>, warnings };
 }

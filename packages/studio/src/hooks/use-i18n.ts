@@ -750,6 +750,7 @@ const strings = {
   "workspace.section.audit": { zh: "审计", en: "Audit" },
   "workspace.section.export": { zh: "导出", en: "Export" },
   "workspace.section.goals": { zh: "目标", en: "Goals" },
+  "workspace.section.intents": { zh: "创作访谈", en: "Interview" },
   "workspace.section.fanfic": { zh: "同人", en: "Fanfic" },
   "workspace.section.runtime": { zh: "运行产物", en: "Runtime" },
   "workspace.section.sources": { zh: "资料来源", en: "Sources" },
