@@ -1973,6 +1973,7 @@ export class PipelineRunner {
       normalizePostWriteSurface,
       validatePostWrite: postWriteValidate,
       validateAuthorIntentInContent,
+      validateEndpointLock,
     } = await import("../agents/post-write-validator.js");
     const { validateHookLedger } = await import("../utils/hook-ledger-validator.js");
     const { readBookRules } = await import("../agents/rules-reader.js");
@@ -2049,7 +2050,23 @@ export class PipelineRunner {
               suggestion: v.suggestion,
             }))
           : [];
-        return [...baseIssues, ...ledgerIssues, ...intentIssues];
+        // Check endpoint lock (opening frame, closing frame)
+        const endpointLockIssues = chapterIntent
+          ? validateEndpointLock(
+              content,
+              chapterIntent.openingFrame,
+              chapterIntent.closingFrame,
+              chapterIntent.pathConstraints,
+            ).map((v) => ({
+              severity: v.severity === "error" ? "critical" as const
+                : v.severity === "warning" ? "warning" as const
+                : "info" as const,
+              category: v.rule,
+              description: v.description,
+              suggestion: v.suggestion,
+            }))
+          : [];
+        return [...baseIssues, ...ledgerIssues, ...intentIssues, ...endpointLockIssues];
       },
       maxReviewIterations: this.config.writingReviewRetries,
       logWarn: (message) => this.logWarn(pipelineLang, message),

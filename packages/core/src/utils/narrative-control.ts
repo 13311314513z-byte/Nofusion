@@ -175,3 +175,114 @@ function extractMarkdownSection(content: string, heading: string): string | unde
   const section = buffer?.join("\n").trim();
   return section && section.length > 0 ? section : undefined;
 }
+
+// ─── Event Chain → Narrative Control Block rendering ──────────────
+
+import type { EventChain, EventNode } from "../models/event-chain.js";
+
+/**
+ * Render a full EventChain as a Markdown Narrative Control Block
+ * suitable for injection into the Writer's system or user prompt.
+ */
+export function renderEventChainAsNarrativeControl(chain: EventChain): string {
+  if (!chain.events || chain.events.length === 0) return "";
+
+  const lines: string[] = [];
+
+  lines.push("## 叙事事件链（Narrative Event Chain）");
+  lines.push("");
+  lines.push("以下是本章必须遵循的事件序列。每个事件描述了场景、参与者、");
+  lines.push("行动顺序、关系变化和关键决策。你的写作必须覆盖这些事件节点，");
+  lines.push("并保持它们之间的因果逻辑。");
+  lines.push("");
+  lines.push(
+    `> 事件链置信度：${chain.confidence >= 0.7 ? "高" : chain.confidence >= 0.4 ? "中" : "低"} | ` +
+    `事件数：${chain.events.length} | ` +
+    `生成时间：${chain.generatedAt}`,
+  );
+  lines.push("");
+
+  for (let i = 0; i < chain.events.length; i++) {
+    const event = chain.events[i];
+    const seq = i + 1;
+
+    lines.push(`### 事件 ${seq}：${event.eventId}`);
+    lines.push(`**场景**：${event.location} · ${event.timeOfDay}`);
+    lines.push(`**氛围**：${event.atmosphere}`);
+
+    if (event.triggeredBy) {
+      lines.push(`← 由 **${event.triggeredBy}** 触发`);
+    }
+    lines.push("");
+
+    // Participants table
+    if (event.participants.length > 0) {
+      lines.push("| 角色 | 身份 | 初始情绪 | 场景目标 |");
+      lines.push("|------|------|---------|---------|");
+      const roleLabel: Record<string, string> = {
+        protagonist: "主角", antagonist: "对手", ally: "盟友",
+        observer: "观察者", catalyst: "催化剂",
+      };
+      for (const p of event.participants) {
+        lines.push(`| ${p.characterId} | ${roleLabel[p.role] ?? p.role} | ${p.initialEmotion} | ${p.goalInScene} |`);
+      }
+      lines.push("");
+    }
+
+    // Actions
+    if (event.actions.length > 0) {
+      lines.push("**行动序列**：");
+      for (let j = 0; j < event.actions.length; j++) {
+        const a = event.actions[j];
+        lines.push(`${j + 1}. **[${a.actorId}]** ${a.description}`);
+        lines.push(`   - 意图：${a.intent} | 结果：${a.outcome}`);
+      }
+      lines.push("");
+    }
+
+    // Relationship deltas
+    if (event.relationshipDeltas && event.relationshipDeltas.length > 0) {
+      lines.push("**关系变化**：");
+      for (const d of event.relationshipDeltas) {
+        lines.push(`- ${d.fromId} → ${d.toId}：${d.before} ⇒ **${d.after}**（触发：${d.trigger}）`);
+      }
+      lines.push("");
+    }
+
+    // Decision points
+    if (event.decisions && event.decisions.length > 0) {
+      lines.push("**关键决策**：");
+      for (const d of event.decisions) {
+        lines.push(`- **${d.deciderId}**：${d.dilemma}`);
+        lines.push(`  → 选择：**${d.chosen}**（${d.reasoning}）→ ${d.consequence}`);
+      }
+      lines.push("");
+    }
+
+    if (event.triggersNext) {
+      lines.push(`→ 触发 **${event.triggersNext}**`);
+    }
+    lines.push("\n---\n");
+  }
+
+  lines.push("**重要**：以上事件链是你的叙事骨架。你必须让章节正文覆盖所有事件节点，");
+  lines.push("保持事件之间的因果逻辑，但可以用你自己的语言和节奏来展开。");
+  lines.push("事件链提供了「什么必须发生」——「如何发生」由你创作。");
+
+  return lines.join("\n");
+}
+
+/**
+ * Render a single event node as a compact Markdown summary.
+ */
+export function renderEventNodeCompact(event: EventNode): string {
+  const parts: string[] = [];
+  parts.push(`**${event.eventId}** — ${event.location} · ${event.timeOfDay}`);
+  parts.push(`氛围：${event.atmosphere}`);
+  parts.push(`人物：${event.participants.map(p => p.characterId).join("、")}`);
+  parts.push(`行动：${event.actions.map(a => `[${a.actorId}] ${a.description}`).join(" → ")}`);
+  if (event.decisions && event.decisions.length > 0) {
+    parts.push(`决策：${event.decisions.map(d => `[${d.deciderId}] ${d.chosen}`).join("; ")}`);
+  }
+  return parts.join("\n");
+}

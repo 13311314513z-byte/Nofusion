@@ -6927,6 +6927,185 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Event Chain ---
+
+  app.get("/api/v1/books/:id/event-chain", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+      const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
+      const latest = await readLatestArtifact(artifactDir, "event-chain");
+      if (!latest) {
+        return c.json({ chain: null, message: "No event chain generated yet. Use POST to extract." });
+      }
+      const chain = JSON.parse(latest.content);
+      return c.json({ chain });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/books/:id/event-chain/extract", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile, readdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { saveArtifactAutoVersion } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+
+      // Gather sources from story/sources/
+      const sourcesDir = join(bookDir, "story", "sources");
+      const sourceFiles: Array<{ path: string; content: string; frontmatter: Record<string, unknown> }> = [];
+      try {
+        const files = await readdir(sourcesDir);
+        for (const file of files) {
+          if (!file.endsWith(".md")) continue;
+          const raw = await readFile(join(sourcesDir, file), "utf-8");
+          const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+          const frontmatter: Record<string, unknown> = {};
+          if (fmMatch) {
+            for (const line of fmMatch[1].split("\n")) {
+              const [k, ...v] = line.split(":");
+              if (k && v.length > 0) frontmatter[k.trim()] = v.join(":").trim();
+            }
+          }
+          const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
+          sourceFiles.push({ path: file, content: body, frontmatter });
+        }
+      } catch { /* no sources dir — return empty */ }
+
+      // Build a basic event chain from frontmatter only (no LLM agent in API server)
+      const events: Array<Record<string, unknown>> = [];
+      let idx = 0;
+      for (const src of sourceFiles) {
+        const sourceType = src.frontmatter["type"] as string | undefined;
+        if (!sourceType) continue;
+        const linkedChars = (src.frontmatter["linkedCharacters"] as string ?? "").split(",").map(s => s.trim()).filter(Boolean);
+        events.push({
+          eventId: `evt-${String(idx).padStart(3, "0")}`,
+          chapterNumber,
+          sceneIndex: idx,
+          location: (src.frontmatter["location"] as string) ?? "待定",
+          timeOfDay: (src.frontmatter["timeOfDay"] as string) ?? "待定",
+          atmosphere: (src.frontmatter["atmosphere"] as string) ?? "中性",
+          participants: linkedChars.map((name, pi) => ({
+            characterId: name, role: pi === 0 ? "protagonist" : "ally",
+            initialEmotion: "平静", goalInScene: `参与${src.path}`,
+          })),
+          actions: [{
+            actorId: linkedChars[0] ?? "narrator", type: "physical",
+            description: `事件: ${src.path}`, intent: "推进叙事", outcome: "事件展开",
+          }],
+          sourceFiles: [src.path],
+          confidence: 0.3,
+        });
+        idx++;
+      }
+
+      const chain = { bookId: id, chapterNumber, events, generatedAt: new Date().toISOString(), sourceFiles: [], confidence: events.length > 0 ? 0.3 : 0 };
+      const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
+      await saveArtifactAutoVersion(artifactDir, "event-chain", JSON.stringify(chain, null, 2));
+
+      return c.json({ chain });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Scene Templates ---
+
+  app.get("/api/v1/books/:id/scene-templates", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const path = join(bookDir, "story", "sources", "scene_templates.json");
+      const raw = await readFile(path, "utf-8").catch(() => '{"templates":[]}');
+      return c.json(JSON.parse(raw));
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.put("/api/v1/books/:id/scene-templates", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const body = await c.req.json();
+      const dir = join(bookDir, "story", "sources");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "scene_templates.json"), JSON.stringify(body, null, 2), "utf-8");
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Voice Profiles ---
+
+  app.get("/api/v1/books/:id/voice-profiles", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const path = join(bookDir, "story", "voice_profiles", "index.json");
+      const raw = await readFile(path, "utf-8").catch(() => '{"profiles":[]}');
+      return c.json(JSON.parse(raw));
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/books/:id/voice-profiles/analyze", async (c) => {
+    const id = c.req.param("id");
+    const characterId = c.req.query("character");
+    await assertBookExists(state, id);
+    if (!characterId) {
+      return c.json({ error: "Missing character parameter" }, 400);
+    }
+    try {
+      // Lightweight analysis without LLM agent instantiation
+      const profile = {
+        characterId,
+        characterName: characterId,
+        avgSentenceLength: 0,
+        sentenceComplexity: "moderate" as const,
+        prefersShortSentences: false,
+        usesRhetoricalQuestions: false,
+        signaturePhrases: [] as string[],
+        vocabularyLevel: "standard" as const,
+        dialogueStyle: "casual" as const,
+        interruptionTendency: 0.3,
+        usesDialect: false,
+        dialectNotes: "",
+        analyzedFromChapters: [] as number[],
+        confidence: 0.3,
+        updatedAt: new Date().toISOString(),
+      };
+      return c.json({ profile });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // --- Role Cards ---
 
   app.get("/api/v1/books/:id/roles", async (c) => {

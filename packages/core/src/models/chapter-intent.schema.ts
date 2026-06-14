@@ -48,6 +48,75 @@ export const AuthorCharacterStateSchema = z.object({
 
 export type AuthorCharacterState = z.input<typeof AuthorCharacterStateSchema>;
 
+// ─── Endpoint Lock: Opening Frame ───────────────────────────────────
+
+/**
+ * The opening frame locks down how a chapter must begin.
+ * When present, the Writer MUST start from this scene — no preamble allowed.
+ */
+export const OpeningFrameSchema = z.object({
+  /** The opening scene description (natural language, required). */
+  scene: z.string().min(1, "Opening scene description is required"),
+  /** Optional POV character for the opening. */
+  povCharacter: z.string().optional(),
+  /** Optional first line — extremely strong constraint. */
+  firstLine: z.string().optional(),
+  /** The emotional atmosphere of the opening. */
+  openingMood: z.string().min(1, "Opening mood is required"),
+  /** Forbidden opening patterns (e.g. "不要从天气描写开始"). */
+  forbiddenOpenings: z.array(z.string()).default([]),
+});
+
+export type OpeningFrame = z.input<typeof OpeningFrameSchema>;
+
+// ─── Endpoint Lock: Closing Frame ───────────────────────────────────
+
+/**
+ * The closing frame locks down how a chapter must end.
+ * When present, the Writer MUST converge to this scene — no epilogue allowed
+ * beyond it.
+ */
+export const ClosingFrameSchema = z.object({
+  /** The closing scene description (natural language, required). */
+  scene: z.string().min(1, "Closing scene description is required"),
+  /** Optional POV character for the closing. */
+  povCharacter: z.string().optional(),
+  /** Optional last line — extremely strong constraint. */
+  lastLine: z.string().optional(),
+  /** The emotional atmosphere of the closing. */
+  closingMood: z.string().min(1, "Closing mood is required"),
+  /** Plot threads that MUST be resolved before the chapter ends. */
+  mustResolve: z.array(z.string()).default([]),
+  /** Plot threads that MUST be set up before the chapter ends (for next chapter hooks). */
+  mustSetup: z.array(z.string()).default([]),
+  /** Optional conditional branch endings. */
+  branches: z.array(z.object({
+    condition: z.string(),
+    closingMood: z.string(),
+    lastLine: z.string().optional(),
+  })).default([]),
+});
+
+export type ClosingFrame = z.input<typeof ClosingFrameSchema>;
+
+// ─── Endpoint Lock: Path Constraints ─────────────────────────────────
+
+/**
+ * Path constraints govern how the chapter progresses from opening to closing.
+ */
+export const PathConstraintsSchema = z.object({
+  /** Maximum number of scenes in this chapter. */
+  maxSceneCount: z.number().int().positive().optional(),
+  /** Narrative beats that MUST appear somewhere between opening and closing. */
+  mustPassThrough: z.array(z.string()).default([]),
+  /** Plot nodes that MUST NOT be skipped. */
+  mustNotSkip: z.array(z.string()).default([]),
+  /** How the emotional tone should shift from opening to closing. */
+  toneShift: z.enum(["none", "gradual", "sudden"]).default("gradual"),
+});
+
+export type PathConstraints = z.input<typeof PathConstraintsSchema>;
+
 // ─── The full intent ───────────────────────────────────────────────
 
 export const AuthorChapterIntentSchema = z.object({
@@ -68,6 +137,11 @@ export const AuthorChapterIntentSchema = z.object({
   requiredBeats: z.array(z.string()).optional(),
   forbiddenMoves: z.array(z.string()).optional(),
   pendingHookIds: z.array(z.string()).optional(),
+
+  // ── Level 5: Endpoint Lock (author locks opening + closing) ─
+  openingFrame: OpeningFrameSchema.optional(),
+  closingFrame: ClosingFrameSchema.optional(),
+  pathConstraints: PathConstraintsSchema.optional(),
 
   // ── Meta ────────────────────────────────────────────────────
   narrativePosition: z

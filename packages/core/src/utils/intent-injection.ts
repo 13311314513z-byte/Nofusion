@@ -140,3 +140,102 @@ export function buildWriterIntentBrief(intent: AuthorChapterIntent): string {
 
   return parts.join(" | ");
 }
+
+// ─── Endpoint Lock injection ────────────────────────────────────────
+
+/**
+ * Build the Endpoint Lock section for the Writer system prompt.
+ *
+ * When the author has specified an opening frame, closing frame, and/or
+ * path constraints, this section locks down the start and end of the chapter,
+ * giving the Writer creative freedom only in "how to get from A to B".
+ *
+ * Returns empty string if neither openingFrame nor closingFrame is provided.
+ */
+export function buildEndpointLockSection(
+  openingFrame?: AuthorChapterIntent["openingFrame"],
+  closingFrame?: AuthorChapterIntent["closingFrame"],
+  pathConstraints?: AuthorChapterIntent["pathConstraints"],
+): string {
+  if (!openingFrame && !closingFrame) return "";
+
+  const lines: string[] = [];
+
+  lines.push("## 端点锁定（Endpoint Lock）");
+  lines.push("");
+  lines.push("本章的开头和结尾已被作者指定，你必须严格遵守：");
+  lines.push("");
+
+  // ── Opening frame ──────────────────────────────────────────
+  if (openingFrame) {
+    lines.push("### 开头画面（不可偏离）");
+    lines.push(openingFrame.scene);
+    lines.push("");
+    if (openingFrame.povCharacter) {
+      lines.push(`视角角色：${openingFrame.povCharacter}`);
+    }
+    lines.push(`开头情绪：${openingFrame.openingMood}`);
+    if (openingFrame.firstLine) {
+      lines.push(`第一句话：${openingFrame.firstLine}`);
+    }
+    if (openingFrame.forbiddenOpenings && openingFrame.forbiddenOpenings.length > 0) {
+      lines.push(`禁止的开头方式：${openingFrame.forbiddenOpenings.join("、")}`);
+    }
+    lines.push("");
+  }
+
+  // ── Closing frame ──────────────────────────────────────────
+  if (closingFrame) {
+    lines.push("### 结尾画面（必须收敛至此）");
+    lines.push(closingFrame.scene);
+    lines.push("");
+    if (closingFrame.povCharacter) {
+      lines.push(`视角角色：${closingFrame.povCharacter}`);
+    }
+    lines.push(`结尾情绪：${closingFrame.closingMood}`);
+    if (closingFrame.lastLine) {
+      lines.push(`最后一句话：${closingFrame.lastLine}`);
+    }
+    if (closingFrame.mustResolve && closingFrame.mustResolve.length > 0) {
+      lines.push(`必须在结尾前解决：${closingFrame.mustResolve.join("、")}`);
+    }
+    if (closingFrame.mustSetup && closingFrame.mustSetup.length > 0) {
+      lines.push(`必须在结尾前铺垫：${closingFrame.mustSetup.join("、")}`);
+    }
+    // Conditional branch endings
+    if (closingFrame.branches && closingFrame.branches.length > 0) {
+      lines.push("");
+      lines.push("**条件分支结局（根据中间情节选择最合适的）**：");
+      for (const branch of closingFrame.branches) {
+        lines.push(`- **如果** ${branch.condition}：结尾情绪为「${branch.closingMood}」${branch.lastLine ? `，最后一句话：「${branch.lastLine}」` : ""}`);
+      }
+    }
+    lines.push("");
+  }
+
+  // ── Path constraints ───────────────────────────────────────
+  if (pathConstraints) {
+    lines.push("### 路径约束");
+    if (pathConstraints.maxSceneCount) {
+      lines.push(`最大场景数：${pathConstraints.maxSceneCount}`);
+    }
+    if (pathConstraints.mustPassThrough && pathConstraints.mustPassThrough.length > 0) {
+      lines.push(`必须经过：${pathConstraints.mustPassThrough.join(" → ")}`);
+    }
+    if (pathConstraints.mustNotSkip && pathConstraints.mustNotSkip.length > 0) {
+      lines.push(`不可跳过：${pathConstraints.mustNotSkip.join("、")}`);
+    }
+    lines.push(`情绪转变方式：${pathConstraints.toneShift === "sudden" ? "突然转折" : pathConstraints.toneShift === "gradual" ? "渐变过渡" : "保持稳定"}`);
+    lines.push("");
+  }
+
+  // ── Writing requirements ───────────────────────────────────
+  lines.push("### 写作要求");
+  lines.push("1. 从开头画面开始，不能在此之前增加任何过渡段落");
+  lines.push("2. 在结尾画面结束，不能在此之后增加任何收尾段落");
+  lines.push("3. 中间的情节推进必须自然地连接两端，不能跳脱");
+  lines.push("4. 保持与开头情绪→结尾情绪一致的转变曲线");
+  lines.push("5. 如果开头和结尾已经确定，你的创造性发挥空间在「如何从 A 走到 B」");
+
+  return lines.join("\n");
+}

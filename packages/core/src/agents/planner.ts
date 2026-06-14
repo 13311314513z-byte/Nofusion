@@ -54,6 +54,22 @@ export interface PlanChapterInput {
   readonly bookDir: string;
   readonly chapterNumber: number;
   readonly externalContext?: string;
+  /** When true, generates 2-3 alternative memo variants alongside the primary. */
+  readonly generateAlternatives?: boolean;
+}
+
+/** A single alternative plan variant. */
+export interface MemoVariant {
+  /** Variant id, e.g. "variant-b", "variant-c". */
+  readonly id: string;
+  /** Human-readable label describing the variant's emphasis. */
+  readonly label: string;
+  /** Brief description of what makes this variant different. */
+  readonly description: string;
+  /** The variant's memo. */
+  readonly memo: ChapterMemo;
+  /** The variant's intent (differs from primary in goal/emphasis). */
+  readonly intent: ChapterIntent;
 }
 
 /** Find the ChapterGoalCard for a specific chapter number. */
@@ -125,6 +141,8 @@ export interface PlanChapterOutput {
   readonly intentMarkdown: string;
   readonly plannerInputs: ReadonlyArray<string>;
   readonly runtimePath: string;
+  /** Alternative plan variants (only populated when generateAlternatives is true). */
+  readonly alternatives?: ReadonlyArray<MemoVariant>;
 }
 
 const MEMO_RETRY_LIMIT = 3;
@@ -266,12 +284,33 @@ export class PlannerAgent extends BaseAgent {
     );
     await writeFile(runtimePath, intentMarkdown, "utf-8");
 
+    // ── Plan variant generation (opt-in) ──────────────────────
+    let alternatives: MemoVariant[] | undefined;
+    if (input.generateAlternatives) {
+      try {
+        alternatives = await this.generateMemosWithVariants(input, {
+          fallbackGoal: goal,
+          chapterSummariesRaw: seedMaterials.chapterSummariesRaw,
+          previousEndingExcerpt: seedMaterials.previousEndingExcerpt,
+          brief: seedMaterials.brief,
+          chapterContext: input.externalContext,
+          chapterGoal,
+          authorIntentBlock,
+          recyclableHooks: memorySelection.recyclableHooks,
+          language: input.book.language ?? "zh",
+        });
+      } catch (e) {
+        this.log?.warn(`Plan variant generation failed: ${String(e)}, using primary only`);
+      }
+    }
+
     return {
       intent,
       memo,
       intentMarkdown,
       plannerInputs: materials.plannerInputs,
       runtimePath,
+      alternatives: alternatives && alternatives.length > 0 ? alternatives : undefined,
     };
   }
 
@@ -925,5 +964,85 @@ export class PlannerAgent extends BaseAgent {
     } catch {
       return "(文件尚未创建)";
     }
+  }
+
+  /**
+   * Generate 2 alternate plan memo variants using the primary plan as context.
+   * Makes onellama call with the primary memo as seed to generate a different variant.
+   */
+  private async generateMemosWithVariants(
+    planInput: PlanChapterInput,
+    _seedInput: {
+      readonly fallbackGoal: string;
+      readonly chapterSummariesRaw: string;
+      readonly previousEndingExcerpt?: string;
+      readonly brief?: string;
+      readonly chapterContext?: string;
+      readonly recyclableHooks?: ReadonlyArray<StoredHook>;
+      readonly language?: "zh" | "en";
+      readonly chapterGoal?: ChapterGoalCard;
+      readonly authorIntentBlock?: string;
+    },
+  ): Promise<MemoVariant[]> {
+    // Simple approach: make 2 additional LLM calls with varied temperatures.
+    // The primary memo is already generated. We ask the LLM to produce
+    // alternative versions with different emphasis.
+    const language = _seedInput.language ?? "zh";
+    const chapterNumber = planInput.chapterNumber;
+
+    const emphasisPrompts = language === "en"
+      ? [
+          "Produce a variant of this chapter memo that emphasizes CONFLICT and PLOT PROGRESSION.",
+          "Produce a variant of this chapter memo that emphasizes CHARACTER INTERIORITY and EMOTIONAL DEPTH.",
+        ]
+      : [
+          "请生成一个本章 memo 的变体版本，更侧重**冲突推进和情节张力**。",
+          "请生成一个本章 memo 的变体版本，更侧重**角色内心和情感深度**。",
+        ];
+
+    const labelTemplates = language === "en"
+      ? ["Conflict-forward", "Character-inward"]
+      : ["冲突推进优先", "角色内心优先"];
+
+    const variants: MemoVariant[] = [];
+
+    for (let i = 0; i < emphasisPrompts.length; i++) {
+      try {
+        const systemPrompt = getPlannerMemoSystemPrompt(language);
+        const userMessage = `${emphasisPrompts[i]}
+
+章号: ${chapterNumber}，目标是: ${_seedInput.fallbackGoal}
+
+请以标准 YAML frontmatter + 7段正文格式输出。`;
+
+        const messages: Array<{ role: "system" | "user"; content: string }> = [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ];
+
+        const response = await this.chat(messages, { temperature: 0.85 });
+
+        const parsed = parseMemo(response.content, chapterNumber, false);
+        variants.push({
+          id: `variant-${String.fromCharCode(98 + i)}`, // b, c
+          label: labelTemplates[i],
+          description: language === "en"
+            ? `Alternative memo variant #${i + 1}`
+            : `第 ${i + 1} 个备选 memo 方案`,
+          memo: parsed,
+          intent: {
+            chapter: chapterNumber,
+            goal: parsed.goal,
+            mustKeep: [],
+            mustAvoid: [],
+            styleEmphasis: [],
+          },
+        });
+      } catch {
+        // Skip unparseable variants
+      }
+    }
+
+    return variants;
   }
 }
