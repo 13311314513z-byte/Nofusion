@@ -578,6 +578,20 @@ export { detectChapter, detectAndRewrite, loadDetectionHistory, type DetectChapt
 export { StateManager } from "./state/manager.js";
 export { bootstrapStructuredStateFromMarkdown } from "./state/state-bootstrap.js";
 export { renderCurrentStateProjection, renderHooksProjection, renderChapterSummariesProjection } from "./state/state-projections.js";
+// New unified markdown renderer/parser (M1)
+export {
+  renderHooksToMarkdown,
+  renderHookSnapshot,
+  renderSummariesToMarkdown,
+  renderSummarySnapshot,
+  renderCurrentStateToMarkdown,
+  renderChapterIntentToMarkdown,
+  renderChapterGoalToMarkdown,
+} from "./utils/markdown-renderer.js";
+export {
+  parseChapterIntentFromMarkdown,
+  parseChapterGoalFromMarkdown,
+} from "./utils/markdown-parser.js";
 export { applyRuntimeStateDelta, type RuntimeStateSnapshot } from "./state/state-reducer.js";
 export { validateRuntimeState, type RuntimeStateValidationIssue } from "./state/state-validator.js";
 
