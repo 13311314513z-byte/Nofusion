@@ -221,6 +221,29 @@ export function useApi<T>(path: string | null) {
   return { data, loading, error, refetch, mutate: setData };
 }
 
+/** Actionable error — extends a string error with retry/fallback options. */
+export interface ActionableError {
+  readonly message: string;
+  readonly canRetry: boolean;
+  readonly retry: () => void;
+  readonly fallbackAction?: { label: string; action: () => void };
+}
+
+/** Wrap a useApi result's error + refetch into an action-oriented error object. */
+export function useActionableError(
+  error: string | null,
+  refetch: () => void,
+  fallbackAction?: { label: string; action: () => void },
+): ActionableError | null {
+  if (!error) return null;
+  return {
+    message: error,
+    canRetry: true,
+    retry: refetch,
+    fallbackAction,
+  };
+}
+
 export async function postApi<T>(path: string, body?: unknown): Promise<T> {
   const result = await fetchJson<T>(path, {
     method: "POST",
