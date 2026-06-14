@@ -40,6 +40,8 @@ export const ChapterMetaSchema = z.object({
   detectionProvider: z.string().optional(),
   detectedAt: z.string().datetime().optional(),
   lengthTelemetry: LengthTelemetrySchema.optional(),
+  /** Revision of the AuthorChapterIntent used to generate this chapter. */
+  intentRevision: z.number().int().min(0).optional(),
   tokenUsage: z.object({
     promptTokens: z.number().int().default(0),
     completionTokens: z.number().int().default(0),

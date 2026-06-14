@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, parse } from "node:path";
-import { createLLMClient, StateManager, createLogger, createStderrSink, createJsonLineSink, resolveEffectiveLLMConfig, loadLLMEnvLayers, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH, type EffectiveLLMConfigResult, type LLMConfigCliOverrides, type ProjectConfig, type PipelineConfig, type LogSink } from "@actalk/inkos-core";
+import { createLLMClient, StateManager, createLogger, createStderrSink, createJsonLineSink, resolveEffectiveLLMConfig, resolveWritingReviewRetries, loadLLMEnvLayers, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH, type EffectiveLLMConfigResult, type LLMConfigCliOverrides, type ProjectConfig, type PipelineConfig, type LogSink } from "@actalk/inkos-core";
 import { formatSqliteMemorySupportWarning } from "./runtime-requirements.js";
 
 export { GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH };
@@ -160,7 +160,11 @@ export function buildPipelineConfig(
     projectRoot: root,
     defaultLLMConfig: config.llm,
     foundationReviewRetries: config.foundation.reviewRetries,
-    writingReviewRetries: config.writing?.reviewRetries ?? 1,
+    writingReviewRetries: resolveWritingReviewRetries(config.writing?.reviewRetries ?? 1, config.writing?.qualityBudget ?? "economy"),
+    qualityBudget: config.writing?.qualityBudget ?? "economy",
+    strictInterview: config.writing?.strictInterview ?? false,
+    betaReaderMode: config.writing?.betaReaderMode ?? "off",
+    betaReaderModelFamily: config.writing?.betaReaderModelFamily,
     modelOverrides: config.modelOverrides,
     inputGovernanceMode: extra?.inputGovernanceMode ?? config.inputGovernanceMode,
     notifyChannels: extra?.notifyChannels ?? config.notify,

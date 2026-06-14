@@ -72,12 +72,26 @@ describe("chapter-intent persistence", () => {
     expect(added[0]?.chapterNumber).toBe(3);
   });
 
-  it("upsertChapterIntent replaces existing intent with same chapter number", () => {
+  it("upsertChapterIntent supersedes the old version and returns the new active version", () => {
     const intent = makeIntent(2, "Original");
     const intents = [intent];
     const updated = upsertChapterIntent(intents, makeIntent(2, "Updated"));
-    expect(updated).toHaveLength(1);
-    expect(updated[0]?.coreNarrative).toBe("Updated");
+    expect(updated).toHaveLength(2);
+    expect(updated[0]?.status).toBe("superseded");
+    expect(getChapterIntent(updated, 2)?.coreNarrative).toBe("Updated");
+    expect(getChapterIntent(updated, 2)?.revision).toBe(2);
+  });
+
+  it("increments from the highest revision across repeated edits", () => {
+    const first = upsertChapterIntent([], makeIntent(2, "First"));
+    const second = upsertChapterIntent(first, makeIntent(2, "Second"));
+    const third = upsertChapterIntent(second, makeIntent(2, "Third"));
+
+    expect(third).toHaveLength(3);
+    expect(third.filter((intent) => intent.status !== "superseded")).toHaveLength(1);
+    expect(third.map((intent) => intent.revision)).toEqual([1, 2, 3]);
+    expect(getChapterIntent(third, 2)?.coreNarrative).toBe("Third");
+    expect(getChapterIntent(third, 2)?.revision).toBe(3);
   });
 
   it("getChapterIntent finds intent by chapter number", () => {
@@ -125,10 +139,12 @@ describe("chapter-intent persistence", () => {
     expect(loadedIntent.coreNarrative).toBe("测试核心叙述");
     expect(loadedIntent.readerTakeaway).toBe("测试读者感受");
     expect(loadedIntent.keyMoment).toBe("测试关键画面");
-    expect(loadedIntent.scenes).toHaveLength(1);
-    expect(loadedIntent.scenes[0]?.goal).toBe("场景目标");
-    expect(loadedIntent.characterStates).toHaveLength(1);
-    expect(loadedIntent.characterStates[0]?.characterId).toBe("角色A");
+    expect(loadedIntent.scenes).toBeDefined();
+    expect(loadedIntent.scenes!).toHaveLength(1);
+    expect(loadedIntent.scenes![0]?.goal).toBe("场景目标");
+    expect(loadedIntent.characterStates).toBeDefined();
+    expect(loadedIntent.characterStates!).toHaveLength(1);
+    expect(loadedIntent.characterStates![0]?.characterId).toBe("角色A");
     expect(loadedIntent.requiredBeats).toContain("必达事件1");
     expect(loadedIntent.forbiddenMoves).toContain("禁止事项1");
     expect(loadedIntent.pendingHookIds).toContain("hook_001");

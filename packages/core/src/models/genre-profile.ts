@@ -13,6 +13,25 @@ export const GenreProfileSchema = z.object({
   pacingRule: z.string().default(""),
   satisfactionTypes: z.array(z.string()).default([]),
   auditDimensions: z.array(z.number()).default([]),
+
+  // ── Genre promises (Stage 3) ─────────────────────────────
+  promises: z
+    .array(
+      z.object({
+        id: z.string(),
+        description: z.string(),
+        importance: z.enum(["core", "expected", "optional"]),
+        scope: z.enum(["book", "arc", "chapter-type"]).default("book"),
+        expectedWindow: z
+          .object({ from: z.number(), to: z.number() })
+          .optional(),
+        appliesToChapterTypes: z.array(z.string()).optional(),
+        overduePolicy: z
+          .enum(["info", "warning", "critical"])
+          .default("warning"),
+      }),
+    )
+    .default([]),
 });
 
 export type GenreProfile = z.infer<typeof GenreProfileSchema>;

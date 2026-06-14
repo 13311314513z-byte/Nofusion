@@ -1,24 +1,42 @@
 {
   "hooks": [
     {
+      "hookId": "clue-刘麻子家眷住-刘家沟-林渡可能通过",
+      "startChapter": 5,
+      "type": "clue",
+      "status": "resolved",
+      "lastAdvancedChapter": 9,
+      "expectedPayoff": "从刘麻子家眷处拿到真物证并安全脱困",
+      "notes": "林渡已拿到内衫+碎瓷片，并指引刘麻子妻子逃往双柳村。家眷线物理分离完成。钩子状态从 progressing 改为 resolved。"
+    },
+    {
+      "hookId": "threat-林渡找到家人-并确认安全-或揭露周禄挟",
+      "startChapter": 3,
+      "type": "threat",
+      "status": "progressing",
+      "lastAdvancedChapter": 9,
+      "expectedPayoff": "确认周禄的监视网规模及反制方式，确保家人安全或揭露周禄挟持",
+      "notes": "林渡已脱困并抵达周家镇外围，看见自家烟囱不冒烟，周禄在对面窗台。威胁从“围困脱困”升级为“进入周家镇直面家人被挟持的现状”。状态从 pressured 推进至 near_payoff。"
+    },
+    {
+      "hookId": "mystery-查明谁在陷害-林渡以及-有人等不及了",
+      "startChapter": 2,
+      "type": "mystery",
+      "status": "progressing",
+      "lastAdvancedChapter": 9,
+      "expectedPayoff": "内衫血迹走向与案卷伤口位置不匹配的真相——凶手动刀手法或被隐瞒，或内衫非刘麻子原物",
+      "payoffTiming": "near-term",
+      "notes": "本章推进：林渡在粪池边最终确认内衫血迹走向与左肋刀伤矛盾的真正涵义——内衫根本不是刘麻子死时穿的，有人把另一件血衣塞进他家。真正的刘麻子内衫在第三个人手里。谜团加深。"
+    },
+    {
       "hookId": "system-mechanic-揭示-回溯之眼-的来源",
       "startChapter": 2,
       "type": "system_mechanic",
-      "status": "open",
-      "lastAdvancedChapter": 2,
-      "expectedPayoff": "揭示“回溯之眼”的来源、代价、完全机制；帮助林渡获得更多物证信息",
+      "status": "progressing",
+      "lastAdvancedChapter": 7,
+      "expectedPayoff": "揭示回溯之眼的来源、代价、完全机制；帮助林渡获得更多物证信息",
       "payoffTiming": "slow-burn",
-      "notes": "本章首次触发并使用了“回溯之眼”（接触死者遗物+消耗每日1次），使用后林渡太阳穴剧痛。系统能力体系尚未完全展开"
-    },
-    {
-      "hookId": "mission-quest-林渡在公审前-完成部署-活过午时并激",
-      "startChapter": 2,
-      "type": "mission/quest",
-      "status": "resolved",
-      "lastAdvancedChapter": 3,
-      "expectedPayoff": "已兑现：林渡成功在公审中激活铁嘴术，获得三天调查窗口",
-      "payoffTiming": "immediate",
-      "notes": "本章公堂对质中林渡利用铁嘴术效果（逻辑推理+反驳供状）迫使县令改判三日期限，任务目标达成。"
+      "notes": "本章无新回溯触发，系统机制未推进。状态维持。"
     },
     {
       "hookId": "relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘",
@@ -28,37 +46,16 @@
       "lastAdvancedChapter": 3,
       "expectedPayoff": "林渡与周禄正面对峙结局，林渡公开翻盘或周禄反扑",
       "payoffTiming": "near-term",
-      "notes": "本章公堂完成公开对立，林渡指控周禄沾血，周禄反击未果，陈汝霖中立。对峙升级，但结局未定。"
+      "notes": "本章无直接对峙，但在章末林渡隔河看见周禄在窗台上喝茶——第一次在逃亡后见到周禄的具象。状态维持，预期在第13章左右触发。"
     },
     {
-      "hookId": "mystery-查明谁在陷害-林渡以及-有人等不及了",
-      "startChapter": 2,
-      "type": "mystery",
-      "status": "progressing",
-      "lastAdvancedChapter": 5,
-      "expectedPayoff": "揭示字条‘求先生家人平安——周老三’的来源和真实意图，以及陷害林渡的真凶全貌",
-      "payoffTiming": "near-term",
-      "notes": "本章通过死囚录发现刘麻子临刑呼冤‘周老三诬陷’，将字条上的‘周老三’与刘麻子案直接关联，强化周老三涉案嫌疑。同时发现有人抢在前面动过案卷锁，暗示第三方也介入此案。"
-    },
-    {
-      "hookId": "threat-林渡找到家人-并确认安全-或揭露周禄挟",
-      "startChapter": 3,
-      "type": "threat",
-      "status": "progressing",
-      "lastAdvancedChapter": 5,
-      "expectedPayoff": "确认周禄的监视网规模及反制方式，确保家人安全或揭露周禄挟持",
-      "payoffTiming": "near-term",
-      "notes": "本章林渡发现监视网收缩（眼线减少且往东集中），短褐汉子跟踪他后转向县衙方向，推断周禄决定提前收网（天亮前）。家人虽仍被软禁，但屋内被翻，县志考书被盗，说明威胁升级。"
-    },
-    {
-      "hookId": "clue-刘麻子家眷住-刘家沟-林渡可能通过",
-      "startChapter": 5,
+      "hookId": "(new) clue-灶台碎瓷片",
+      "startChapter": 9,
       "type": "clue",
       "status": "open",
-      "lastAdvancedChapter": 5,
-      "expectedPayoff": "刘麻子家眷住刘家沟，林渡可能通过其家人获取更多真相",
-      "payoffTiming": "near-term",
-      "notes": "赵老三在死囚录上留小字称刘麻子家眷未被流放，至今住刘家沟。林渡已决定前往乱葬岗后可能转去刘家沟。"
+      "lastAdvancedChapter": 9,
+      "expectedPayoff": "查明碎瓷片来源、刻画含义（半个“寅”字+烧痕）、与刘麻子案以及“丙七”死囚的关联",
+      "notes": "刘麻子妻子在最后时刻交给林渡的新物证。刘麻子死前三天藏在灶台砖缝里，称“这东西能救命”。碎片有被刀刻和火烧的痕迹，正面有半字。尚未经过任何验证。"
     }
   ]
 }

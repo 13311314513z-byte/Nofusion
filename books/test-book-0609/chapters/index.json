@@ -141,5 +141,150 @@
       "completionTokens": 12774,
       "totalTokens": 54667
     }
+  },
+  {
+    "number": 6,
+    "title": "白骨与犬吠",
+    "status": "ready-for-review",
+    "wordCount": 2313,
+    "createdAt": "2026-06-14T06:07:48.494Z",
+    "updatedAt": "2026-06-14T06:07:48.494Z",
+    "auditIssues": [
+      "[warning] chapter_memo 的 hook 账中明确要求本章 advance T0LK（刘麻子家眷住刘家沟），落地方式为“林渡在章尾决定：明天天亮前去刘家沟”。但成稿章尾只有林渡蹲在槐树下喘息、意识到收网比想象快，没有任何前往刘家沟的决策或意图表达，导致该钩子实际未被推进。",
+      "[warning] chapter_memo 的章尾必须改变第 3 点要求林渡从待查嫌疑人彻底转入被通缉的逃犯（周禄通过陈汝霖签发捕令），但成稿只写到周禄手下追捕，未展现正式通缉令或权力反转。虽然 memo 同时有“不要在这章让陈汝霖出面令捕”的约束，但权力改变的预期落地方案应是周禄私下行动形成的实质通缉（如派衙役持票），成稿中追捕者仅表现为带狗的家丁或私访人员，缺乏官方背书，使权力改变力度不足。",
+      "[warning] 最近4章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘（近期，可回收）。",
+      "[info] 全文出现 1 次‘猛地’（‘画面猛地拉近’），本文字数约 1800 字，未达到每 3000 字超过 1 次的 warning 阈值，但作为 AI 标记词可适度替换。",
+      "[warning] 65个段落里有40个不足35字，段落被切得过碎。",
+      "[warning] 连续出现4个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 2313,
+      "postWriterNormalizeCount": 2313,
+      "postReviseCount": 0,
+      "finalCount": 2313,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 39531,
+      "completionTokens": 10114,
+      "totalTokens": 49645
+    }
+  },
+  {
+    "number": 7,
+    "title": "深溪",
+    "status": "audit-failed",
+    "wordCount": 4440,
+    "createdAt": "2026-06-14T07:15:16.360Z",
+    "updatedAt": "2026-06-14T07:15:16.360Z",
+    "auditIssues": [
+      "[critical] 出现了「不是……而是……」句式",
+      "[warning] 最近4章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘（近期，已逾期）、threat-林渡找到家人-并确认安全-或揭露周禄挟（近期，可回收）。",
+      "[info] 从第3章到第7章连续6章均为推进章，缺乏爆发、后效或喘息章节。情节类型单一化，长期可能造成读者疲劳。当前阶段可以接受，但建议在后续章节中适当加入高潮或过渡章节以调整节奏。",
+      "[info] 本章未实现Chapter Memo中计划的open新钩子（追兵领队飞鸽传书和‘孟’字指印）。两个钩子缺失不影响章节核心任务完成，但会削弱读者对未来势力层级的悬念预期。",
+      "[info] Chapter Memo要求‘代价是暴露行踪范围、压缩逃生空间’中的‘暴露行踪范围’没有在正文中明确展现。林渡成功逃脱，但未通过追兵的反应或自己的观察来确认自己的行踪已被暴露。老汉的出现虽暗示有人知道他的行踪，但并未说明是追兵还是第三方。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 4437,
+      "postWriterNormalizeCount": 4440,
+      "postReviseCount": 4440,
+      "finalCount": 4440,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 80409,
+      "completionTokens": 21087,
+      "totalTokens": 101496
+    }
+  },
+  {
+    "number": 8,
+    "title": "围村",
+    "status": "audit-failed",
+    "wordCount": 3118,
+    "createdAt": "2026-06-14T07:20:26.690Z",
+    "updatedAt": "2026-06-14T07:20:26.690Z",
+    "auditIssues": [
+      "[critical] memo 在 advance/resolve 里声明要处理 H01，但正文没有对应的落地动作",
+      "[warning] 最近4章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 连续5章为推进章（第3-7章），本章仍为高压推进章，但利用村庄环境、物证交接和围村设定构建了完整蓄压→小爆发（拿到内衫）→新冲突（被围）的波形。未造成节奏停滞，但‘纯推进’惯性需留意下一章能否转换为后效/喘息或新一轮蓄压。",
+      "[info] 开篇进村的环境描写略偏静态，‘土坯房顺着坡势歪歪扭扭地排下来’至‘敲了三下门’之间约200字用于氛围渲染，未直接推进主线。但渲染服务于读者进入新地理空间，且篇幅在可接受范围内。",
+      "[info] 林渡拒绝浑家带孩子走的决定符合人设（冷静、计算），但‘只要我不跟你们一起走，你们就是安全的’这一判断略有乌托邦色彩——周禄既然派专业人手围村，浑家事后被迁怒的风险真实存在。虽服务于林渡的急迫逻辑，但可稍加内心动摇来更贴合现实恐惧。",
+      "[info] 本章出现‘插上门闩’、‘擂鼓一样撞在胸腔里’等常见表达，但未触发高疲劳词（震惊/不可思议等）单次密度超标。AI标记词‘仿佛/不禁/宛如/竟然/忽然/猛地’仅‘猛地’出现1次（3000字内，安全）。",
+      "[warning] 连续出现5个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 3118,
+      "postWriterNormalizeCount": 3118,
+      "postReviseCount": 0,
+      "finalCount": 3118,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 72705,
+      "completionTokens": 13367,
+      "totalTokens": 86072
+    }
+  },
+  {
+    "number": 9,
+    "title": "弃沼",
+    "status": "audit-failed",
+    "wordCount": 3905,
+    "createdAt": "2026-06-14T07:25:40.434Z",
+    "updatedAt": "2026-06-14T07:25:40.434Z",
+    "auditIssues": [
+      "[critical] 正文中出现了章节号指称：\"第9章\"。角色不知道自己在第几章。",
+      "[warning] 章节标题\"粪池\"已自动调整为\"弃沼\"。",
+      "[warning] 最近4章章节类型持续停留在“推进章”，长篇节奏可能开始固化。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：relationship-foreshadowing-林渡与周禄正-面对峙结局-林渡公开翻盘（近期，已逾期）。",
+      "[info] 『好像』『像是』在章节中使用了3次，密度略高但未达warning标准。『仿佛』『不禁』『宛如』等AI标记词未出现，整体可控。",
+      "[info] 第4段『像一根针扎进他太阳穴里』—措辞偏感官描写，属于保留项，归info供Polisher参考。",
+      "[info] system-mechanic-揭示-回溯之眼-的来源 未在第9章推进，但memo明确暂不掀该勾，状态合情理。保持info供planner留意慢烧线。",
+      "[info] 最近6章（ch4-ch9）全部为推进章，情绪基调持续紧绷/压抑/紧张，缺少喘息章或释放章。虽然第9章本身是合逻辑的脱困后效章节，但连续6章同模式构成节奏压平预警。",
+      "[warning] 连续出现4个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "softMin": null,
+      "softMax": null,
+      "hardMin": null,
+      "hardMax": null,
+      "countingMode": "zh_chars",
+      "writerCount": 3898,
+      "postWriterNormalizeCount": 3905,
+      "postReviseCount": 3905,
+      "finalCount": 3905,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 85653,
+      "completionTokens": 15607,
+      "totalTokens": 101260
+    }
   }
 ]

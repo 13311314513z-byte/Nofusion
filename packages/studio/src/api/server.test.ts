@@ -42,6 +42,10 @@ const loadSecretsMock = vi.fn();
 const saveSecretsMock = vi.fn();
 const setServiceApiKeyMock = vi.fn();
 const getServiceApiKeyMock = vi.fn();
+const loadChapterIntentsMock = vi.fn(async () => ({ intents: [], updatedAt: new Date().toISOString() }));
+const saveChapterIntentsMock = vi.fn();
+const getChapterIntentMock = vi.fn(() => undefined);
+const upsertChapterIntentMock = vi.fn((intents: readonly unknown[], intent: unknown) => [...intents, intent]);
 type ServicePresetMock = {
   providerFamily: "openai" | "anthropic";
   baseUrl: string;
@@ -264,6 +268,7 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     resolveServiceProviderFamily: resolveServiceProviderFamilyMock,
     resolveServiceModelsBaseUrl: resolveServiceModelsBaseUrlMock,
     resolveServiceModel: resolveServiceModelMock,
+    resolveWritingReviewRetries: actual.resolveWritingReviewRetries,
     COVER_PROVIDER_PRESETS: actual.COVER_PROVIDER_PRESETS,
     coverSecretKey: actual.coverSecretKey,
     resolveCoverProviderPreset: actual.resolveCoverProviderPreset,
@@ -288,6 +293,11 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     planChapterImport: actual.planChapterImport,
     loadChapterGoals: actual.loadChapterGoals,
     saveChapterGoals: actual.saveChapterGoals,
+    loadChapterIntents: loadChapterIntentsMock,
+    saveChapterIntents: saveChapterIntentsMock,
+    getChapterIntent: getChapterIntentMock,
+    upsertChapterIntent: upsertChapterIntentMock,
+    AuthorChapterIntentSchema: actual.AuthorChapterIntentSchema,
     getChapterGoal: actual.getChapterGoal,
     upsertChapterGoal: actual.upsertChapterGoal,
     removeChapterGoal: actual.removeChapterGoal,
@@ -2942,7 +2952,12 @@ describe("createStudioServer daemon lifecycle", () => {
       join(root, "inkos.json"),
       JSON.stringify({
         ...cloneProjectConfig(),
-        writing: { reviewRetries: 3 },
+        writing: {
+          reviewRetries: 3,
+          qualityBudget: "normal",
+          betaReaderMode: "shadow",
+          betaReaderModelFamily: "openai",
+        },
       }, null, 2),
       "utf-8",
     );
@@ -2959,6 +2974,8 @@ describe("createStudioServer daemon lifecycle", () => {
     expect(response.status).toBe(200);
     expect(pipelineConfigs.at(-1)).toEqual(expect.objectContaining({
       writingReviewRetries: 3,
+      betaReaderMode: "shadow",
+      betaReaderModelFamily: "openai",
     }));
   });
 
@@ -3710,3 +3727,7 @@ describe("createStudioServer daemon lifecycle", () => {
     });
   });
 });
+
+// Note: vi.mock("@actalk/inkos-core") is hoisted globally by Vitest.
+// Pool isolation (forks + isolate: true in vitest.config.ts) ensures
+// this mock does not leak to other test files — no afterAll cleanup needed.

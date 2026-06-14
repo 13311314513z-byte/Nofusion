@@ -30,6 +30,7 @@ import {
   resolveServiceProviderFamily,
   resolveServiceModelsBaseUrl,
   resolveServiceModel,
+  resolveWritingReviewRetries,
   loadSecrets,
   saveSecrets,
   setServiceApiKey,
@@ -84,6 +85,7 @@ import {
   getChapterIntent,
   upsertChapterIntent,
   removeChapterIntent,
+  AuthorChapterIntentSchema,
   buildAuthorIntentBlock,
   generateSuggestions,
   type AuthorChapterIntent,
@@ -1750,7 +1752,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       projectRoot: root,
       defaultLLMConfig: currentConfig.llm,
       foundationReviewRetries: currentConfig.foundation?.reviewRetries ?? 2,
-      writingReviewRetries: currentConfig.writing?.reviewRetries ?? 1,
+      writingReviewRetries: resolveWritingReviewRetries(
+        currentConfig.writing?.reviewRetries ?? 1,
+        currentConfig.writing?.qualityBudget ?? "economy",
+      ),
+      qualityBudget: currentConfig.writing?.qualityBudget ?? "economy",
+      strictInterview: currentConfig.writing?.strictInterview ?? false,
+      betaReaderMode: currentConfig.writing?.betaReaderMode ?? "off",
+      betaReaderModelFamily: currentConfig.writing?.betaReaderModelFamily,
       modelOverrides: currentConfig.modelOverrides,
       notifyChannels: currentConfig.notify,
       logger,
@@ -2129,6 +2138,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  /** @deprecated Use PUT /api/v1/books/:id instead. */
   app.patch("/api/v1/books/:id/config", async (c) => {
     const id = c.req.param("id");
     await assertBookExists(state, id);
@@ -3526,6 +3536,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Agent chat ---
 
+  /** @deprecated Use /api/v1/sessions endpoints instead. Kept for backward compatibility. */
   app.get("/api/v1/interaction/session", async (c) => {
     const session = await loadProjectSession(root);
     const activeBookId = await resolveSessionActiveBook(root, session);
@@ -6314,6 +6325,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // Legacy direct import (kept for backward compatibility)
+  /** @deprecated Use POST /api/v1/books/:id/import/chapters/plan + /commit instead. */
   app.post("/api/v1/books/:id/import/chapters", async (c) => {
     const id = c.req.param("id");
     const { text, splitRegex } = await c.req.json<{ text: string; splitRegex?: string }>();
@@ -6560,7 +6572,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = state.bookDir(id);
       const index = await loadChapterIntents(bookDir);
       const existing = getChapterIntent(index.intents, chapterNumber);
-      const intent: AuthorChapterIntent = {
+      const parsedIntent = AuthorChapterIntentSchema.safeParse({
         chapterNumber,
         coreNarrative: body.coreNarrative ?? existing?.coreNarrative ?? "",
         readerTakeaway: body.readerTakeaway ?? existing?.readerTakeaway ?? "",
@@ -6573,10 +6585,17 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         narrativePosition: body.narrativePosition ?? existing?.narrativePosition ?? "rising",
         plotLine: body.plotLine ?? existing?.plotLine,
         interviewCompletedAt: body.interviewCompletedAt ?? existing?.interviewCompletedAt,
-      };
+      });
+      if (!parsedIntent.success) {
+        return c.json({
+          error: "Invalid chapter intent",
+          issues: parsedIntent.error.issues,
+        }, 400);
+      }
+      const intent: AuthorChapterIntent = parsedIntent.data;
       const next = upsertChapterIntent(index.intents, intent);
       await saveChapterIntents(bookDir, next);
-      return c.json({ ok: true, intent });
+      return c.json({ ok: true, intent: getChapterIntent(next, chapterNumber) });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }

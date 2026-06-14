@@ -213,3 +213,14 @@ export function formatImportCanonComplete(language: CliLanguage): string[] {
     }),
   ];
 }
+
+export function formatStrictInterviewBlocked(
+  language: CliLanguage,
+  chapterNumber: number,
+  missingFields: readonly string[],
+): string {
+  if (language === "en") {
+    return `⚠ Strict Interview mode: chapter ${chapterNumber} is missing required intent fields: ${missingFields.join(", ")}.\nPlease use the Studio to fill these in before auto-writing, or set "writing.strictInterview" to false in inkos.json.`;
+  }
+  return `⚠ 严格面谈模式：第 ${chapterNumber} 章缺少必要的写作意图字段：${missingFields.join("、")}。\n请在 Studio 中补充后再进行自动写作，或将 inkos.json 中的 "writing.strictInterview" 设为 false。`;
+}

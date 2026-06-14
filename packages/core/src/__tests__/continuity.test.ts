@@ -15,6 +15,56 @@ describe("ContinuityAuditor", () => {
     vi.restoreAllMocks();
   });
 
+  it("preserves structured issue location, evidence, confidence, and fix scope", () => {
+    const auditor = new ContinuityAuditor({
+      client: {
+        provider: "openai",
+        apiFormat: "chat",
+        stream: false,
+        defaults: {
+          temperature: 0.7,
+          maxTokens: 4096,
+          thinkingBudget: 0,
+          extra: {},
+        },
+      },
+      model: "test-model",
+      projectRoot: ".",
+    });
+    const result = (auditor as unknown as {
+      tryParseAuditJson(json: string, language: "zh" | "en"): {
+        issues: ReadonlyArray<{
+          source?: string;
+          location?: { startParagraph: number; endParagraph: number };
+          evidence?: ReadonlyArray<string>;
+          confidence?: number;
+          fixScope?: string;
+        }>;
+      } | null;
+    }).tryParseAuditJson(JSON.stringify({
+      passed: false,
+      issues: [{
+        severity: "critical",
+        category: "Timeline Check",
+        description: "角色在得知消息前就采取了行动。",
+        suggestion: "调整第 4 段的信息顺序。",
+        location: { startParagraph: 4, endParagraph: 4 },
+        evidence: ["第4段先行动，第6段才获得消息"],
+        confidence: 0.92,
+        fixScope: "paragraph",
+      }],
+      summary: "时间线冲突",
+    }), "zh");
+
+    expect(result?.issues[0]).toMatchObject({
+      source: "continuity",
+      location: { startParagraph: 4, endParagraph: 4 },
+      evidence: ["第4段先行动，第6段才获得消息"],
+      confidence: 0.92,
+      fixScope: "paragraph",
+    });
+  });
+
   it("prefers book language override when building audit prompts", async () => {
     const root = await mkdtemp(join(tmpdir(), "inkos-auditor-lang-test-"));
     const bookDir = join(root, "book");

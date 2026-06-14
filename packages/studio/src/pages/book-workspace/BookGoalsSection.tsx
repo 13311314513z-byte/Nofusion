@@ -5,6 +5,12 @@ import type { SSEMessage } from "../../hooks/use-sse";
 import { fetchJson, useApi } from "../../hooks/use-api";
 import { Target, Save, Trash2, Plus, X, TargetIcon, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+// Import shared types from core — these are the single source of truth.
+import type {
+  AuthorChapterIntent,
+  AuthorScenePlan,
+  AuthorCharacterState,
+} from "@actalk/inkos-core";
 
 interface ChapterGoalCard {
   readonly chapterNumber: number;
@@ -23,34 +29,6 @@ interface ChapterGoalCard {
 interface ChapterGoalsIndex {
   readonly goals: ReadonlyArray<ChapterGoalCard>;
   readonly updatedAt: string;
-}
-
-interface AuthorScenePlan {
-  readonly goal: string;
-  readonly location: string;
-  readonly povCharacter: string;
-  readonly targetEmotion?: string;
-}
-
-interface AuthorCharacterState {
-  readonly characterId: string;
-  readonly emotion: string;
-  readonly relationshipChanges?: string;
-}
-
-interface AuthorChapterIntent {
-  readonly chapterNumber: number;
-  readonly coreNarrative: string;
-  readonly readerTakeaway: string;
-  readonly keyMoment: string;
-  readonly scenes: ReadonlyArray<AuthorScenePlan>;
-  readonly characterStates: ReadonlyArray<AuthorCharacterState>;
-  readonly requiredBeats: ReadonlyArray<string>;
-  readonly forbiddenMoves: ReadonlyArray<string>;
-  readonly pendingHookIds: ReadonlyArray<string>;
-  readonly narrativePosition: "opening" | "rising" | "climax" | "falling" | "resolution";
-  readonly plotLine?: string;
-  readonly interviewCompletedAt?: string;
 }
 
 interface BookData {

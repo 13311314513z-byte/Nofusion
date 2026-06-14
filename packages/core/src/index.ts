@@ -1,8 +1,19 @@
 // Models
 export { type BookConfig, type Platform, type Genre, type BookStatus, type FanficMode, BookConfigSchema, PlatformSchema, GenreSchema, BookStatusSchema, FanficModeSchema, normalizePlatformId, normalizePlatformOrOther } from "./models/book.js";
 export { type ChapterMeta, type ChapterStatus, ChapterMetaSchema, ChapterStatusSchema } from "./models/chapter.js";
-export { type ProjectConfig, type LLMConfig, type NotifyChannel, type DetectionConfig, type QualityGates, type FoundationConfig, type WritingConfig, type AgentLLMOverride, type InputGovernanceMode, ProjectConfigSchema, LLMConfigSchema, AgentLLMOverrideSchema, DetectionConfigSchema, QualityGatesSchema, FoundationConfigSchema, WritingConfigSchema, InputGovernanceModeSchema } from "./models/project.js";
+export { type ProjectConfig, type LLMConfig, type NotifyChannel, type DetectionConfig, type QualityGates, type FoundationConfig, type WritingConfig, type AgentLLMOverride, type InputGovernanceMode, ProjectConfigSchema, LLMConfigSchema, AgentLLMOverrideSchema, DetectionConfigSchema, QualityGatesSchema, FoundationConfigSchema, WritingConfigSchema, InputGovernanceModeSchema, resolveWritingReviewRetries } from "./models/project.js";
 export { type CurrentState, type ParticleLedger, type PendingHooks, type PendingHook, type LedgerEntry } from "./models/state.js";
+export {
+  buildPromptManifest,
+  estimateTokens,
+  getAvailableInputTokens,
+  type PromptFragment,
+  type PromptManifest,
+} from "./models/prompt-manifest.js";
+export {
+  buildManifestFromMessages,
+  logPromptManifest,
+} from "./utils/prompt-tracing.js";
 export { type GenreProfile, type ParsedGenreProfile, GenreProfileSchema, parseGenreProfile } from "./models/genre-profile.js";
 export { type BookRules, type ParsedBookRules, BookRulesSchema, parseBookRules, tryParseBookRulesFrontmatter } from "./models/book-rules.js";
 export { type DetectionHistoryEntry, type DetectionStats } from "./models/detection.js";
@@ -86,6 +97,31 @@ export {
 export { assertSafeBookId, deriveBookIdFromTitle, isSafeBookId } from "./utils/book-id.js";
 export { safeChildPath } from "./utils/path-safety.js";
 export { ResourceRegistry, globalRegistry, type Resource } from "./utils/resource-registry.js";
+export {
+  computePreferenceMetrics,
+  type PairedPreference,
+  type PairedPreferenceQuestion,
+  type PreferenceMetrics,
+} from "./evaluation/paired-preference.js";
+export {
+  checkGenrePromises,
+  getCriticalGenrePromises,
+  type GenrePromiseStatus,
+} from "./evaluation/genre-promises.js";
+export {
+  IssueNormalizer,
+  type NormalizedIssues,
+  type NormalizableAuditIssue,
+} from "./agents/issue-normalizer.js";
+export {
+  createIssue,
+  fromLegacyContinuityIssue,
+  generateIssueId,
+  resolveAuditIssue,
+  type AuditIssueSource,
+  type ResolvedAuditIssue,
+  type AuditIssue as UnifiedAuditIssue,
+} from "./models/audit-issue.js";
 export {
   AutomationModeSchema,
   type AutomationMode,
@@ -293,11 +329,13 @@ export { ContinuityAuditor, type AuditResult, type AuditIssue } from "./agents/c
 export { ReviserAgent, DEFAULT_REVISE_MODE, type ReviseOutput, type ReviseMode } from "./agents/reviser.js";
 export { PolisherAgent, type PolishChapterInput, type PolishChapterOutput } from "./agents/polisher.js";
 export { RadarAgent, type RadarResult, type RadarRecommendation } from "./agents/radar.js";
+export { BetaReader, type BetaReaderInput, type BetaReaderOutput, type ReaderObservation, type BetaReaderMode } from "./agents/beta-reader.js";
+export { summarizeObservations } from "./models/beta-reader-output.js";
+export { checkPatchBoundary, issueLocationsToParagraphSet, selectReviseModeFromFixScope, type PatchBoundaryReport } from "./utils/patch-boundary.js";
 export { FanqieRadarSource, QidianRadarSource, TextRadarSource, type RadarSource, type PlatformRankings, type RankingEntry } from "./agents/radar-source.js";
 export { readGenreProfile, readBookRules, listAvailableGenres, getBuiltinGenresDir } from "./agents/rules-reader.js";
 export { buildWriterSystemPrompt, buildGoldenOpeningDiscipline } from "./agents/writer-prompts.js";
 export { analyzeAITells, type AITellResult, type AITellIssue } from "./agents/ai-tells.js";
-export { analyzeSensitiveWords, type SensitiveWordResult, type SensitiveWordMatch } from "./agents/sensitive-words.js";
 export { detectAIContent, type DetectionResult } from "./agents/detector.js";
 export { analyzeStyle } from "./agents/style-analyzer.js";
 export { analyzeStyleFingerprint, type StyleFingerprint } from "./agents/style-fingerprint.js";
@@ -446,7 +484,7 @@ export { summarizePendingHookHealth, type HookHealthSummary } from "./utils/hook
 export { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filterCharacterMatrix } from "./utils/context-filter.js";
 export { extractPOVFromOutline, filterMatrixByPOV, filterHooksByPOV } from "./utils/pov-filter.js";
 export { ConsolidatorAgent } from "./agents/consolidator.js";
-export { MemoryDB, type Fact, type StoredSummary, type IntentCommitment } from "./state/memory-db.js";
+export { MemoryDB, type Fact, type StoredSummary } from "./state/memory-db.js";
 export { StateValidatorAgent } from "./agents/state-validator.js";
 export { loadRuntimeStateSnapshot, buildRuntimeStateArtifacts, saveRuntimeStateSnapshot, loadNarrativeMemorySeed, loadSnapshotCurrentStateFacts, type RuntimeStateArtifacts, type NarrativeMemorySeed } from "./state/runtime-state-store.js";
 export { splitChapters, type SplitChapter } from "./utils/chapter-splitter.js";
@@ -476,11 +514,21 @@ export {
   getChapterIntent,
   upsertChapterIntent,
   removeChapterIntent,
+  confirmChapterIntent,
+  supersedeChapterIntent,
   type AuthorChapterIntent,
   type ChapterIntentsIndex,
   type AuthorScenePlan,
   type AuthorCharacterState,
 } from "./models/chapter-intent.js";
+export {
+  AuthorChapterIntentSchema,
+  AuthorScenePlanSchema,
+  AuthorCharacterStateSchema,
+  ChapterIntentsIndexSchema,
+  migrateLegacyIntent,
+  migrateIntentsIndex,
+} from "./models/chapter-intent.schema.js";
 export {
   buildAuthorIntentBlock,
   buildAuthorCommitmentChecklist,

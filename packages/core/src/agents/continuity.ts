@@ -10,12 +10,18 @@ import { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filt
 import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
 import { loadChapterIntents, getChapterIntent } from "../models/chapter-intent.js";
 import { buildAuthorCommitmentChecklist } from "../utils/intent-injection.js";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
+import { createIssue } from "../models/audit-issue.js";
+import type { AuditIssue } from "../models/audit-issue.js";
 import {
   readVolumeMap,
   readCharacterContext,
   readCurrentStateWithFallback,
 } from "../utils/outline-paths.js";
 import { join } from "node:path";
+
+export type { AuditIssue } from "../models/audit-issue.js";
 
 export interface AuditResult {
   readonly passed: boolean;
@@ -30,11 +36,58 @@ export interface AuditResult {
   };
 }
 
-export interface AuditIssue {
-  readonly severity: "critical" | "warning" | "info";
-  readonly category: string;
-  readonly description: string;
-  readonly suggestion: string;
+function normalizeAuditSeverity(value: unknown): AuditIssue["severity"] {
+  return value === "critical" || value === "info" ? value : "warning";
+}
+
+function normalizeAuditLocation(value: unknown): AuditIssue["location"] {
+  if (!value || typeof value !== "object") return undefined;
+  const location = value as { startParagraph?: unknown; endParagraph?: unknown };
+  if (
+    !Number.isInteger(location.startParagraph)
+    || !Number.isInteger(location.endParagraph)
+    || (location.startParagraph as number) < 1
+    || (location.endParagraph as number) < (location.startParagraph as number)
+  ) {
+    return undefined;
+  }
+  return {
+    startParagraph: location.startParagraph as number,
+    endParagraph: location.endParagraph as number,
+  };
+}
+
+function normalizeAuditEvidence(value: unknown): ReadonlyArray<string> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const evidence = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return evidence.length > 0 ? evidence : undefined;
+}
+
+function normalizeAuditConfidence(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
+}
+
+function normalizeAuditFixScope(
+  value: unknown,
+  severity: AuditIssue["severity"],
+  location?: AuditIssue["location"],
+): NonNullable<AuditIssue["fixScope"]> {
+  if (
+    value === "word"
+    || value === "sentence"
+    || value === "paragraph"
+    || value === "scene"
+    || value === "chapter"
+  ) {
+    return value;
+  }
+  if (location) return "paragraph";
+  return severity === "critical" ? "chapter" : "paragraph";
 }
 
 type PromptLanguage = "zh" | "en";
@@ -66,7 +119,6 @@ const DIMENSION_LABELS: Record<number, { readonly zh: string; readonly en: strin
   24: { zh: "支线停滞", en: "Subplot Stagnation Check" },
   25: { zh: "弧线平坦", en: "Arc Flatline Check" },
   26: { zh: "节奏单调", en: "Pacing Monotony Check" },
-  27: { zh: "敏感词检查", en: "Sensitive Content Check" },
   28: { zh: "正传事件冲突", en: "Mainline Canon Event Conflict" },
   29: { zh: "未来信息泄露", en: "Future Knowledge Leak Check" },
   30: { zh: "世界规则跨书一致性", en: "Cross-Book World Rule Check" },
@@ -482,13 +534,18 @@ Output format MUST be JSON:
       "severity": "critical|warning|info",
       "category": "dimension name",
       "description": "specific issue description",
-      "suggestion": "fix suggestion"
+      "suggestion": "fix suggestion",
+      "location": { "startParagraph": 3, "endParagraph": 5 },
+      "evidence": ["short supporting quote or factual reference"],
+      "confidence": 0.85,
+      "fixScope": "word|sentence|paragraph|scene|chapter"
     }
   ],
   "summary": "one-sentence audit conclusion"
 }
 
 passed is false ONLY when critical-severity issues exist.
+For every issue, provide the narrowest valid paragraph range and fixScope. Omit location only when the issue is genuinely chapter-wide.
 
 overall_score calibration:
 - 95-100: Publishable as-is, no noticeable issues
@@ -521,13 +578,18 @@ ${dimList}
       "severity": "critical|warning|info",
       "category": "审查维度名称",
       "description": "具体问题描述",
-      "suggestion": "修改建议"
+      "suggestion": "修改建议",
+      "location": { "startParagraph": 3, "endParagraph": 5 },
+      "evidence": ["简短证据摘录或事实依据"],
+      "confidence": 0.85,
+      "fixScope": "word|sentence|paragraph|scene|chapter"
     }
   ],
   "summary": "一句话总结审查结论"
 }
 
 只有当存在 critical 级别问题时，passed 才为 false。
+每个问题都必须给出尽可能窄的段落范围和 fixScope；只有真正影响全章的问题才可省略 location。
 
 overall_score 评分校准：
 - 95-100：可直接发布，无明显问题
@@ -639,11 +701,49 @@ ${hooksBlock}${volumeSummariesBlock}${subplotBlock}${emotionalBlock}${matrixBloc
 ## 待审章节内容
 ${chapterContent}`;
 
-    const chatMessages = [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: userPrompt },
-    ];
+    // Stage 2: Use buildPromptManifest as the actual prompt assembly controller
+    const maxAllowedInputTokens = getAvailableInputTokens(this.ctx.model);
+    const systemFragment: PromptFragment = {
+      id: "continuity-system",
+      source: "continuity",
+      role: "system",
+      slot: "system-prompt",
+      priority: 100,
+      content: systemPrompt,
+      optional: false,
+      estimatedTokens: Math.ceil(systemPrompt.length / 4),
+    };
+    const userFragment: PromptFragment = {
+      id: "continuity-user",
+      source: "continuity",
+      role: "user",
+      slot: "user-message",
+      priority: 80,
+      content: userPrompt,
+      optional: true,
+      estimatedTokens: Math.ceil(userPrompt.length / 4),
+    };
+    const manifest = buildPromptManifest({
+      stage: this.name,
+      fragments: [systemFragment, userFragment],
+      maxAllowedInputTokens,
+    });
+
+    if (manifest.droppedFragments.length > 0) {
+      this.log?.warn(`[continuity] Fragment(s) dropped due to token budget: ${manifest.droppedFragments.map((d) => d.fragmentId).join(", ")}`);
+    }
+
+    // Build messages from manifest fragments
+    const chatMessages: Array<{ role: "system" | "user"; content: string }> = [];
+    for (const fragment of manifest.fragments) {
+      if (fragment.role === "system" || fragment.role === "user") {
+        chatMessages.push({ role: fragment.role, content: fragment.content });
+      }
+    }
     const chatOptions = { temperature: options?.temperature ?? 0.3 };
+
+    // Log the manifest for traceability
+    logPromptManifest(this.name, chatMessages, this.ctx.model, this.log);
 
     // Use web search for fact verification when eraResearch is enabled
     const response = gp.eraResearch
@@ -690,13 +790,20 @@ ${chapterContent}`;
         let match: RegExpExecArray | null;
         while ((match = issuePattern.exec(issuesMatch[1]!)) !== null) {
           try {
-            const issue = JSON.parse(match[0]);
-            issues.push({
-              severity: issue.severity ?? "warning",
-              category: issue.category ?? (language === "en" ? "Uncategorized" : "未分类"),
-              description: issue.description ?? "",
-              suggestion: issue.suggestion ?? "",
-            });
+            const issue = JSON.parse(match[0]) as Record<string, unknown>;
+            const severity = normalizeAuditSeverity(issue.severity);
+            const location = normalizeAuditLocation(issue.location);
+            issues.push(createIssue({
+              source: "continuity",
+              severity,
+              category: String(issue.category ?? (language === "en" ? "Uncategorized" : "未分类")),
+              description: String(issue.description ?? ""),
+              suggestion: String(issue.suggestion ?? ""),
+              location,
+              evidence: normalizeAuditEvidence(issue.evidence),
+              confidence: normalizeAuditConfidence(issue.confidence),
+              fixScope: normalizeAuditFixScope(issue.fixScope, severity, location),
+            }));
           } catch (e) {
             console.warn(`[continuity] Skipping malformed issue: ${e instanceof Error ? e.message : String(e)}`);
           }
@@ -711,7 +818,8 @@ ${chapterContent}`;
 
     return {
       passed: false,
-      issues: [{
+      issues: [createIssue({
+        source: "continuity",
         severity: "critical",
         category: language === "en" ? "System Error" : "系统错误",
         description: language === "en"
@@ -720,7 +828,9 @@ ${chapterContent}`;
         suggestion: language === "en"
           ? "The model may not support reliable structured output. Try a stronger model or inspect the API response format."
           : "可能是模型不支持结构化输出。尝试换一个更大的模型，或检查 API 返回格式。",
-      }],
+        fixScope: "chapter",
+        blocking: true,
+      })],
       summary: language === "en" ? "Audit output parsing failed" : "审稿输出解析失败",
     };
   }
@@ -817,12 +927,21 @@ ${overrides}\n`;
       return {
         passed: Boolean(parsed.passed ?? false),
         issues: Array.isArray(parsed.issues)
-          ? parsed.issues.map((i: Record<string, unknown>) => ({
-              severity: (i.severity as string) ?? "warning",
-              category: (i.category as string) ?? (language === "en" ? "Uncategorized" : "未分类"),
-              description: (i.description as string) ?? "",
-              suggestion: (i.suggestion as string) ?? "",
-            }))
+          ? parsed.issues.map((i: Record<string, unknown>) => {
+              const severity = normalizeAuditSeverity(i.severity);
+              const location = normalizeAuditLocation(i.location);
+              return createIssue({
+                source: "continuity",
+                severity,
+                category: String(i.category ?? (language === "en" ? "Uncategorized" : "未分类")),
+                description: String(i.description ?? ""),
+                suggestion: String(i.suggestion ?? ""),
+                location,
+                evidence: normalizeAuditEvidence(i.evidence),
+                confidence: normalizeAuditConfidence(i.confidence),
+                fixScope: normalizeAuditFixScope(i.fixScope, severity, location),
+              });
+            })
           : [],
         summary: String(parsed.summary ?? ""),
         overallScore,

@@ -66,20 +66,9 @@ export interface StoredHook {
   readonly promoted?: boolean;
 }
 
-/**
- * An intent commitment records the author's answer to a pre-writing question.
- * At audit time the system checks whether the written chapter fulfills it.
- */
-export interface IntentCommitment {
-  readonly id?: number;
-  readonly chapterNumber: number;
-  readonly question: string;
-  readonly answer: string;
-  readonly category: "core" | "scene" | "character" | "constraint";
-  readonly verified: boolean;
-  readonly verificationResult?: string;
-  readonly createdAt?: string;
-}
+// Intent commitments have been removed — chapter_intents.json is the
+// single source of truth. See packages/core/src/models/chapter-intent.ts
+// for intent CRUD operations.
 
 export class MemoryDB {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,6 +85,12 @@ export class MemoryDB {
       this.migrate();
       this.available = true;
     } catch {
+      try {
+        this.db?.close();
+      } catch {
+        // Ignore cleanup errors while degrading to the no-op implementation.
+      }
+      this.db = undefined;
       // Graceful degradation: node:sqlite unavailable (Node < 22 or missing build).
       // All operations become no-ops so callers don't need to handle this.
       this.available = false;
@@ -155,19 +150,6 @@ export class MemoryDB {
       CREATE INDEX IF NOT EXISTS idx_facts_source ON facts(source_chapter);
       CREATE INDEX IF NOT EXISTS idx_hooks_status ON hooks(status);
       CREATE INDEX IF NOT EXISTS idx_hooks_last_advanced ON hooks(last_advanced_chapter);
-
-      CREATE TABLE IF NOT EXISTS intent_commitments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chapter_number INTEGER NOT NULL,
-        question TEXT NOT NULL,
-        answer TEXT NOT NULL,
-        category TEXT NOT NULL DEFAULT 'core',
-        verified INTEGER NOT NULL DEFAULT 0,
-        verification_result TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_intent_commitments_chapter ON intent_commitments(chapter_number);
     `);
 
     this.ensureColumn("hooks", "payoff_timing", "TEXT NOT NULL DEFAULT ''");
@@ -458,81 +440,9 @@ export class MemoryDB {
     ).all() as unknown as ReadonlyArray<StoredHook>;
   }
 
-  // ---------------------------------------------------------------------------
-  // Intent commitments (author interview answers)
-  // ---------------------------------------------------------------------------
-
-  /** Record an intent commitment — the author's answer to a pre-writing question. */
-  addIntentCommitment(commitment: Omit<IntentCommitment, "id" | "createdAt">): number {
-    if (!this.available) return 0;
-    this.ensureDb();
-    const stmt = this.db.prepare(
-      `INSERT INTO intent_commitments (chapter_number, question, answer, category, verified, verification_result)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    );
-    const result = stmt.run(
-      commitment.chapterNumber,
-      commitment.question,
-      commitment.answer,
-      commitment.category,
-      commitment.verified ? 1 : 0,
-      commitment.verificationResult ?? "",
-    );
-    return Number(result.lastInsertRowid);
-  }
-
-  /** Mark an intent commitment as verified (or not) after the chapter is written. */
-  verifyIntentCommitment(
-    id: number,
-    verified: boolean,
-    result: string,
-  ): void {
-    if (!this.available) return;
-    this.ensureDb();
-    this.db.prepare(
-      `UPDATE intent_commitments SET verified = ?, verification_result = ? WHERE id = ?`,
-    ).run(verified ? 1 : 0, result, id);
-  }
-
-  /** Get all intent commitments for a specific chapter. */
-  getIntentCommitments(chapterNumber: number): ReadonlyArray<IntentCommitment> {
-    if (!this.available) return [];
-    this.ensureDb();
-    return this.db.prepare(
-      `SELECT
-         id,
-         chapter_number AS chapterNumber,
-         question,
-         answer,
-         category,
-         verified,
-         verification_result AS verificationResult,
-         created_at AS createdAt
-       FROM intent_commitments
-       WHERE chapter_number = ?
-       ORDER BY id ASC`,
-    ).all(chapterNumber) as unknown as ReadonlyArray<IntentCommitment>;
-  }
-
-  /** Get all unverified intent commitments across all chapters. */
-  getUnverifiedIntentCommitments(): ReadonlyArray<IntentCommitment> {
-    if (!this.available) return [];
-    this.ensureDb();
-    return this.db.prepare(
-      `SELECT
-         id,
-         chapter_number AS chapterNumber,
-         question,
-         answer,
-         category,
-         verified,
-         verification_result AS verificationResult,
-         created_at AS createdAt
-       FROM intent_commitments
-       WHERE verified = 0
-       ORDER BY chapter_number ASC, id ASC`,
-    ).all() as unknown as ReadonlyArray<IntentCommitment>;
-  }
+  // ── Intent commitments removed ──────────────────────────────
+  // chapter_intents.json is the single source of truth.
+  // See packages/core/src/models/chapter-intent.ts
 
   // ---------------------------------------------------------------------------
   // Lifecycle

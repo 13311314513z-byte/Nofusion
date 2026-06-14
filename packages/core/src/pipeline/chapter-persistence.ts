@@ -21,6 +21,8 @@ export async function persistChapterArtifacts(params: {
   readonly lengthTelemetry?: LengthTelemetry;
   readonly degradedIssues: ReadonlyArray<AuditIssue>;
   readonly tokenUsage?: ChapterPersistenceUsage;
+  /** Revision of the AuthorChapterIntent used to generate this chapter (Stage 0). */
+  readonly intentRevision?: number;
   readonly loadChapterIndex: () => Promise<ReadonlyArray<ChapterMeta>>;
   readonly saveChapter: () => Promise<void>;
   readonly saveTruthFiles: () => Promise<void>;
@@ -46,6 +48,7 @@ export async function persistChapterArtifacts(params: {
     wordCount: params.finalWordCount,
     createdAt: now,
     updatedAt: now,
+    intentRevision: params.intentRevision,
     auditIssues: params.auditResult.issues.map((issue) => `[${issue.severity}] ${issue.description}`),
     lengthWarnings: [...params.lengthWarnings],
     reviewNote: params.status === "state-degraded"

@@ -8,15 +8,12 @@
  * - dim 23: List-like structure (consecutive same-prefix sentences)
  */
 
-export interface AITellIssue {
-  readonly severity: "warning" | "info";
-  readonly category: string;
-  readonly description: string;
-  readonly suggestion: string;
-}
+import { createIssue, type AuditIssue } from "../models/audit-issue.js";
+
+export type AITellIssue = AuditIssue;
 
 export interface AITellResult {
-  readonly issues: ReadonlyArray<AITellIssue>;
+  readonly issues: ReadonlyArray<AuditIssue>;
 }
 
 type AITellLanguage = "zh" | "en";
@@ -36,7 +33,7 @@ const TRANSITION_WORDS: Record<AITellLanguage, ReadonlyArray<string>> = {
  * Returns issues that can be merged into audit results.
  */
 export function analyzeAITells(content: string, language: AITellLanguage = "zh"): AITellResult {
-  const issues: AITellIssue[] = [];
+  const issues: AuditIssue[] = [];
   const isEnglish = language === "en";
   const joiner = isEnglish ? ", " : "、";
 
@@ -54,7 +51,8 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
       const stdDev = Math.sqrt(variance);
       const cv = stdDev / mean;
       if (cv < 0.15) {
-        issues.push({
+        issues.push(createIssue({
+          source: "ai-tells",
           severity: "warning",
           category: isEnglish ? "Paragraph uniformity" : "段落等长",
           description: isEnglish
@@ -63,7 +61,9 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
           suggestion: isEnglish
             ? "Increase paragraph-length contrast: use shorter beats for impact and longer blocks for immersive detail"
             : "增加段落长度差异：短段落用于节奏加速或冲击，长段落用于沉浸描写",
-        });
+          fixScope: "chapter",
+          confidence: 1,
+        }));
       }
     }
   }
@@ -79,7 +79,8 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
     }
     const hedgeDensity = hedgeCount / (totalChars / 1000);
     if (hedgeDensity > 3) {
-      issues.push({
+      issues.push(createIssue({
+        source: "ai-tells",
         severity: "warning",
         category: isEnglish ? "Hedge density" : "套话密度",
         description: isEnglish
@@ -88,7 +89,9 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
         suggestion: isEnglish
           ? "Replace hedges with firmer narration: remove vague qualifiers and use concrete detail instead"
           : "用确定性叙述替代模糊表达：去掉「似乎」直接描述状态，用具体细节替代「可能」",
-      });
+        fixScope: "sentence",
+        confidence: 1,
+      }));
     }
   }
 
@@ -108,7 +111,8 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
     const detail = repeatedTransitions
       .map(([word, count]) => `"${word}"×${count}`)
       .join(joiner);
-    issues.push({
+    issues.push(createIssue({
+      source: "ai-tells",
       severity: "warning",
       category: isEnglish ? "Formulaic transitions" : "公式化转折",
       description: isEnglish
@@ -117,7 +121,10 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
       suggestion: isEnglish
         ? "Let scenes pivot through action, timing, or viewpoint shifts instead of repeating the same transitions"
         : "用情节自然转折替代转折词，或换用不同的过渡手法（动作切入、时间跳跃、视角切换）",
-    });
+      evidence: repeatedTransitions.map(([word, count]) => `${word} × ${count}`),
+      fixScope: "sentence",
+      confidence: 1,
+    }));
   }
 
   // dim 23: List-like structure (consecutive sentences with same prefix pattern)
@@ -144,7 +151,8 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
       }
     }
     if (maxConsecutive >= 3) {
-      issues.push({
+      issues.push(createIssue({
+        source: "ai-tells",
         severity: "info",
         category: isEnglish ? "List-like structure" : "列表式结构",
         description: isEnglish
@@ -153,7 +161,9 @@ export function analyzeAITells(content: string, language: AITellLanguage = "zh")
         suggestion: isEnglish
           ? "Vary how sentences open: change subject, timing, or action entry to break the list effect"
           : "变换句式开头：用不同主语、时间词、动作词开头，打破列表感",
-      });
+        fixScope: "paragraph",
+        confidence: 0.9,
+      }));
     }
   }
 

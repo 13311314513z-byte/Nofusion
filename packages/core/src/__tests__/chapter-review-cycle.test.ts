@@ -43,7 +43,6 @@ const baseParams = {
     totalTokens: left.totalTokens + (right?.totalTokens ?? 0),
   }),
   analyzeAITells: () => ({ issues: [] as AuditIssue[] }),
-  analyzeSensitiveWords: () => ({ found: [] as Array<{ severity: "warn" | "block" }>, issues: [] as AuditIssue[] }),
   logWarn: () => undefined,
   logStage: () => undefined,
 } as const;

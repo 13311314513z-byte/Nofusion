@@ -17,7 +17,7 @@ import type { GenreProfile } from "../models/genre-profile.js";
 
 export interface PostWriteViolation {
   readonly rule: string;
-  readonly severity: "error" | "warning";
+  readonly severity: "error" | "warning" | "info";
   readonly description: string;
   readonly suggestion: string;
 }
@@ -925,9 +925,9 @@ export function validateAuthorIntentInContent(
     if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
       violations.push({
         rule: "关键画面缺失",
-        severity: "warning",
-        description: `作者设定的关键画面"${keyMoment.slice(0, 40)}${keyMoment.length > 40 ? "…" : ""}"未在正文中找到足够的关键词匹配`,
-        suggestion: "检查该场景是否被遗漏，或在适当位置加入相关描写",
+        severity: "info", // Downgraded from "warning" to "info" — heuristic check, not a reliable gate
+        description: `作者设定的关键画面"${keyMoment.slice(0, 40)}${keyMoment.length > 40 ? "…" : ""}"未在正文中找到足够的关键词匹配（启发式检查，可能有误报）`,
+        suggestion: "请人工确认该场景是否被遗漏。此检查为 advisory，不阻塞管线。",
       });
     }
   }
@@ -939,12 +939,17 @@ export function validateAuthorIntentInContent(
     if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
       violations.push({
         rule: "核心叙述偏离",
-        severity: "warning",
-        description: `作者设定的核心"${coreNarrative.slice(0, 40)}${coreNarrative.length > 40 ? "…" : ""}"的关建词在正文中出现较少`,
-        suggestion: "检查本章是否偏离了作者设定的核心方向",
+        severity: "info", // Downgraded from "warning" — same rationale as above
+        description: `作者设定的核心"${coreNarrative.slice(0, 40)}${coreNarrative.length > 40 ? "…" : ""}"的关键词在正文中出现较少（启发式检查，可能有误报）`,
+        suggestion: "请人工确认本章是否偏离了作者设定的核心方向。此检查为 advisory，不阻塞管线。",
       });
     }
   }
+
+  // readerTakeaway is intentionally NOT checked via keywords —
+  // emotional effect is a reader response, not a textual fact.
+  // Checking it with keyword heuristics would produce false positives
+  // and encourage mechanical insertion of emotion words.
 
   return violations;
 }

@@ -8,6 +8,8 @@ import {
   type ChapterIntent,
   type ChapterMemo,
 } from "../models/input-governance.js";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
 import {
   renderHookSnapshot,
   renderSummarySnapshot,
@@ -348,13 +350,50 @@ export class PlannerAgent extends BaseAgent {
     let lastError: PlannerParseError | undefined;
 
     for (let attempt = 0; attempt < MEMO_RETRY_LIMIT; attempt += 1) {
-      const response = await this.chat(
-        [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: currentUserMessage },
-        ],
-        { temperature: 0.7 },
-      );
+      // Stage 2: Use buildPromptManifest as the actual prompt assembly controller
+      const maxAllowedInputTokens = getAvailableInputTokens(this.ctx.model);
+      const systemFragment: PromptFragment = {
+        id: "planner-system",
+        source: "planner-memo",
+        role: "system",
+        slot: "system-prompt",
+        priority: 100,
+        content: systemPrompt,
+        optional: false,
+        estimatedTokens: Math.ceil(systemPrompt.length / 4),
+      };
+      const userFragment: PromptFragment = {
+        id: "planner-user",
+        source: "planner-memo",
+        role: "user",
+        slot: "user-message",
+        priority: 80,
+        content: currentUserMessage,
+        optional: true,
+        estimatedTokens: Math.ceil(currentUserMessage.length / 4),
+      };
+      const manifest = buildPromptManifest({
+        stage: this.name,
+        fragments: [systemFragment, userFragment],
+        maxAllowedInputTokens,
+      });
+
+      if (manifest.droppedFragments.length > 0) {
+        this.log?.warn(`[planner] Fragment(s) dropped due to token budget: ${manifest.droppedFragments.map((d) => d.fragmentId).join(", ")}`);
+      }
+
+      // Build messages from manifest fragments (preserving role order)
+      const messages: Array<{ role: "system" | "user"; content: string }> = [];
+      for (const fragment of manifest.fragments) {
+        if (fragment.role === "system" || fragment.role === "user") {
+          messages.push({ role: fragment.role, content: fragment.content });
+        }
+      }
+
+      // Log the manifest for traceability
+      logPromptManifest(this.name, messages, this.ctx.model, this.log);
+
+      const response = await this.chat(messages, { temperature: 0.7 });
 
       try {
         return parseMemo(response.content, input.chapterNumber, input.isGoldenOpening);

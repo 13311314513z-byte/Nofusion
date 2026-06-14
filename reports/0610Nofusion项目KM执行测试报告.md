@@ -279,7 +279,7 @@ export { detectDuplicateRhetoric, type DuplicateRhetoricFinding, type DuplicateR
 export { preprocessText, exportPreprocessed, type PreprocessOptions, type PreprocessResult, type PreprocessExportFormat, type PreprocessExportResult } from "./utils/text-preprocessor.js";
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { analyzeAITells, type AITellResult, type AITellIssue } from "./agents/ai-tells.js";
-export { analyzeSensitiveWords, type SensitiveWordResult, type SensitiveWordMatch } from "./agents/sensitive-words.js";
+// 旧词表扫描模块导出（现已移除）
 export { countChapterLength, resolveLengthCountingMode, formatLengthCount, buildLengthSpec, isOutsideSoftRange, isOutsideHardRange, chooseNormalizeMode, type LengthLanguage } from "./utils/length-metrics.js";
 export { splitChapters, type SplitChapter } from "./utils/chapter-splitter.js";
 export { computeAnalytics, type AnalyticsData, type TokenStats } from "./utils/analytics.js";

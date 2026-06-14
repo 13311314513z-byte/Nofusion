@@ -48,6 +48,8 @@ import {
   renderNarrativeSelectedContext,
   sanitizeNarrativeEvidenceBlock,
 } from "../utils/narrative-control.js";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -129,6 +131,7 @@ export interface WriteChapterOutput {
     readonly description: string;
     readonly suggestion: string;
   }>;
+  readonly writerPromptHash?: string;
   readonly tokenUsage?: TokenUsage;
 }
 
@@ -282,13 +285,44 @@ export class WriterAgent extends BaseAgent {
       en: `Phase 1: creative writing for chapter ${chapterNumber}`,
     });
 
-    const creativeResponse = await this.chat(
-      [
-        { role: "system", content: creativeSystemPrompt },
-        { role: "user", content: creativeUserPrompt },
-      ],
-      { temperature: creativeTemperature },
-    );
+    const maxTokens = getAvailableInputTokens(this.ctx.model);
+    const creativeSysFragment: PromptFragment = {
+      id: "writer-creative-system",
+      source: "writer-creative",
+      role: "system",
+      slot: "system-prompt",
+      priority: 100,
+      content: creativeSystemPrompt,
+      optional: false,
+      estimatedTokens: Math.ceil(creativeSystemPrompt.length / 4),
+    };
+    const creativeUserFragment: PromptFragment = {
+      id: "writer-creative-user",
+      source: "writer-creative",
+      role: "user",
+      slot: "user-message",
+      priority: 90,
+      content: creativeUserPrompt,
+      optional: false,
+      estimatedTokens: Math.ceil(creativeUserPrompt.length / 4),
+    };
+    const creativeManifest = buildPromptManifest({
+      stage: `${this.name}.creative`,
+      fragments: [creativeSysFragment, creativeUserFragment],
+      maxAllowedInputTokens: maxTokens,
+    });
+    if (creativeManifest.droppedFragments.length > 0) {
+      this.log?.warn(`[writer.creative] Fragment(s) dropped: ${creativeManifest.droppedFragments.map((d) => d.fragmentId).join(", ")}`);
+    }
+    const creativeMessages: Array<{ role: "system" | "user"; content: string }> = [];
+    for (const frag of creativeManifest.fragments) {
+      if (frag.role === "system" || frag.role === "user") {
+        creativeMessages.push({ role: frag.role, content: frag.content });
+      }
+    }
+    logPromptManifest(`${this.name}.creative`, creativeMessages, this.ctx.model, this.log);
+
+    const creativeResponse = await this.chat(creativeMessages, { temperature: creativeTemperature });
     if (creativeResponse.stopReason === "length") {
       this.log?.warn(
         resolvedLanguage === "en"
@@ -456,6 +490,7 @@ export class WriterAgent extends BaseAgent {
       postWriteErrors,
       postWriteWarnings,
       hookHealthIssues,
+      writerPromptHash: creativeManifest.promptHash,
       tokenUsage,
     };
   }
@@ -594,13 +629,44 @@ export class WriterAgent extends BaseAgent {
       zh: `阶段 2a：提取第${params.chapterNumber}章事实`,
       en: `Phase 2a: observing facts for chapter ${params.chapterNumber}`,
     });
-    const observerResponse = await this.chat(
-      [
-        { role: "system", content: observerSystem },
-        { role: "user", content: observerUser },
-      ],
-      { temperature: 0.5 },
-    );
+    const maxTokensObs = getAvailableInputTokens(this.ctx.model);
+    const obsSysFragment: PromptFragment = {
+      id: "writer-observer-system",
+      source: "writer-observer",
+      role: "system",
+      slot: "system-prompt",
+      priority: 100,
+      content: observerSystem,
+      optional: false,
+      estimatedTokens: Math.ceil(observerSystem.length / 4),
+    };
+    const obsUserFragment: PromptFragment = {
+      id: "writer-observer-user",
+      source: "writer-observer",
+      role: "user",
+      slot: "user-message",
+      priority: 90,
+      content: observerUser,
+      optional: false,
+      estimatedTokens: Math.ceil(observerUser.length / 4),
+    };
+    const observerManifest = buildPromptManifest({
+      stage: `${this.name}.observer`,
+      fragments: [obsSysFragment, obsUserFragment],
+      maxAllowedInputTokens: maxTokensObs,
+    });
+    if (observerManifest.droppedFragments.length > 0) {
+      this.log?.warn(`[writer.observer] Fragment(s) dropped: ${observerManifest.droppedFragments.map((d) => d.fragmentId).join(", ")}`);
+    }
+    const observerMessages: Array<{ role: "system" | "user"; content: string }> = [];
+    for (const frag of observerManifest.fragments) {
+      if (frag.role === "system" || frag.role === "user") {
+        observerMessages.push({ role: frag.role, content: frag.content });
+      }
+    }
+    logPromptManifest(`${this.name}.observer`, observerMessages, this.ctx.model, this.log);
+
+    const observerResponse = await this.chat(observerMessages, { temperature: 0.5 });
     const observations = observerResponse.content;
 
     // Phase 2b: Reflector — merge observations into truth files
@@ -646,13 +712,44 @@ export class WriterAgent extends BaseAgent {
       validationFeedback: params.validationFeedback,
     });
 
-    const response = await this.chat(
-      [
-        { role: "system", content: settlerSystem },
-        { role: "user", content: settlerUser },
-      ],
-      { temperature: 0.3 },
-    );
+    const maxTokensSet = getAvailableInputTokens(this.ctx.model);
+    const setSysFragment: PromptFragment = {
+      id: "writer-settler-system",
+      source: "writer-settler",
+      role: "system",
+      slot: "system-prompt",
+      priority: 100,
+      content: settlerSystem,
+      optional: false,
+      estimatedTokens: Math.ceil(settlerSystem.length / 4),
+    };
+    const setUserFragment: PromptFragment = {
+      id: "writer-settler-user",
+      source: "writer-settler",
+      role: "user",
+      slot: "user-message",
+      priority: 90,
+      content: settlerUser,
+      optional: false,
+      estimatedTokens: Math.ceil(settlerUser.length / 4),
+    };
+    const settlerManifest = buildPromptManifest({
+      stage: `${this.name}.settler`,
+      fragments: [setSysFragment, setUserFragment],
+      maxAllowedInputTokens: maxTokensSet,
+    });
+    if (settlerManifest.droppedFragments.length > 0) {
+      this.log?.warn(`[writer.settler] Fragment(s) dropped: ${settlerManifest.droppedFragments.map((d) => d.fragmentId).join(", ")}`);
+    }
+    const settlerMessages: Array<{ role: "system" | "user"; content: string }> = [];
+    for (const frag of settlerManifest.fragments) {
+      if (frag.role === "system" || frag.role === "user") {
+        settlerMessages.push({ role: frag.role, content: frag.content });
+      }
+    }
+    logPromptManifest(`${this.name}.settler`, settlerMessages, this.ctx.model, this.log);
+
+    const response = await this.chat(settlerMessages, { temperature: 0.3 });
 
     let mergedSettlement: ReturnType<typeof parseSettlementOutput> & {
       runtimeStateDelta?: RuntimeStateDelta;
