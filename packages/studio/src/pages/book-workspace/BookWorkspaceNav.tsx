@@ -13,6 +13,8 @@ import {
   Library,
   Sparkles,
   Cpu,
+  Database,
+  Settings,
 } from "lucide-react";
 import { useColors } from "../../hooks/use-colors";
 import type { Theme } from "../../hooks/use-theme";
@@ -33,6 +35,8 @@ const MENU_ITEMS: { readonly key: BookSection; readonly icon: React.ElementType 
   { key: "export", icon: Download },
   { key: "fanfic", icon: Sparkles },
   { key: "runtime", icon: Cpu },
+  { key: "sources", icon: Database },
+  { key: "settings", icon: Settings },
 ];
 
 interface BookWorkspaceNavProps {

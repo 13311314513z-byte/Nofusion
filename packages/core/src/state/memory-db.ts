@@ -66,9 +66,14 @@ export interface StoredHook {
   readonly promoted?: boolean;
 }
 
+// Intent commitments have been removed — chapter_intents.json is the
+// single source of truth. See packages/core/src/models/chapter-intent.ts
+// for intent CRUD operations.
+
 export class MemoryDB {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private db: any;
+  private available = false;
 
   constructor(bookDir: string) {
     // node:sqlite requires Node 22+; require() via createRequire for ESM compat
@@ -78,17 +83,29 @@ export class MemoryDB {
       this.db = new DatabaseSync(dbPath);
       this.db.exec("PRAGMA journal_mode = WAL");
       this.migrate();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      throw new Error(`SQLite memory index unavailable (node:sqlite requires Node 22+): ${message}`);
+      this.available = true;
+    } catch {
+      try {
+        this.db?.close();
+      } catch {
+        // Ignore cleanup errors while degrading to the no-op implementation.
+      }
+      this.db = undefined;
+      // Graceful degradation: node:sqlite unavailable (Node < 22 or missing build).
+      // All operations become no-ops so callers don't need to handle this.
+      this.available = false;
     }
   }
 
+  get isAvailable(): boolean {
+    return this.available;
+  }
+
   private ensureDb(): void {
-    if (!this.db) {
+    if (!this.available) {
       throw new Error(
         "MemoryDB is unavailable because node:sqlite could not be opened (requires Node 22+). " +
-        "Core functionality works without it, but some acceleration features are disabled.",
+          "Core functionality works without it, but some acceleration features are disabled.",
       );
     }
   }
@@ -152,6 +169,7 @@ export class MemoryDB {
 
   /** Add a new fact. */
   addFact(fact: Omit<Fact, "id">): number {
+    if (!this.available) return 0;
     this.ensureDb();
     const stmt = this.db.prepare(
       `INSERT INTO facts (subject, predicate, object, valid_from_chapter, valid_until_chapter, source_chapter)
@@ -166,6 +184,7 @@ export class MemoryDB {
 
   /** Invalidate a fact (set valid_until). */
   invalidateFact(id: number, untilChapter: number): void {
+    if (!this.available) return;
     this.ensureDb();
     this.db.prepare(
       "UPDATE facts SET valid_until_chapter = ? WHERE id = ?",
@@ -174,6 +193,7 @@ export class MemoryDB {
 
   /** Get all currently valid facts (valid_until is null). */
   getCurrentFacts(): ReadonlyArray<Fact> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
@@ -185,6 +205,7 @@ export class MemoryDB {
 
   /** Get facts about a specific subject that are valid at a given chapter. */
   getFactsAt(subject: string, chapter: number): ReadonlyArray<Fact> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
@@ -197,6 +218,7 @@ export class MemoryDB {
 
   /** Get all facts about a subject (including historical). */
   getFactHistory(subject: string): ReadonlyArray<Fact> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
@@ -208,6 +230,7 @@ export class MemoryDB {
 
   /** Search facts by predicate (e.g., all "location" facts). */
   getFactsByPredicate(predicate: string): ReadonlyArray<Fact> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT ${FACT_SELECT_COLUMNS}
@@ -220,6 +243,7 @@ export class MemoryDB {
   /** Get facts relevant to a set of character names. */
   getFactsForCharacters(names: ReadonlyArray<string>): ReadonlyArray<Fact> {
     if (names.length === 0) return [];
+    if (!this.available) return [];
     this.ensureDb();
     const placeholders = names.map(() => "?").join(",");
     return this.db.prepare(
@@ -231,14 +255,24 @@ export class MemoryDB {
   }
 
   replaceCurrentFacts(facts: ReadonlyArray<Omit<Fact, "id">>): void {
+    if (!this.available) return;
     this.ensureDb();
-    this.db.exec("DELETE FROM facts WHERE valid_until_chapter IS NULL");
-    for (const fact of facts) {
-      this.addFact(fact);
+    // Transaction: atomic replace so partial failure doesn't lose data
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec("DELETE FROM facts WHERE valid_until_chapter IS NULL");
+      for (const fact of facts) {
+        this.addFact(fact);
+      }
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
     }
   }
 
   resetFacts(): void {
+    if (!this.available) return;
     this.ensureDb();
     this.db.exec("DELETE FROM facts");
   }
@@ -249,6 +283,7 @@ export class MemoryDB {
 
   /** Upsert a chapter summary. */
   upsertSummary(summary: StoredSummary): void {
+    if (!this.available) return;
     this.ensureDb();
     this.db.prepare(
       `INSERT OR REPLACE INTO chapter_summaries (chapter, title, characters, events, state_changes, hook_activity, mood, chapter_type)
@@ -260,15 +295,25 @@ export class MemoryDB {
   }
 
   replaceSummaries(summaries: ReadonlyArray<StoredSummary>): void {
+    if (!this.available) return;
     this.ensureDb();
-    this.db.exec("DELETE FROM chapter_summaries");
-    for (const summary of summaries) {
-      this.upsertSummary(summary);
+    // Transaction: atomic replace so partial failure doesn't lose data
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec("DELETE FROM chapter_summaries");
+      for (const summary of summaries) {
+        this.upsertSummary(summary);
+      }
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
     }
   }
 
   /** Get summaries for a range of chapters. */
   getSummaries(fromChapter: number, toChapter: number): ReadonlyArray<StoredSummary> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT
@@ -289,6 +334,7 @@ export class MemoryDB {
   /** Get summaries matching any of the given character names. */
   getSummariesByCharacters(names: ReadonlyArray<string>): ReadonlyArray<StoredSummary> {
     if (names.length === 0) return [];
+    if (!this.available) return [];
     this.ensureDb();
     const conditions = names.map(() => "characters LIKE ?").join(" OR ");
     const params = names.map((n) => `%${n}%`);
@@ -310,6 +356,7 @@ export class MemoryDB {
 
   /** Get total chapter count. */
   getChapterCount(): number {
+    if (!this.available) return 0;
     this.ensureDb();
     const row = this.db.prepare("SELECT COUNT(*) as count FROM chapter_summaries").get() as unknown as { count: number };
     return row.count;
@@ -317,6 +364,7 @@ export class MemoryDB {
 
   /** Get the most recent N summaries. */
   getRecentSummaries(count: number): ReadonlyArray<StoredSummary> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT
@@ -339,6 +387,7 @@ export class MemoryDB {
   // ---------------------------------------------------------------------------
 
   upsertHook(hook: StoredHook): void {
+    if (!this.available) return;
     this.ensureDb();
     this.db.prepare(
       `INSERT OR REPLACE INTO hooks (hook_id, start_chapter, type, status, last_advanced_chapter, expected_payoff, payoff_timing, notes)
@@ -356,14 +405,24 @@ export class MemoryDB {
   }
 
   replaceHooks(hooks: ReadonlyArray<StoredHook>): void {
+    if (!this.available) return;
     this.ensureDb();
-    this.db.exec("DELETE FROM hooks");
-    for (const hook of hooks) {
-      this.upsertHook(hook);
+    // Transaction: atomic replace so partial failure doesn't lose data
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec("DELETE FROM hooks");
+      for (const hook of hooks) {
+        this.upsertHook(hook);
+      }
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
     }
   }
 
   getActiveHooks(): ReadonlyArray<StoredHook> {
+    if (!this.available) return [];
     this.ensureDb();
     return this.db.prepare(
       `SELECT
@@ -381,12 +440,22 @@ export class MemoryDB {
     ).all() as unknown as ReadonlyArray<StoredHook>;
   }
 
+  // ── Intent commitments removed ──────────────────────────────
+  // chapter_intents.json is the single source of truth.
+  // See packages/core/src/models/chapter-intent.ts
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
   close(): void {
-    if (!this.db) return;
+    if (!this.available || !this.db) return;
     this.db.close();
   }
+}
+
+/** Factory that returns a MemoryDB instance or null if sqlite is unavailable. */
+export function tryCreateMemoryDB(bookDir: string): MemoryDB | null {
+  const db = new MemoryDB(bookDir);
+  return db.isAvailable ? db : null;
 }

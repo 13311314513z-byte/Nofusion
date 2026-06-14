@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { createLLMClient, StateManager, createLogger, createStderrSink, createJsonLineSink, resolveEffectiveLLMConfig, loadLLMEnvLayers, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH, type EffectiveLLMConfigResult, type LLMConfigCliOverrides, type ProjectConfig, type PipelineConfig, type LogSink } from "@actalk/inkos-core";
+import { existsSync } from "node:fs";
+import { join, resolve, parse } from "node:path";
+import { createLLMClient, StateManager, createLogger, createStderrSink, createJsonLineSink, resolveEffectiveLLMConfig, resolveWritingReviewRetries, loadLLMEnvLayers, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH, type EffectiveLLMConfigResult, type LLMConfigCliOverrides, type ProjectConfig, type PipelineConfig, type LogSink } from "@actalk/inkos-core";
 import { formatSqliteMemorySupportWarning } from "./runtime-requirements.js";
 
 export { GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH };
@@ -27,8 +28,19 @@ export async function resolveContext(opts: {
   return undefined;
 }
 
-export function findProjectRoot(): string {
-  return process.cwd();
+export function findProjectRoot(startDir?: string): string {
+  let dir = startDir ? resolve(startDir) : process.cwd();
+  const { root } = parse(dir);
+  while (dir !== root) {
+    try {
+      if (existsSync(join(dir, "inkos.json"))) return dir;
+    } catch {
+      // Continue searching up
+    }
+    dir = resolve(dir, "..");
+  }
+  // Fallback to cwd if no inkos.json found
+  return startDir ? resolve(startDir) : process.cwd();
 }
 
 export async function loadConfig(options?: {
@@ -148,7 +160,11 @@ export function buildPipelineConfig(
     projectRoot: root,
     defaultLLMConfig: config.llm,
     foundationReviewRetries: config.foundation.reviewRetries,
-    writingReviewRetries: config.writing?.reviewRetries ?? 1,
+    writingReviewRetries: resolveWritingReviewRetries(config.writing?.reviewRetries ?? 1, config.writing?.qualityBudget ?? "economy"),
+    qualityBudget: config.writing?.qualityBudget ?? "economy",
+    strictInterview: config.writing?.strictInterview ?? false,
+    betaReaderMode: config.writing?.betaReaderMode ?? "off",
+    betaReaderModelFamily: config.writing?.betaReaderModelFamily,
     modelOverrides: config.modelOverrides,
     inputGovernanceMode: extra?.inputGovernanceMode ?? config.inputGovernanceMode,
     notifyChannels: extra?.notifyChannels ?? config.notify,
@@ -165,6 +181,36 @@ export function log(message: string): void {
 
 export function logError(message: string): void {
   process.stderr.write(`[ERROR] ${message}\n`);
+}
+
+/**
+ * Standard JSON output format for CLI --json flag.
+ * All commands should emit { status, error?, data?, meta? } for scriptable consumption.
+ */
+export interface JsonOutput<D = unknown, M = Record<string, unknown>> {
+  readonly status: "ok" | "error";
+  readonly error?: string;
+  readonly data?: D;
+  readonly meta?: M;
+}
+
+export function formatJsonOutput<D, M extends Record<string, unknown> = Record<string, unknown>>(
+  dataOrError: D | Error,
+  meta?: M,
+  raw?: boolean,
+): string {
+  if (dataOrError instanceof Error) {
+    return JSON.stringify(
+      Object.assign({ status: "error" as const, error: dataOrError.message }, meta ? { meta } : {}),
+      null, 2,
+    );
+  }
+  const payload = raw ? dataOrError : Object.assign({ status: "ok" as const, data: dataOrError }, meta ? { meta } : {});
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return JSON.stringify({ status: "error" as const, error: "Failed to serialize output" }, null, 2);
+  }
 }
 
 /**

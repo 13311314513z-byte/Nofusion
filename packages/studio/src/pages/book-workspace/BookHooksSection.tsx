@@ -13,6 +13,10 @@ import {
   Ban,
   ArrowRight,
   SortAsc,
+  Plus,
+  Trash2,
+  Save,
+  X,
 } from "lucide-react";
 
 interface HookRecord {
@@ -113,6 +117,81 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sortByRisk, setSortByRisk] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingHookId, setEditingHookId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<HookRecord>>({});
+  const [saving, setSaving] = useState(false);
+
+  const loadHooks = () => {
+    setLoading(true);
+    setError("");
+    fetchJson<{ hooks: ReadonlyArray<HookRecord> }>(`/books/${bookId}/hooks`)
+      .then((data) => {
+        setHooks(data.hooks ?? []);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Failed to load hooks");
+      })
+      .finally(() => setLoading(false));
+  };
+
+  const handleCreate = async () => {
+    const hookId = editForm.hookId?.trim();
+    if (!hookId) return;
+    setSaving(true);
+    try {
+      await fetchJson(`/books/${bookId}/hooks`, {
+        method: "POST",
+        body: JSON.stringify(editForm),
+      });
+      setShowCreateForm(false);
+      setEditForm({});
+      loadHooks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create hook");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async (hookId: string) => {
+    setSaving(true);
+    try {
+      await fetchJson(`/books/${bookId}/hooks/${encodeURIComponent(hookId)}`, {
+        method: "PUT",
+        body: JSON.stringify(editForm),
+      });
+      setEditingHookId(null);
+      setEditForm({});
+      loadHooks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update hook");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (hookId: string) => {
+    if (!confirm(`${t("hook.deleteConfirm")} "${hookId}"？`)) return;
+    try {
+      await fetchJson(`/books/${bookId}/hooks/${encodeURIComponent(hookId)}`, {
+        method: "DELETE",
+      });
+      loadHooks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete hook");
+    }
+  };
+
+  const startEdit = (hook: HookRecord) => {
+    setEditingHookId(hook.hookId);
+    setEditForm({ ...hook });
+  };
+
+  const startCreate = () => {
+    setEditForm({ hookId: `hook-${Date.now()}`, status: "open" });
+    setShowCreateForm(true);
+  };
 
   // Fetch actual book chapters for accurate "current chapter" calculation
   const { data: bookData } = useApi<{ chapters: ReadonlyArray<{ number: number }> }>(`/books/${bookId}`);
@@ -232,18 +311,27 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
               {hooks.length} · {t("hook.unresolved")} {unresolvedCount}
             </span>
           </div>
-          <button
-            onClick={() => setSortByRisk((v) => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs font-bold transition-colors ${
-              sortByRisk
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-secondary/40 text-muted-foreground hover:bg-secondary"
-            }`}
-            title={sortByRisk ? "按风险排序中" : "点击按风险排序"}
-          >
-            <SortAsc size={12} />
-            {sortByRisk ? "风险排序" : "默认排序"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={startCreate}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Plus size={12} />
+              {t("hook.create")}
+            </button>
+            <button
+              onClick={() => setSortByRisk((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs font-bold transition-colors ${
+                sortByRisk
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary/40 text-muted-foreground hover:bg-secondary"
+              }`}
+              title={sortByRisk ? t("hook.sortByRiskTitle") : t("hook.sortDefaultTitle")}
+            >
+              <SortAsc size={12} />
+              {sortByRisk ? t("hook.sortByRisk") : t("hook.sortDefault")}
+            </button>
+          </div>
         </div>
 
         {hooks.length === 0 ? (
@@ -272,7 +360,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                 <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-600">{grouped.get("resolved")?.length ?? 0}</div>
               </div>
               <div className={`rounded-xl border p-4 ${overdueCount > 0 ? "border-red-200 bg-red-50/30 dark:border-red-900/30 dark:bg-red-950/10" : "border-border/40 bg-secondary/20"}`}>
-                <div className="text-xs text-muted-foreground font-medium">已逾期</div>
+                <div className="text-xs text-muted-foreground font-medium">{t("hook.overdueCount")}</div>
                 <div className={`mt-1 text-xl font-semibold tabular-nums ${overdueCount > 0 ? "text-red-600" : ""}`}>{overdueCount}</div>
               </div>
             </div>
@@ -282,7 +370,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
               <div className="rounded-xl border border-red-200 dark:border-red-900/30 bg-red-50/20 dark:bg-red-950/10 p-4 space-y-2">
                 <h3 className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5">
                   <AlertTriangle size={12} />
-                  最高风险伏笔（需优先处理）
+                  {t("hook.topRiskHooks")}
                 </h3>
                 <div className="space-y-1.5">
                   {topRiskHooks.map((hook) => {
@@ -297,7 +385,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                           onClick={() => nav.toChapter(bookId, hook.startChapter)}
                           className="text-primary hover:underline shrink-0"
                         >
-                          跳转 #{hook.startChapter}
+                          {t("hook.jumpTo")} #{hook.startChapter}
                         </button>
                       </div>
                     );
@@ -361,7 +449,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                                 {hook.halfLife && <span>{t("hook.halfLife")}: {hook.halfLife}</span>}
                                 {currentChapterNum > 0 && halfLifeNum > 0 && (
                                   <span className={isOverdue ? "text-red-600 font-medium" : ""}>
-                                    剩余: {Math.max(0, halfLifeNum - (currentChapterNum - hook.startChapter))} 章
+                                    {t("hook.remaining")}: {Math.max(0, halfLifeNum - (currentChapterNum - hook.startChapter))} {t("hook.chaptersLeft")}
                                   </span>
                                 )}
                               </div>
@@ -371,7 +459,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                                   {deps.length > 0 && (
                                     <div className="flex items-center gap-1 text-muted-foreground">
-                                      <span className="text-[10px] font-medium">依赖:</span>
+                                      <span className="text-[10px] font-medium">{t("hook.depends")}:</span>
                                       {deps.map((depId, i) => {
                                         const depHook = hookMap.get(depId);
                                         return (
@@ -383,7 +471,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                                                   ? statusClass(depHook.status).replace("text-", "bg-").split(" ")[0] + " text-foreground/80"
                                                   : "bg-muted text-muted-foreground"
                                               }`}
-                                              title={depHook ? `${depHook.expectedPayoff || ""} (${statusLabel(depHook.status, t)})` : "未找到"}
+                                              title={depHook ? `${depHook.expectedPayoff || ""} (${statusLabel(depHook.status, t)})` : t("hook.notFound")}
                                             >
                                               {depId}
                                             </span>
@@ -395,7 +483,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                                   {dependedBy.length > 0 && (
                                     <div className="flex items-center gap-1 text-muted-foreground">
                                       <ArrowRight size={10} className="text-muted-foreground/50" />
-                                      <span className="text-[10px] font-medium">被依赖:</span>
+                                      <span className="text-[10px] font-medium">{t("hook.dependedBy")}:</span>
                                       {dependedBy.slice(0, 3).map((depId, i) => {
                                         const depHook = hookMap.get(depId);
                                         return (
@@ -407,7 +495,7 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
                                                   ? statusClass(depHook.status).replace("text-", "bg-").split(" ")[0] + " text-foreground/80"
                                                   : "bg-muted text-muted-foreground"
                                               }`}
-                                              title={depHook ? `${depHook.expectedPayoff || ""} (${statusLabel(depHook.status, t)})` : "未找到"}
+                                              title={depHook ? `${depHook.expectedPayoff || ""} (${statusLabel(depHook.status, t)})` : t("hook.notFound")}
                                             >
                                               {depId}
                                             </span>
@@ -424,6 +512,23 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
 
                               {hook.notes && <p className="mt-1 text-xs text-muted-foreground italic">{hook.notes}</p>}
                             </div>
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => startEdit(hook)}
+                                className="p-1 rounded text-muted-foreground/50 hover:text-primary hover:bg-primary/5 transition-colors"
+                                title="编辑"
+                              >
+                                <Save size={12} />
+                              </button>
+                              <button
+                                onClick={() => void handleDelete(hook.hookId)}
+                                className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/5 transition-colors"
+                                title="删除"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -433,6 +538,125 @@ export function BookHooksSection({ bookId, nav, t }: BookHooksSectionProps) {
               ))}
             </div>
           </>
+        )}
+
+        {/* Create / Edit Form Modal */}
+        {(showCreateForm || editingHookId) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => { setShowCreateForm(false); setEditingHookId(null); }}>
+            <div className="bg-card border border-border/50 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold">{showCreateForm ? t("hook.create") : t("hook.edit")}</h3>
+                <button onClick={() => { setShowCreateForm(false); setEditingHookId(null); }} className="p-1 rounded hover:bg-muted transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldId")}</label>
+                  <input
+                    value={editForm.hookId ?? ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, hookId: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="hook-xxx"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{t("hook.statusLabel")}</label>
+                    <select
+                      value={editForm.status ?? "open"}
+                      onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="open">{t("hook.status.open")}</option>
+                      <option value="progressing">{t("hook.status.progressing")}</option>
+                      <option value="deferred">{t("hook.status.deferred")}</option>
+                      <option value="resolved">{t("hook.status.resolved")}</option>
+                      <option value="stale">{t("hook.status.stale")}</option>
+                      <option value="blocked">{t("hook.status.blocked")}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldType")}</label>
+                    <input
+                      value={editForm.type ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder={t("hook.fieldType")}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldExpectedPayoff")}</label>
+                  <input
+                    value={editForm.expectedPayoff ?? ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, expectedPayoff: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder={t("hook.fieldExpectedPayoff")}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldStartChapter")}</label>
+                    <input
+                      type="number"
+                      value={editForm.startChapter ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, startChapter: parseInt(e.target.value) || 0 }))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldHalfLife")}</label>
+                    <input
+                      value={editForm.halfLife ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, halfLife: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder={t("hook.halfLife")}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldCoreHook")}</label>
+                    <select
+                      value={editForm.coreHook ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, coreHook: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">{t("hook.no")}</option>
+                      <option value="是">{t("hook.yes")}</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{t("hook.fieldNotes")}</label>
+                  <textarea
+                    value={editForm.notes ?? ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    rows={2}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => { setShowCreateForm(false); setEditingHookId(null); }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  {t("hook.cancel")}
+                </button>
+                <button
+                  onClick={() => {
+                    if (showCreateForm) void handleCreate();
+                    else if (editingHookId) void handleUpdate(editingHookId);
+                  }}
+                  disabled={saving || !editForm.hookId?.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                >
+                  <Save size={12} />
+                  {saving ? t("hook.saving") : t("hook.save")}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -91,9 +91,34 @@ export type FoundationConfig = z.infer<typeof FoundationConfigSchema>;
 
 export const WritingConfigSchema = z.object({
   reviewRetries: z.number().int().min(0).max(10).default(1),
+  /** Quality budget tier — controls how many LLM evaluation calls are made per chapter. */
+  qualityBudget: z.enum(["economy", "normal", "premium"]).default("economy"),
+  /** Strict interview mode — when true, missing intent fields block auto-writing. */
+  strictInterview: z.boolean().default(false),
+  /** Beta Reader maturity mode. */
+  betaReaderMode: z.enum(["off", "shadow", "advisory", "actionable"]).default("off"),
+  /**
+   * Expected model family for the Beta Reader.
+   * When set, the reader MUST use a model from a different family than the writer.
+   * This avoids self-preference bias where the reader prefers its own writing style.
+   * Examples: "claude", "gpt", "deepseek", "gemini"
+   * If the writer and reader models share the same family, a warning is logged.
+   */
+  betaReaderModelFamily: z.string().optional(),
+  /** Number of candidates to generate for key scenes (importance="key"). */
+  keySceneCandidates: z.number().int().min(1).max(3).default(1),
 });
 
 export type WritingConfig = z.infer<typeof WritingConfigSchema>;
+
+export function resolveWritingReviewRetries(
+  configured: number,
+  qualityBudget: WritingConfig["qualityBudget"],
+): number {
+  if (qualityBudget === "economy") return Math.min(configured, 1);
+  if (qualityBudget === "premium") return Math.max(configured, 3);
+  return configured;
+}
 
 export const AgentLLMOverrideSchema = z.object({
   model: z.string().min(1),

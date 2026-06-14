@@ -6,7 +6,7 @@ import {
   CurrentStateStateSchema,
   HooksStateSchema,
 } from "../models/runtime-state.js";
-import { MemoryDB, type Fact, type StoredHook, type StoredSummary } from "../state/memory-db.js";
+import { MemoryDB, tryCreateMemoryDB, type Fact, type StoredHook, type StoredSummary } from "../state/memory-db.js";
 import { bootstrapStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
 import {
   filterActiveHooks,
@@ -225,7 +225,7 @@ export function extractQueryTerms(goal: string, outlineNode: string | undefined,
 
 function openMemoryDB(bookDir: string): MemoryDB | null {
   try {
-    return new MemoryDB(bookDir);
+    return tryCreateMemoryDB(bookDir);
   } catch {
     return null;
   }

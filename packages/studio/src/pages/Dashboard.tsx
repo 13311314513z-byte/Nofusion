@@ -82,6 +82,7 @@ function BookMenu({ bookId, bookTitle, nav, t, onDelete, onOpenChange }: {
       <button
         onClick={() => setOpen((prev) => !prev)}
         className="p-3 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+        title={t("book.moreOptions")}
       >
         <MoreVertical size={18} />
       </button>
@@ -249,9 +250,11 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
                       <div className={`w-2 h-2 rounded-full ${
                         book.status === "active" ? "bg-emerald-500" :
                         book.status === "paused" ? "bg-amber-500" :
+                        book.status === "incubating" ? "bg-sky-500" :
                         "bg-muted-foreground"
                       }`} />
                       <span>{
+                        book.status === "incubating" ? t("book.statusIncubating") :
                         book.status === "active" ? t("book.statusActive") :
                         book.status === "paused" ? t("book.statusPaused") :
                         book.status === "outlining" ? t("book.statusOutlining") :
@@ -357,8 +360,9 @@ export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: R
           <div className="space-y-2 font-mono text-xs bg-black/5 dark:bg-black/20 p-6 rounded-xl border border-border/50 max-h-[200px] overflow-y-auto scrollbar-thin">
             {logEvents.map((msg, i) => {
               const d = msg.data as { tag?: string; message?: string };
+              const eventKey = d.tag ? `${d.tag}-${i}` : `log-${i}`;
               return (
-                <div key={i} className="flex gap-3 leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
+                <div key={eventKey} className="flex gap-3 leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
                   <span className="text-primary/60 font-bold shrink-0">[{d.tag}]</span>
                   <span className="text-muted-foreground">{d.message}</span>
                 </div>

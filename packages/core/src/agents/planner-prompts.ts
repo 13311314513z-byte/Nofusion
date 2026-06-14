@@ -213,6 +213,8 @@ export const PLANNER_MEMO_USER_TEMPLATE_EN = `# Chapter {{chapterNumber}} memo r
 
 {{brief_block}}
 {{chapter_context_block}}
+{{chapter_goal_block}}
+{{author_intent_block}}
 
 ## Last screen of previous chapter (excerpt)
 {{previous_chapter_ending_excerpt}}
@@ -262,6 +264,8 @@ export const PLANNER_MEMO_USER_TEMPLATE = `# 第 {{chapterNumber}} 章 memo 请�
 
 {{brief_block}}
 {{chapter_context_block}}
+{{chapter_goal_block}}
+{{author_intent_block}}
 
 ## 上一章最后一屏（原文节选）
 {{previous_chapter_ending_excerpt}}
@@ -308,6 +312,8 @@ export interface PlannerUserMessageInput {
   readonly bookRulesRelevant: string;
   readonly brief?: string;
   readonly chapterContext?: string;
+  readonly chapterGoalBlock?: string;
+  readonly authorIntentBlock?: string;
   readonly language?: "zh" | "en";
 }
 
@@ -319,11 +325,15 @@ export function buildPlannerUserMessage(input: PlannerUserMessageInput): string 
 
   const briefBlock = buildBriefBlock(input.brief ?? "", language);
   const chapterContextBlock = buildChapterContextBlock(input.chapterContext ?? "", language);
+  const chapterGoalBlock = input.chapterGoalBlock ?? "";
+  const authorIntentBlock = input.authorIntentBlock ?? "";
 
   const filled = template
     .replaceAll("{{chapterNumber}}", String(input.chapterNumber))
     .replaceAll("{{brief_block}}", briefBlock)
     .replaceAll("{{chapter_context_block}}", chapterContextBlock)
+    .replaceAll("{{chapter_goal_block}}", chapterGoalBlock)
+    .replaceAll("{{author_intent_block}}", authorIntentBlock)
     .replaceAll("{{previous_chapter_ending_excerpt}}", input.previousChapterEndingExcerpt)
     .replaceAll("{{recent_summaries}}", input.recentSummaries)
     .replaceAll("{{current_arc_prose}}", input.currentArcProse)

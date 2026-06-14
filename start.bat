@@ -23,27 +23,26 @@ if errorlevel 1 (
 )
 
 echo [NoFusion] Resolving pnpm...
-call corepack pnpm --version >nul 2>nul
+rem Try local pnpm.cmd first (workspace-installed), then PATH, then corepack as fallback.
+if exist "%ROOT%\pnpm.cmd" (
+  call "%ROOT%\pnpm.cmd" --version >nul 2>nul
+)
 if not errorlevel 1 (
-  set "PNPM=corepack"
-  set "PNPM_ARGS=pnpm"
+  set "PNPM=%ROOT%\pnpm.cmd"
+  set "PNPM_ARGS="
 ) else (
   where pnpm >nul 2>nul
   if not errorlevel 1 (
     set "PNPM=pnpm"
     set "PNPM_ARGS="
   ) else (
-    if exist "%ROOT%\pnpm.cmd" (
-      call "%ROOT%\pnpm.cmd" --version >nul 2>nul
-    ) else (
-      cmd /c exit 1
-    )
+    call corepack pnpm --version >nul 2>nul
     if not errorlevel 1 (
-      set "PNPM=%ROOT%\pnpm.cmd"
-      set "PNPM_ARGS="
+      set "PNPM=corepack"
+      set "PNPM_ARGS=pnpm"
     ) else (
       echo [NoFusion] ERROR: pnpm not found. Please install pnpm manually.
-      echo [NoFusion] Run: corepack enable
+      echo [NoFusion] Run: corepack enable, or download from https://pnpm.io/installation
       pause
       exit /b 1
     )

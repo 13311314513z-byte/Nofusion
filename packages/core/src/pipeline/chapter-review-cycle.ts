@@ -1,4 +1,7 @@
 import type { AuditIssue, AuditResult } from "../agents/continuity.js";
+import { IssueNormalizer } from "../agents/issue-normalizer.js";
+import { createIssue, resolveAuditIssue } from "../models/audit-issue.js";
+import { checkPatchBoundary, issueLocationsToParagraphSet } from "../utils/patch-boundary.js";
 import type { ReviseMode, ReviseOutput } from "../agents/reviser.js";
 import type { WriteChapterOutput } from "../agents/writer.js";
 import type { ChapterIntent, ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
@@ -96,12 +99,8 @@ export async function runChapterReviewCycle(params: {
     right?: ChapterReviewCycleUsage,
   ) => ChapterReviewCycleUsage;
   readonly analyzeAITells: (content: string) => { issues: ReadonlyArray<AuditIssue> };
-  readonly analyzeSensitiveWords: (content: string) => {
-    found: ReadonlyArray<{ severity: string }>;
-    issues: ReadonlyArray<AuditIssue>;
-  };
   /** Re-run deterministic post-write checks (chapter-ref, paragraph shape, etc.) on any content. */
-  readonly runPostWriteChecks?: (content: string) => ReadonlyArray<AuditIssue>;
+  readonly runPostWriteChecks?: (content: string) => ReadonlyArray<AuditIssue> | Promise<ReadonlyArray<AuditIssue>>;
   readonly maxReviewIterations?: number;
   readonly logWarn: (message: { zh: string; en: string }) => void;
   readonly logStage: (message: { zh: string; en: string }) => void;
@@ -112,12 +111,17 @@ export async function runChapterReviewCycle(params: {
   let finalWordCount = params.initialOutput.wordCount;
 
   // Convert initial postWriteErrors into AuditIssues as fallback when runPostWriteChecks isn't provided.
-  const initialPostWriteIssues: ReadonlyArray<AuditIssue> = params.initialOutput.postWriteErrors.map((violation) => ({
-    severity: "critical" as const,
-    category: violation.rule,
-    description: violation.description,
-    suggestion: violation.suggestion,
-  }));
+  const initialPostWriteIssues: ReadonlyArray<AuditIssue> = params.initialOutput.postWriteErrors.map((violation) =>
+    createIssue({
+      source: "post-write",
+      severity: "critical",
+      category: violation.rule,
+      description: violation.description,
+      suggestion: violation.suggestion,
+      fixScope: "paragraph",
+      blocking: true,
+    }),
+  );
 
   // ---------------------------------------------------------------------------
   // Length normalization: dedicated step, only runs for clear hard-range drift.
@@ -163,31 +167,35 @@ export async function runChapterReviewCycle(params: {
     );
     totalUsage = params.addUsage(totalUsage, llmAudit.tokenUsage);
     const aiTellsResult = params.analyzeAITells(content);
-    const sensitiveResult = params.analyzeSensitiveWords(content);
-    const hasBlockedWords = sensitiveResult.found.some((item) => item.severity === "block");
     const wordCount = countChapterLength(content, params.lengthSpec.countingMode);
     const lengthInRange = !isOutsideHardRange(wordCount, params.lengthSpec);
 
     // Deterministic post-write checks: run every round, not just the first.
     // If runPostWriteChecks is provided, use it; otherwise fall back to initial postWriteErrors.
-    const postWriteIssues = params.runPostWriteChecks
+    const postWriteResult = params.runPostWriteChecks
       ? params.runPostWriteChecks(content)
       : initialPostWriteIssues;
+    const rawPostWriteIssues = postWriteResult instanceof Promise
+      ? await postWriteResult
+      : postWriteResult;
+    const postWriteIssues = rawPostWriteIssues.map((issue) =>
+      resolveAuditIssue(issue, "post-write"),
+    );
 
     const allIssues: AuditIssue[] = [
       ...llmAudit.issues,
       ...aiTellsResult.issues,
-      ...sensitiveResult.issues,
       ...postWriteIssues,
     ];
+    const normalizedIssues = new IssueNormalizer().normalize(allIssues).issues;
 
     // Length is NOT added to reviser issues — normalize handles it as a dedicated step.
     // lengthInRange is only used in isPassed() as a hard gate.
 
     const hasPostWriteCritical = postWriteIssues.some((i) => i.severity === "critical");
     const auditResult: AuditResult = {
-      passed: (hasBlockedWords || hasPostWriteCritical) ? false : llmAudit.passed,
-      issues: allIssues,
+      passed: hasPostWriteCritical ? false : llmAudit.passed,
+      issues: normalizedIssues,
       summary: llmAudit.summary,
       overallScore: llmAudit.overallScore,
     };
@@ -255,6 +263,35 @@ export async function runChapterReviewCycle(params: {
       params.assertChapterContentNotEmpty(reviseOutput.revisedContent, `repair iteration ${iteration + 1}`);
       const revisedContent = params.normalizePostWriteSurface?.(reviseOutput.revisedContent) ?? reviseOutput.revisedContent;
       const revisedWordCount = countChapterLength(revisedContent, params.lengthSpec.countingMode);
+
+      // Patch boundary check: verify the auto-revision only modified targeted paragraphs.
+      // This mirrors the check in runner.ts reviseDraft() for manual revisions.
+      {
+        const issuesWithLocation = currentAudit.auditResult.issues.filter(
+          (i): i is typeof i & { location: { startParagraph: number; endParagraph: number } } =>
+            "location" in i &&
+            (i as any).location?.startParagraph > 0 &&
+            (i as any).location?.endParagraph > 0,
+        );
+        if (issuesWithLocation.length > 0) {
+          const targetSet = issueLocationsToParagraphSet(issuesWithLocation.map((i) => i.location));
+          const splitParagraphs = (text: string) => text
+            .split(/\r?\n\s*\r?\n/)
+            .map((p) => p.trim())
+            .filter(Boolean);
+          const originalParas = splitParagraphs(finalContent);
+          const revisedParas = splitParagraphs(revisedContent);
+          const boundaryReport = checkPatchBoundary(originalParas, revisedParas, targetSet);
+          if (!boundaryReport.withinBounds) {
+            params.logWarn({
+              zh: `修复轮次 ${iteration + 1} 越界修订：${boundaryReport.overstepCount} 段修改超出目标范围。已回退至上一版本`,
+              en: `repair iteration ${iteration + 1} boundary violation: ${boundaryReport.overstepCount} paragraph(s) modified outside target range. Reverting to previous version.`,
+            });
+            // Reject the revision — skip this iteration without adding a snapshot
+            break;
+          }
+        }
+      }
 
       // Re-assess revised content. If REVISED_CONTENT drifted on length,
       // lengthInRange will be false → isPassed fails → bestSnapshot picks

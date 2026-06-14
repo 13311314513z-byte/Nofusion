@@ -111,6 +111,14 @@ export interface LLMResponse {
     readonly completionTokens: number;
     readonly totalTokens: number;
   };
+  /**
+   * API 返回的 stop_reason / finish_reason。
+   * - "stop": 正常结束
+   * - "length": 达到 max_tokens 限制被截断
+   * - "tool_use": 触发了工具调用
+   * - undefined: 无法获取（如流中断等）
+   */
+  readonly stopReason?: "stop" | "length" | "tool_use" | string;
 }
 
 export interface LLMMessage {
@@ -143,6 +151,8 @@ export interface LLMClient {
     readonly thinkingBudget: number;
     readonly extra: Record<string, unknown>;
   };
+  /** Optional cleanup hook for resources held by the client (e.g. connections). */
+  dispose?(): void;
 }
 
 // === Tool-calling Types ===
@@ -272,7 +282,8 @@ function parseEnvHeaders(): Record<string, string> | undefined {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed as Record<string, string>;
     }
-  } catch {
+  } catch (e) {
+    console.warn(`[llm] INKOS_LLM_HEADERS is not valid JSON, falling back to "Key: Value" parsing: ${e instanceof Error ? e.message : String(e)}`);
     // not JSON — treat as single "Key: Value" pair
     const idx = raw.indexOf(":");
     if (idx > 0) {
@@ -490,6 +501,9 @@ async function withTransientLLMRetry<T>(
 }
 
 function shouldUseNativeCustomTransport(client: LLMClient): boolean {
+  if (client.proxyUrl) {
+    return client.provider === "openai" || client.provider === "anthropic";
+  }
   if (client.service === "kkaiapi" && client.provider === "openai") {
     return true;
   }
@@ -608,7 +622,8 @@ async function readErrorResponse(res: Response): Promise<string> {
       return `${res.status} ${json.error.message}`;
     }
     if (typeof json.detail === "string" && json.detail) return `${res.status} ${json.detail}`;
-  } catch {
+  } catch (e) {
+    console.warn(`[llm] Failed to parse error response JSON: ${e instanceof Error ? e.message : String(e)}`);
     // fall through
   }
   return `${res.status} ${text || res.statusText}`.trim();
@@ -689,6 +704,18 @@ function extractAnthropicContent(json: any): string {
     .join("");
 }
 
+function mapResponsesStopReason(json: any): LLMResponse["stopReason"] {
+  const raw = json?.response?.status
+    ?? json?.status
+    ?? json?.choices?.[0]?.finish_reason
+    ?? json?.stop_reason;
+  if (raw === "completed" || raw === "stop" || raw === "end_turn") return "stop";
+  if (raw === "incomplete" || raw === "length" || raw === "max_tokens") return "length";
+  if (raw === "tool_use") return "tool_use";
+  if (typeof raw === "string") return raw;
+  return undefined;
+}
+
 async function chatCompletionViaCustomAnthropicCompatible(
   client: LLMClient,
   model: string,
@@ -696,6 +723,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
   resolved: { readonly temperature: number; readonly maxTokens: number; readonly extra: Record<string, unknown> },
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   const baseUrl = client._piModel?.baseUrl ?? "";
   const errorCtx = { baseUrl, model, service: client.service };
@@ -723,6 +751,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
       ...(client._piModel?.headers ?? {}),
     }) ?? { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   }, client.proxyUrl);
 
   if (!response.ok) {
@@ -800,9 +829,10 @@ async function chatCompletionViaCustomOpenAICompatible(
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
   allowSystemRoleFallback = true,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   if (client.provider === "anthropic") {
-    return chatCompletionViaCustomAnthropicCompatible(client, model, messages, resolved, onStreamProgress, onTextDelta);
+    return chatCompletionViaCustomAnthropicCompatible(client, model, messages, resolved, onStreamProgress, onTextDelta, signal);
   }
   const baseUrl = client._piModel?.baseUrl ?? "";
   const headers = buildCustomHeaders(client);
@@ -826,6 +856,7 @@ async function chatCompletionViaCustomOpenAICompatible(
       method: "POST",
       headers,
       body: JSON.stringify(payload),
+      signal,
     }, client.proxyUrl);
     if (!response.ok) {
       throw wrapLLMError(new Error(await readErrorResponse(response)), errorCtx);
@@ -844,6 +875,7 @@ async function chatCompletionViaCustomOpenAICompatible(
           completionTokens: json?.usage?.output_tokens ?? 0,
           totalTokens: json?.usage?.total_tokens ?? 0,
         },
+        stopReason: mapResponsesStopReason(json),
       };
     }
 
@@ -855,6 +887,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const monitor = createStreamMonitor(onStreamProgress);
 
+    let stopReason: LLMResponse["stopReason"] = undefined;
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -876,6 +909,7 @@ async function chatCompletionViaCustomOpenAICompatible(
               completionTokens: json.response?.usage?.output_tokens ?? 0,
               totalTokens: json.response?.usage?.total_tokens ?? 0,
             };
+            stopReason = mapResponsesStopReason(json.response);
             if (!content) {
               content = extractResponsesContent(json.response);
             }
@@ -889,7 +923,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     if (!content) {
       throw wrapLLMError(new Error("LLM returned empty response from stream"), errorCtx);
     }
-    return { content, usage };
+    return { content, usage, stopReason };
   }
 
   const payload: Record<string, unknown> = {
@@ -913,6 +947,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     method: "POST",
     headers,
     body: JSON.stringify(payload),
+    signal,
   }, client.proxyUrl);
   if (!response.ok) {
     const detail = await readErrorResponse(response);
@@ -925,6 +960,7 @@ async function chatCompletionViaCustomOpenAICompatible(
         onStreamProgress,
         onTextDelta,
         false,
+        signal,
       );
     }
     throw wrapLLMError(new Error(detail), errorCtx);
@@ -943,6 +979,7 @@ async function chatCompletionViaCustomOpenAICompatible(
         completionTokens: json?.usage?.completion_tokens ?? 0,
         totalTokens: json?.usage?.total_tokens ?? 0,
       },
+      stopReason: mapResponsesStopReason(json),
     };
   }
 
@@ -952,6 +989,7 @@ async function chatCompletionViaCustomOpenAICompatible(
   let buffer = "";
   let content = "";
   let reasoningContent = "";
+  let stopReason: LLMResponse["stopReason"] = undefined;
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const monitor = createStreamMonitor(onStreamProgress);
 
@@ -977,6 +1015,11 @@ async function chatCompletionViaCustomOpenAICompatible(
             monitor.onChunk(reasoningDelta);
           }
         }
+        // Capture finish_reason from the last chunk in the stream
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason) {
+          stopReason = mapResponsesStopReason({ choices: [{ finish_reason: finishReason }] });
+        }
         if (json?.usage) {
           usage = {
             promptTokens: json.usage.prompt_tokens ?? usage.promptTokens,
@@ -994,7 +1037,7 @@ async function chatCompletionViaCustomOpenAICompatible(
   if (!finalContent) {
     throw wrapLLMError(new Error("LLM returned empty response from stream"), errorCtx);
   }
-  return { content: finalContent, usage };
+  return { content: finalContent, usage, stopReason };
 }
 
 // === Simple Chat (used by all agents via BaseAgent.chat()) ===
@@ -1009,6 +1052,7 @@ export async function chatCompletion(
     readonly webSearch?: boolean;
     readonly onStreamProgress?: OnStreamProgress;
     readonly onTextDelta?: (text: string) => void;
+    readonly signal?: AbortSignal;
   },
 ): Promise<LLMResponse> {
   // C1 (v2.0.0)：删除 maxTokensCap 机制。per-call 显式传的 maxTokens 永远不被裁剪。
@@ -1023,15 +1067,19 @@ export async function chatCompletion(
   };
   const onStreamProgress = options?.onStreamProgress;
   const onTextDelta = options?.onTextDelta;
+  const signal = options?.signal;
   const errorCtx = { baseUrl: client._piModel?.baseUrl ?? "(unknown)", model, service: client.service };
 
   try {
     return await withTransientLLMRetry(
       async () => {
-        if (shouldUseNativeCustomTransport(client)) {
-          return chatCompletionViaCustomOpenAICompatible(client, model, messages, resolved, onStreamProgress, onTextDelta);
+        if (signal?.aborted) {
+          throw new Error(signal.reason instanceof Error ? signal.reason.message : "Request aborted");
         }
-        return chatCompletionViaPiAi(client, model, messages, resolved, onStreamProgress, onTextDelta);
+        if (shouldUseNativeCustomTransport(client)) {
+          return chatCompletionViaCustomOpenAICompatible(client, model, messages, resolved, onStreamProgress, onTextDelta, true, signal);
+        }
+        return chatCompletionViaPiAi(client, model, messages, resolved, onStreamProgress, onTextDelta, signal);
       },
       // Retrying after UI text deltas have been emitted can duplicate visible text.
       { enabled: !onTextDelta },
@@ -1042,6 +1090,7 @@ export async function chatCompletion(
       return {
         content: error.partialContent,
         usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        stopReason: "length",
       };
     }
     throw wrapLLMError(error, errorCtx);
@@ -1182,6 +1231,7 @@ async function chatCompletionViaPiAi(
   resolved: { readonly temperature: number; readonly maxTokens: number; readonly extra: Record<string, unknown> },
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<LLMResponse> {
   const piModel = resolvePiModel(client, model);
   const context = toPiContext(messages);
@@ -1213,6 +1263,7 @@ async function chatCompletionViaPiAi(
         completionTokens: response.usage.output,
         totalTokens: response.usage.totalTokens,
       },
+      stopReason: mapPiStopReason(response.stopReason),
     };
   }
 
@@ -1221,6 +1272,7 @@ async function chatCompletionViaPiAi(
   const monitor = createStreamMonitor(onStreamProgress);
   let inputTokens = 0;
   let outputTokens = 0;
+  let stopReason: LLMResponse["stopReason"] = undefined;
 
   try {
     for await (const event of eventStream) {
@@ -1233,6 +1285,9 @@ async function chatCompletionViaPiAi(
         const msg = event.type === "done" ? event.message : event.error;
         inputTokens = msg.usage.input;
         outputTokens = msg.usage.output;
+        if (event.type === "done") {
+          stopReason = mapPiStopReason(msg.stopReason);
+        }
         if (event.type === "error" && msg.errorMessage) {
           const partial = chunks.join("");
           if (partial.length >= MIN_SALVAGEABLE_CHARS) {
@@ -1268,7 +1323,17 @@ async function chatCompletionViaPiAi(
       completionTokens: outputTokens,
       totalTokens: inputTokens + outputTokens,
     },
+    stopReason,
   };
+}
+
+/** Map pi-ai stop reasons to our LLMResponse.stopReason format. */
+function mapPiStopReason(reason: string | undefined): LLMResponse["stopReason"] {
+  if (!reason) return undefined;
+  if (reason === "stop" || reason === "end_turn") return "stop";
+  if (reason === "length" || reason === "max_tokens") return "length";
+  if (reason === "tool_use") return "tool_use";
+  return reason;
 }
 
 async function chatWithToolsViaPiAi(

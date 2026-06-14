@@ -426,7 +426,8 @@ async function resolveRuntimeLanguage(bookDir: string): Promise<"zh" | "en"> {
     const raw = await readFile(join(bookDir, "book.json"), "utf-8");
     const parsed = JSON.parse(raw) as { language?: unknown };
     return parsed.language === "zh" ? "zh" : "en";
-  } catch {
+  } catch (e) {
+    console.warn(`[state-bootstrap] Failed to resolve runtime language for ${bookDir}, defaulting to en: ${e instanceof Error ? e.message : String(e)}`);
     return "en";
   }
 }

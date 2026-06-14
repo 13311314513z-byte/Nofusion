@@ -3,30 +3,9 @@
  * Pure text analysis (no LLM).
  */
 
-export interface StyleFingerprint {
-  readonly dialogueRatio: number;
-  readonly actionDensity: number;
-  readonly psychologicalRatio: number;
-  readonly sensoryDensity: number;
-  readonly colloquialismScore: number;
-  readonly rhetoricDensity: number;
-  readonly punctuationRhythm: {
-    readonly commaRatio: number;
-    readonly periodRatio: number;
-    readonly questionRatio: number;
-    readonly exclamationRatio: number;
-    readonly ellipsisRatio: number;
-    readonly semicolonRatio: number;
-  };
-  readonly aiTellRisk: number;
-  readonly sensoryBreakdown: {
-    readonly visual: number;
-    readonly auditory: number;
-    readonly tactile: number;
-    readonly olfactory: number;
-    readonly gustatory: number;
-  };
-}
+import { detectDuplicateRhetoric } from "../utils/semantic-duplication.js";
+import type { StyleFingerprint } from "../models/style-profile.js";
+export type { StyleFingerprint } from "../models/style-profile.js";
 
 const ACTION_VERBS: ReadonlyArray<string> = [
   "走", "跑", "跳", "打", "抓", "推", "拉", "踢", "挥", "冲", "退", "追", "逃",
@@ -88,14 +67,6 @@ const SENSORY_WORDS: ReadonlyArray<{
 const COLLOQUIAL_PARTICLES: ReadonlyArray<string> = [
   "啊", "呢", "吧", "嘛", "呗", "哦", "噢", "嗯", "唉", "哟", "嘿", "哼", "哈", "哇",
   "吗", "么", "喽", "噻", "咯",
-];
-
-const RHETORICAL_PATTERNS: ReadonlyArray<{ readonly name: string; readonly regex: RegExp }> = [
-  { name: "比喻", regex: /[像如仿佛似](?:是|同|一般|一样)|宛如|好似/g },
-  { name: "排比", regex: /[，。；]([^，。；]{2,6})[，。；]\1/g },
-  { name: "反问", regex: /难道|怎么可能|岂不是|何尝不|何况|怎么会/g },
-  { name: "夸张", regex: /天崩地裂|惊天动地|翻天覆地|震耳欲聋|人山人海|无边无际/g },
-  { name: "拟人", regex: /[风雨雪月花树草石山河水](?:在|像|仿佛|好似).*?(?:笑|哭|叹|呻|吟|怒|舞|睡|醒)/g },
 ];
 
 const HEDGE_WORDS: ReadonlyArray<string> = [
@@ -258,8 +229,9 @@ export function analyzeStyleFingerprint(text: string): StyleFingerprint {
   );
 
   let rhetoricCount = 0;
-  for (const { regex } of RHETORICAL_PATTERNS) {
-    rhetoricCount += (text.match(regex) ?? []).length;
+  const rhetoricResult = detectDuplicateRhetoric(text, "zh");
+  for (const finding of rhetoricResult.findings) {
+    rhetoricCount += finding.count;
   }
   const rhetoricDensity = Math.min(Math.round((rhetoricCount / sentenceCount) * 100) / 100, 1);
 

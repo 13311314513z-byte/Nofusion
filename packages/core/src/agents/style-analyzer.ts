@@ -5,16 +5,8 @@
 
 import type { StyleProfile } from "../models/style-profile.js";
 import { analyzeStyleFingerprint } from "./style-fingerprint.js";
-
-// Common rhetorical patterns in Chinese fiction
-const RHETORICAL_PATTERNS: ReadonlyArray<{ readonly name: string; readonly regex: RegExp }> = [
-  { name: "比喻(像/如/仿佛)", regex: /[像如仿佛似](?:是|同|一般|一样)/g },
-  { name: "排比", regex: /[，。；]([^，。；]{2,6})[，。；]\1/g },
-  { name: "反问", regex: /难道|怎么可能|岂不是|何尝不/g },
-  { name: "夸张", regex: /天崩地裂|惊天动地|翻天覆地|震耳欲聋/g },
-  { name: "拟人", regex: /[风雨雪月花树草石](?:在|像|仿佛).*?(?:笑|哭|叹|呻|吟|怒|舞)/g },
-  { name: "短句节奏", regex: /[。！？][^。！？]{1,8}[。！？]/g },
-];
+import { detectDuplicateRhetoric } from "../utils/semantic-duplication.js";
+import { computeExpandedFingerprint } from "../utils/style-dimensions.js";
 
 /**
  * Analyze a reference text and extract its style profile.
@@ -71,16 +63,15 @@ export function analyzeStyle(text: string, sourceName?: string): StyleProfile {
     .filter(([, count]) => count >= 3)
     .map(([pattern, count]) => `${pattern}...(${count}次)`);
 
-  // Rhetorical features
-  const rhetoricalFeatures: string[] = [];
-  for (const { name, regex } of RHETORICAL_PATTERNS) {
-    const matches = text.match(regex);
-    if (matches && matches.length >= 2) {
-      rhetoricalFeatures.push(`${name}(${matches.length}处)`);
-    }
-  }
+  // Rhetorical features — unified via detectDuplicateRhetoric
+  const rhetoricResult = detectDuplicateRhetoric(text, "zh");
+  const rhetoricalFeatures: string[] = rhetoricResult.findings
+    .filter((f) => f.count >= 2)
+    .map((f) => `${f.label}(${f.count}处)`);
 
-  const fingerprint = analyzeStyleFingerprint(text);
+  const baseFingerprint = analyzeStyleFingerprint(text);
+  // Pass precomputed rhetoricResult to avoid double detection in computeExpandedFingerprint
+  const fingerprint = computeExpandedFingerprint(text, baseFingerprint, rhetoricResult);
 
   return {
     avgSentenceLength: Math.round(avgSentenceLength * 10) / 10,

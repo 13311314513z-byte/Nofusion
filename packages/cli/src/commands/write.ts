@@ -1,10 +1,10 @@
 import { Command } from "commander";
-import { PipelineRunner, StateManager } from "@actalk/inkos-core";
+import { PipelineRunner, StateManager, loadChapterIntents, getChapterIntent } from "@actalk/inkos-core";
 import { readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { loadConfig, buildPipelineConfig, findProjectRoot, getLegacyMigrationHint, resolveContext, resolveBookId, log, logError } from "../utils.js";
-import { formatWriteNextComplete, formatWriteNextProgress, formatWriteNextResultLines, resolveCliLanguage } from "../localization.js";
+import { formatWriteNextComplete, formatWriteNextProgress, formatWriteNextResultLines, formatStrictInterviewBlocked, resolveCliLanguage } from "../localization.js";
 
 export const writeCommand = new Command("write")
   .description("Write chapters");
@@ -32,6 +32,31 @@ writeCommand
         log(`[migration] ${migrationHint}`);
       }
       const config = await loadConfig();
+
+      // Strict Interview check: block auto-writing when intent fields are incomplete
+      if (config.writing?.strictInterview) {
+        const nextChapterNumber = await state.getNextChapterNumber(bookId);
+        const intentsIndex = await loadChapterIntents(state.bookDir(bookId));
+        const intent = getChapterIntent(intentsIndex.intents, nextChapterNumber);
+
+        const missingFields: string[] = [];
+        if (!intent?.coreNarrative?.trim()) missingFields.push(language === "en" ? "coreNarrative" : "核心叙事");
+        if (!intent?.readerTakeaway?.trim()) missingFields.push(language === "en" ? "readerTakeaway" : "读者感受");
+        if (!intent?.keyMoment?.trim()) missingFields.push(language === "en" ? "keyMoment" : "关键时刻");
+
+        if (missingFields.length > 0) {
+          if (!opts.json) {
+            log(formatStrictInterviewBlocked(language, nextChapterNumber, missingFields));
+          } else {
+            log(JSON.stringify({
+              error: "strict-interview-blocked",
+              chapterNumber: nextChapterNumber,
+              missingFields,
+            }));
+          }
+          process.exit(1);
+        }
+      }
 
       const pipeline = new PipelineRunner(buildPipelineConfig(config, root, { externalContext: context, quiet: opts.quiet }));
 

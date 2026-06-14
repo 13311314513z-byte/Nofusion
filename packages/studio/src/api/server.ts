@@ -10,6 +10,9 @@ import {
   createInteractionToolsFromDeps,
   computeAnalytics,
   loadProjectConfig,
+  listFoundationSources,
+  archiveFoundationSource,
+  summarizePendingHookHealth,
   loadProjectSession,
   processProjectInteractionRequest,
   resolveSessionActiveBook,
@@ -27,8 +30,10 @@ import {
   resolveServiceProviderFamily,
   resolveServiceModelsBaseUrl,
   resolveServiceModel,
+  resolveWritingReviewRetries,
   loadSecrets,
   saveSecrets,
+  setServiceApiKey,
   listModelsForService,
   isApiKeyOptionalForEndpoint,
   getAllEndpoints,
@@ -55,6 +60,12 @@ import {
   reanalyzeAuthorProfile,
   deleteAuthorProfile,
   deleteStyleSource,
+  saveAuthorDiagnostics,
+  listAuthorDiagnostics,
+  getAuthorDiagnostics,
+  compareWithAuthorProfile,
+  generateAdjustmentPlan,
+  rewriteWithAuthorProfile,
   extractDocumentFromText,
   extractDocumentChunked,
   MAX_CHARS,
@@ -69,6 +80,15 @@ import {
   getChapterGoal,
   upsertChapterGoal,
   removeChapterGoal,
+  loadChapterIntents,
+  saveChapterIntents,
+  getChapterIntent,
+  upsertChapterIntent,
+  removeChapterIntent,
+  AuthorChapterIntentSchema,
+  buildAuthorIntentBlock,
+  generateSuggestions,
+  type AuthorChapterIntent,
   listRoleCards,
   loadRoleCard,
   saveRoleCard,
@@ -95,13 +115,24 @@ import {
   type FoundationSourceInput,
 } from "@actalk/inkos-core";
 import { randomUUID } from "node:crypto";
-import { access, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isIP } from "node:net";
 import { isSafeBookId } from "./safety.js";
 import { ApiError } from "./errors.js";
 import { buildStudioBookConfig, type StudioCreateBookBody } from "./book-create.js";
+
+import {
+  PreprocessRequestSchema,
+  RelayoutRequestSchema,
+  InspectRequestSchema,
+  MAX_PREPROCESS_TEXT_CHARS,
+  DiagnosticsRequestSchema,
+  CompareRequestSchema,
+  AdjustmentPlanRequestSchema,
+  RewritePreviewRequestSchema,
+} from "./style-schemas.js";
 
 // -- Pipeline stage definitions per agent type --
 
@@ -334,6 +365,11 @@ const NON_TEXT_MODEL_ID_PARTS = [
   "speech",
   "audio",
   "moderation",
+  "whisper",
+  "transcribe",
+  "sora",
+  "realtime",
+  "computer-use",
 ] as const;
 
 const SERVICE_MODELS_PROBE_TIMEOUT_MS = 4_000;
@@ -706,11 +742,88 @@ interface StudioBookListSummary {
   readonly [key: string]: unknown;
 }
 
+function normalizeStudioBookConfig(
+  bookId: string,
+  book: Record<string, unknown>,
+): Record<string, unknown> & { id: string; title: string; genre: string; status: string } {
+  const title =
+    typeof book.title === "string" && book.title.trim()
+      ? book.title
+      : typeof book.name === "string" && book.name.trim()
+        ? book.name
+        : bookId;
+  const name = title;
+  const genre =
+    typeof book.genre === "string" && book.genre.trim()
+      ? book.genre
+      : typeof book.genreProfileId === "string" && book.genreProfileId.trim()
+        ? book.genreProfileId
+        : "other";
+  const genreProfileId = genre;
+
+  return {
+    ...book,
+    id: bookId,
+    title,
+    name,
+    genre,
+    genreProfileId,
+    status: typeof book.status === "string" && book.status.trim() ? book.status : "active",
+  };
+}
+
+// --- withPipeline —— 自动管理 PipelineRunner 生命周期 ---
+
+/**
+ * 创建 PipelineRunner，在 promise 完成/失败后自动 dispose。
+ * 兼容测试环境（MockPipelineRunner 可能无 dispose 或 globalRegistry 被 mock）。
+ */
+async function withPipeline<T>(
+  label: string,
+  config: PipelineConfig,
+  fn: (pipeline: PipelineRunner) => Promise<T>,
+  _ttlMs = 5 * 60_000,
+): Promise<T> {
+  const pipeline = new PipelineRunner(config);
+
+  try {
+    const result = await fn(pipeline);
+    return result;
+  } finally {
+    if (typeof (pipeline as any).dispose === "function") {
+      (pipeline as any).dispose();
+    }
+  }
+}
+
 // --- Event bus for SSE ---
 
 type EventHandler = (event: string, data: unknown) => void;
 const subscribers = new Set<EventHandler>();
-const bookCreateStatus = new Map<string, { status: "creating" | "error"; error?: string }>();
+const bookCreateStatus = new Map<string, {
+  status: "queued" | "creating" | "completed" | "failed";
+  error?: string;
+  phase?: string;
+  createdAt: number;
+  /** 完成/失败后保留状态的时长（ms） */
+  ttlMs: number;
+}>();
+const BOOK_CREATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟超时
+const BOOK_CREATE_TTL_MS = 60 * 1000; // 完成后保留 60 秒
+const BOOK_CREATE_IN_PROGRESS_TTL_MS = BOOK_CREATE_TIMEOUT_MS + 60 * 1000; // queued/creating 状态保留到创建超时后再加 1 分钟缓冲
+
+// 定期清理过期状态（保存 timer 引用以便进程退出时清理）
+const bookCreateCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [id, st] of bookCreateStatus) {
+    if (now - st.createdAt > st.ttlMs) {
+      bookCreateStatus.delete(id);
+    }
+  }
+}, 30_000);
+
+// 进程退出时主动清理 timer
+process.once("beforeExit", () => clearInterval(bookCreateCleanupTimer));
 
 // 内存缓存：service -> 模型列表 + 更新时间戳；避免每次 sidebar 挂载时都打真实 LLM /models
 const modelListCache = new Map<string, { models: Array<{ id: string; name: string }>; at: number }>();
@@ -722,6 +835,8 @@ interface ServiceConfigEntry {
   temperature?: number;
   apiFormat?: "chat" | "responses";
   stream?: boolean;
+  /** 写作参数透传（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty） */
+  extra?: Record<string, unknown>;
 }
 
 type LLMConfigSource = "env" | "studio";
@@ -797,7 +912,7 @@ async function loadStudioBookListSummary(
   state: StateManager,
   bookId: string,
 ): Promise<StudioBookListSummary> {
-  const book = await state.loadBookConfig(bookId);
+  const book = normalizeStudioBookConfig(bookId, await state.loadBookConfig(bookId) as Record<string, unknown>);
   const nextChapter = await state.getNextChapterNumber(bookId);
   return { ...book, chaptersWritten: nextChapter - 1 };
 }
@@ -811,6 +926,12 @@ function serviceConfigKey(entry: ServiceConfigEntry): string {
 }
 
 function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>): ServiceConfigEntry {
+  // 通用 extra 提取：透传写作参数（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+  const extra = value.extra && typeof value.extra === "object" && !Array.isArray(value.extra)
+    ? (value.extra as Record<string, unknown>)
+    : undefined;
+  const extraSpread = extra && Object.keys(extra).length > 0 ? { extra } : {};
+
   if (serviceId.startsWith("custom:")) {
     return {
       service: "custom",
@@ -819,6 +940,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
       ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
       ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
       ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+      ...extraSpread,
     };
   }
 
@@ -830,6 +952,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
       ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
       ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
       ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+      ...extraSpread,
     };
   }
 
@@ -838,6 +961,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
     ...(typeof value.temperature === "number" ? { temperature: value.temperature } : {}),
     ...(value.apiFormat === "chat" || value.apiFormat === "responses" ? { apiFormat: value.apiFormat } : {}),
     ...(typeof value.stream === "boolean" ? { stream: value.stream } : {}),
+    ...extraSpread,
   };
 }
 
@@ -856,6 +980,10 @@ function normalizeServiceConfig(raw: unknown): ServiceConfigEntry[] {
         ...(typeof entry.temperature === "number" ? { temperature: entry.temperature } : {}),
         ...(entry.apiFormat === "chat" || entry.apiFormat === "responses" ? { apiFormat: entry.apiFormat } : {}),
         ...(typeof entry.stream === "boolean" ? { stream: entry.stream } : {}),
+        // ✅ 写作参数透传（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+        ...(entry.extra && typeof entry.extra === "object" && !Array.isArray(entry.extra)
+          ? { extra: entry.extra as Record<string, unknown> }
+          : {}),
       }));
   }
 
@@ -907,6 +1035,13 @@ function syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
   if (selectedEntry.temperature !== undefined) llm.temperature = selectedEntry.temperature;
   if (selectedEntry.apiFormat !== undefined) llm.apiFormat = selectedEntry.apiFormat;
   if (selectedEntry.stream !== undefined) llm.stream = selectedEntry.stream;
+  // ✅ 同步写作参数到顶层（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+  if (selectedEntry.extra !== undefined && typeof selectedEntry.extra === "object") {
+    const existingExtra = llm.extra && typeof llm.extra === "object" && !Array.isArray(llm.extra)
+      ? (llm.extra as Record<string, unknown>)
+      : {};
+    llm.extra = { ...existingExtra, ...selectedEntry.extra };
+  }
 }
 
 async function loadRawConfig(root: string): Promise<Record<string, unknown>> {
@@ -1258,6 +1393,13 @@ async function fetchModelsFromServiceBaseUrl(
     }, proxyUrl);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (serviceId === "moonshot") {
+        return {
+          models: [],
+          error: formatMoonshotAuthenticationError(res.status, body),
+          authFailed: res.status === 401 || res.status === 403,
+        };
+      }
       return {
         models: [],
         error: `服务商返回 ${res.status}: ${body.slice(0, 200)}`,
@@ -1274,6 +1416,17 @@ async function fetchModelsFromServiceBaseUrl(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function formatMoonshotAuthenticationError(status: number, body: string): string {
+  const detail = body.trim().slice(0, 500);
+  return [
+    `Moonshot/Kimi 认证失败（HTTP ${status}）。`,
+    "请使用 Moonshot 开放平台生成的 API Key，不要使用 kimi.com 网页登录 token、Cookie 或会员兑换码。",
+    "请打开 https://platform.moonshot.cn/console/api-keys，登录后创建或复制有效的 API Key，并且只粘贴原始密钥。",
+    "项目预设 Base URL：https://api.moonshot.cn/v1",
+    detail ? `服务商原始返回：${detail}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function buildBearerAuthHeaders(apiKey: string | undefined): Record<string, string> {
@@ -1313,17 +1466,17 @@ async function probeServiceCapabilities(args: {
       error: modelsResponse.error ?? "API Key 无效或无权访问模型列表。",
     };
   }
-  const discoveredModels = modelsResponse.models;
+  const discoveredModels = filterTextChatModels(modelsResponse.models);
   const endpoint = getAllEndpoints().find((ep) => ep.id === baseService);
   const preset = resolveServicePreset(baseService);
   const discoveredFirstModel =
     discoveredModels.find((model) => isTextChatModelId(model.id))?.id
     ?? discoveredModels[0]?.id;
-  if (discoveredModels.length > 0) {
+  if (modelsResponse.models.length > 0) {
     if (!discoveredFirstModel || !isTextChatModelId(discoveredFirstModel)) {
       return {
         ok: false,
-        models: discoveredModels,
+        models: [],
         error: "模型列表可访问，但没有发现可用于文本对话的模型。",
       };
     }
@@ -1450,20 +1603,71 @@ async function probeServiceCapabilities(args: {
 
 // --- Server factory ---
 
+// Foundation plan persistence directory
+const PLANS_DIR = ".inkos/plans";
+
+async function loadPersistedFoundationPlans(root: string): Promise<Map<string, FoundationPlanEntry>> {
+  const plans = new Map<string, FoundationPlanEntry>();
+  const plansDir = join(root, PLANS_DIR);
+  try {
+    const files = await readdir(plansDir);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const raw = await readFile(join(plansDir, file), "utf-8");
+        const entry = JSON.parse(raw) as FoundationPlanEntry;
+        if (entry.expiresAt > Date.now()) {
+          plans.set(file.replace(/\.json$/, ""), entry);
+        }
+      } catch {
+        // Skip corrupted files
+      }
+    }
+  } catch {
+    // Directory doesn't exist yet
+  }
+  return plans;
+}
+
+async function persistFoundationPlan(root: string, planId: string, entry: FoundationPlanEntry): Promise<void> {
+  const plansDir = join(root, PLANS_DIR);
+  await mkdir(plansDir, { recursive: true }).catch(() => {});
+  await writeFile(join(plansDir, `${planId}.json`), JSON.stringify(entry), "utf-8");
+}
+
+async function removePersistedFoundationPlan(root: string, planId: string): Promise<void> {
+  await rm(join(root, PLANS_DIR, `${planId}.json`), { force: true }).catch(() => {});
+}
+
+interface FoundationPlanEntry {
+  readonly bookId: string;
+  readonly mode: "supplement" | "rebuild";
+  readonly proposed: ArchitectOutput;
+  readonly foundationRevision: string;
+  readonly sourceBundle: FoundationSourceBundle;
+  readonly expiresAt: number;
+}
+
 export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   const app = new Hono();
-  const foundationPlans = new Map<string, {
-    readonly bookId: string;
-    readonly mode: "supplement" | "rebuild";
-    readonly proposed: ArchitectOutput;
-    readonly foundationRevision: string;
-    readonly sourceBundle: FoundationSourceBundle;
-    readonly expiresAt: number;
-  }>();
+  // Load persisted plans on startup; expired ones are filtered out automatically
+  const foundationPlans = new Map<string, FoundationPlanEntry>();
+  let foundationPlansLoaded = false;
+  const foundationPlansPromise = loadPersistedFoundationPlans(root)
+    .then((loaded) => {
+      for (const [id, entry] of loaded) foundationPlans.set(id, entry);
+      foundationPlansLoaded = true;
+    })
+    .catch((e) => {
+      foundationPlansLoaded = true;
+      console.error("[studio] Failed to load persisted foundation plans:", e);
+    });
   const state = new StateManager(root);
   let cachedConfig = initialConfig;
 
-  app.use("/*", cors());
+  // CORS: only allow the Studio's own origin. When behind a proxy, set STUDIO_ORIGIN.
+  const allowedOrigin = process.env.STUDIO_ORIGIN || "http://localhost:4577";
+  app.use("/*", cors({ origin: allowedOrigin, credentials: true }));
 
   // Structured error handler — ApiError returns typed JSON, others return 500
   app.onError((error, c) => {
@@ -1548,7 +1752,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       projectRoot: root,
       defaultLLMConfig: currentConfig.llm,
       foundationReviewRetries: currentConfig.foundation?.reviewRetries ?? 2,
-      writingReviewRetries: currentConfig.writing?.reviewRetries ?? 1,
+      writingReviewRetries: resolveWritingReviewRetries(
+        currentConfig.writing?.reviewRetries ?? 1,
+        currentConfig.writing?.qualityBudget ?? "economy",
+      ),
+      qualityBudget: currentConfig.writing?.qualityBudget ?? "economy",
+      strictInterview: currentConfig.writing?.strictInterview ?? false,
+      betaReaderMode: currentConfig.writing?.betaReaderMode ?? "off",
+      betaReaderModelFamily: currentConfig.writing?.betaReaderModelFamily,
       modelOverrides: currentConfig.modelOverrides,
       notifyChannels: currentConfig.notify,
       logger,
@@ -1565,6 +1776,27 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Security helpers
+  // ---------------------------------------------------------------------------
+
+  function assertProjectRoot(input: string | undefined, serverRoot: string): string {
+    const candidate = input ? resolve(input) : resolve(serverRoot);
+    const allowed = resolve(serverRoot);
+    // Must be either the exact root, or directly within it (with separator)
+    const withSep = allowed.endsWith(sep) ? allowed : allowed + sep;
+    if (candidate !== allowed && !candidate.startsWith(withSep)) {
+      throw new Error("Project root out of bounds");
+    }
+    return candidate;
+  }
+
+  function assertSafeAuthorId(id: string): string {
+    const clean = id.replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!clean || clean !== id) throw new Error(`Invalid authorId: ${id}`);
+    return clean;
+  }
+
   // --- Books ---
 
   app.get("/api/v1/books", async (c) => {
@@ -1576,7 +1808,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.get("/api/v1/books/:id", async (c) => {
     const id = c.req.param("id");
     try {
-      const book = await state.loadBookConfig(id);
+      const book = normalizeStudioBookConfig(id, await state.loadBookConfig(id) as Record<string, unknown>);
       const chapters = await state.loadChapterIndex(id);
       const nextChapter = await state.getNextChapterNumber(id);
       return c.json({ book, chapters, nextChapter });
@@ -1606,7 +1838,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Book Create ---
 
   app.post("/api/v1/books/create", async (c) => {
-    const body = await c.req.json<StudioCreateBookBody>();
+    let body: StudioCreateBookBody;
+    try {
+      body = await c.req.json<StudioCreateBookBody>();
+    } catch (e) {
+      return c.json({ error: "请求体 JSON 解析失败" }, 400);
+    }
     let sourceBundle: FoundationSourceBundle | undefined;
     try {
       sourceBundle = body.foundationSources?.length
@@ -1630,44 +1867,91 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
 
     broadcast("book:creating", { bookId, title: body.title });
-    bookCreateStatus.set(bookId, { status: "creating" });
+    // 先设为 queued，消费者轮询时可见
+    bookCreateStatus.set(bookId, { status: "queued", createdAt: Date.now(), ttlMs: BOOK_CREATE_IN_PROGRESS_TTL_MS });
 
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    const tools = createInteractionToolsFromDeps(pipeline, state);
-    processProjectInteractionRequest({
-      projectRoot: root,
-      request: {
-        intent: "create_book",
-        title: body.title,
-        genre: body.genre,
-        language: body.language === "en" ? "en" : body.language === "zh" ? "zh" : undefined,
-        platform: body.platform,
-        chapterWordCount: body.chapterWordCount,
-        targetChapters: body.targetChapters,
-        blurb: [body.blurb?.trim(), sourceBundle?.contextBlock.trim()].filter(Boolean).join("\n\n"),
-      },
-      tools,
-    }).then(
-      async (result: {
-        readonly session: { readonly activeBookId?: string };
-        readonly details?: Readonly<Record<string, unknown>>;
-      }) => {
-        const createdBookId = (result.details?.bookId as string | undefined) ?? result.session.activeBookId ?? bookId;
-        if (sourceBundle) {
-          await persistFoundationSourceBundle(state.bookDir(createdBookId), sourceBundle, "create");
-        }
-        const book = await loadStudioBookListSummary(state, createdBookId).catch(() => undefined);
-        bookCreateStatus.delete(createdBookId);
-        broadcast("book:created", { bookId: createdBookId, ...(book ? { book } : {}) });
-      },
-      (e: unknown) => {
+    const blurb = [body.blurb?.trim(), sourceBundle?.contextBlock.trim()]
+      .filter((part): part is string => Boolean(part))
+      .join("\n\n");
+
+    // 使用 withPipeline 自动管理生命周期
+    // Note: buildPipelineConfig 可能因配置加载失败而抛异常，必须 try/catch
+    (async () => {
+      try {
+        // 从 queued → creating
+        bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_IN_PROGRESS_TTL_MS });
+        const pipelineConfig = await buildPipelineConfig();
+        withPipeline("create-book", pipelineConfig, async (pipeline) => {
+          const tools = createInteractionToolsFromDeps(pipeline, state);
+
+          // 带超时的创建任务
+          const creationPromise = processProjectInteractionRequest({
+            projectRoot: root,
+            request: {
+              intent: "create_book",
+              title: body.title,
+              genre: body.genre,
+              language: body.language === "en" ? "en" : body.language === "zh" ? "zh" : undefined,
+              platform: body.platform,
+              chapterWordCount: body.chapterWordCount,
+              targetChapters: body.targetChapters,
+              ...(blurb ? { blurb } : {}),
+            },
+            tools,
+          });
+
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("书籍创建超时（10 分钟）")), BOOK_CREATE_TIMEOUT_MS);
+          });
+
+          try {
+            const result = await Promise.race([creationPromise, timeoutPromise]);
+            const r = result as {
+              readonly session: { readonly activeBookId?: string };
+              readonly details?: Readonly<Record<string, unknown>>;
+            };
+            const createdBookId = (r.details?.bookId as string | undefined) ?? r.session.activeBookId ?? bookId;
+            if (sourceBundle) {
+              await persistFoundationSourceBundle(state.bookDir(createdBookId), sourceBundle, "create");
+            }
+            // Persist extended BookConfig fields (volumeCount, currentVolume, keywords, etc.)
+            // that the interactive agent does not handle during creation.
+            if (bookConfig.volumeCount !== undefined || bookConfig.currentVolume !== undefined || bookConfig.keywords !== undefined || bookConfig.targetAudience !== undefined || bookConfig.serializationStatus !== undefined) {
+              try {
+                const existing = await state.loadBookConfig(createdBookId);
+                const patched = {
+                  ...existing,
+                  ...(bookConfig.volumeCount !== undefined ? { volumeCount: bookConfig.volumeCount } : {}),
+                  ...(bookConfig.currentVolume !== undefined ? { currentVolume: bookConfig.currentVolume } : {}),
+                  ...(bookConfig.keywords !== undefined ? { keywords: bookConfig.keywords } : {}),
+                  ...(bookConfig.targetAudience !== undefined ? { targetAudience: bookConfig.targetAudience } : {}),
+                  ...(bookConfig.serializationStatus !== undefined ? { serializationStatus: bookConfig.serializationStatus } : {}),
+                  updatedAt: new Date().toISOString(),
+                };
+                await state.saveBookConfig(createdBookId, patched);
+              } catch {
+                // Best-effort: extended fields are optional; failure to persist them
+                // should not block book creation.
+              }
+            }
+            const book = await loadStudioBookListSummary(state, createdBookId).catch(() => undefined);
+            bookCreateStatus.set(bookId, { status: "completed", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+            broadcast("book:created", { bookId: createdBookId, ...(book ? { book } : {}) });
+          } catch (e: unknown) {
+            const error = e instanceof Error ? e.message : String(e);
+            bookCreateStatus.set(bookId, { status: "failed", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+            broadcast("book:error", { bookId, error });
+          }
+        }).catch(() => { /* fire-and-forget 的异常已被内部 catch 处理 */ });
+      } catch (e: unknown) {
         const error = e instanceof Error ? e.message : String(e);
-        bookCreateStatus.set(bookId, { status: "error", error });
-        broadcast("book:error", { bookId, error });
-      },
-    );
+        bookCreateStatus.set(bookId, { status: "failed", error: `管道初始化失败: ${error}`, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
+        broadcast("book:error", { bookId, error: `管道初始化失败: ${error}` });
+      }
+    })();
 
-    return c.json({ status: "creating", bookId });
+    // 返回 202 + jobId，符合异步 Job 契约
+    return c.json({ jobId: bookId, status: "queued" }, 202);
   });
 
   app.get("/api/v1/books/:id/create-status", async (c) => {
@@ -1676,7 +1960,16 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     if (!status) {
       return c.json({ status: "missing" }, 404);
     }
-    return c.json(status);
+    const elapsed = Date.now() - status.createdAt;
+    const remaining = Math.max(0, BOOK_CREATE_TIMEOUT_MS - elapsed);
+    return c.json({
+      status: status.status,
+      error: status.error,
+      phase: status.phase,
+      elapsedMs: elapsed,
+      remainingMs: remaining,
+      createdAt: status.createdAt,
+    });
   });
 
   // --- Chapters ---
@@ -1699,29 +1992,153 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
-  // --- Chapter Save ---
+  // --- Chapter Save (with version backup, content hash, concurrency protection) ---
+
+  const MAX_CHAPTER_VERSIONS = 50;
+  // In-memory lock per chapter to prevent concurrent writes
+  const chapterLocks = new Map<string, Promise<void>>();
+
+  function withChapterLock<T>(bookId: string, chapterNum: number, fn: () => Promise<T>): Promise<T> {
+    const key = `${bookId}:${chapterNum}`;
+    const previous = chapterLocks.get(key) ?? Promise.resolve();
+    // If the previous lock rejected, still allow the next operation to proceed.
+    const next = previous
+      .catch(() => undefined)
+      .then(() => fn());
+    chapterLocks.set(key, next as Promise<void>);
+    // Clean up after completion
+    next.finally(() => {
+      if (chapterLocks.get(key) === (next as Promise<void>)) chapterLocks.delete(key);
+    });
+    return next;
+  }
 
   app.put("/api/v1/books/:id/chapters/:num", async (c) => {
     const id = c.req.param("id");
     const num = parseInt(c.req.param("num"), 10);
+    if (!Number.isFinite(num) || num < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    const body = await c.req.json<{ content?: unknown }>();
+    if (typeof body.content !== "string") {
+      return c.json({ error: "content must be a string" }, 400);
+    }
+    const content = body.content;
+    if (content.length > 10_000_000) {
+      return c.json({ error: "content too large" }, 413);
+    }
     const bookDir = state.bookDir(id);
     const chaptersDir = join(bookDir, "chapters");
-    const { content } = await c.req.json<{ content: string }>();
+
+    // Use per-chapter lock to prevent concurrent overwrites
+    return withChapterLock(id, num, async () => {
+      try {
+        const files = await readdir(chaptersDir);
+        const paddedNum = String(num).padStart(4, "0");
+        const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
+        if (!match) return c.json({ error: "Chapter not found" }, 404);
+
+        const { readFile: readFileFs, writeFile: writeFileFs, mkdir, unlink } = await import("node:fs/promises");
+        const chapterFilePath = join(chaptersDir, match);
+
+        // Read current content
+        const oldContent = await readFileFs(chapterFilePath, "utf-8").catch(() => "");
+
+        // Skip backup if content is identical (content hash comparison)
+        if (oldContent === content) {
+          return c.json({ ok: true, chapterNumber: num, unchanged: true });
+        }
+
+        // Save version backup before overwriting
+        const versionsDir = join(chaptersDir, "versions");
+        await mkdir(versionsDir, { recursive: true }).catch(() => {});
+
+        // Find existing versions and compute next revision number
+        const existingVersions = await readdir(versionsDir).catch(() => []);
+        const versionPrefix = `${paddedNum}_v`;
+        let revisionCount = 0;
+        const versionFiles: string[] = [];
+        for (const f of existingVersions) {
+          if (f.startsWith(versionPrefix) && f.endsWith(".md")) {
+            versionFiles.push(f);
+            const revNum = parseInt(f.slice(versionPrefix.length, -3), 10);
+            if (!isNaN(revNum) && revNum > revisionCount) revisionCount = revNum;
+          }
+        }
+        revisionCount++;
+
+        // Write the backup
+        await writeFileFs(join(versionsDir, `${paddedNum}_v${revisionCount}.md`), oldContent, "utf-8");
+
+        // Enforce version limit: remove oldest versions beyond MAX_CHAPTER_VERSIONS
+        if (versionFiles.length >= MAX_CHAPTER_VERSIONS) {
+          // Sort by numeric revision (not dictionary order) so v10 comes after v9
+          const sorted = [...versionFiles].sort((a, b) => {
+            const revA = parseInt(a.slice(versionPrefix.length, -3), 10);
+            const revB = parseInt(b.slice(versionPrefix.length, -3), 10);
+            return revA - revB;
+          });
+          const toRemove = sorted.slice(0, sorted.length - MAX_CHAPTER_VERSIONS + 1);
+          for (const stale of toRemove) {
+            await unlink(join(versionsDir, stale)).catch(() => {});
+          }
+        }
+
+        // Write new content
+        await writeFileFs(chapterFilePath, content, "utf-8");
+
+        return c.json({ ok: true, chapterNumber: num, revision: revisionCount });
+      } catch (e) {
+        return c.json({ error: String(e) }, 500);
+      }
+    });
+  });
+
+  // --- Chapter Versions API ---
+
+  app.get("/api/v1/books/:id/chapters/:num/versions", async (c) => {
+    const id = c.req.param("id");
+    const num = parseInt(c.req.param("num"), 10);
+    const bookDir = state.bookDir(id);
+    const versionsDir = join(bookDir, "chapters", "versions");
 
     try {
-      const files = await readdir(chaptersDir);
+      await assertBookExists(state, id);
+      const files = await readdir(versionsDir).catch(() => []);
       const paddedNum = String(num).padStart(4, "0");
-      const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
-      if (!match) return c.json({ error: "Chapter not found" }, 404);
-
-      const { writeFile: writeFileFs } = await import("node:fs/promises");
-      await writeFileFs(join(chaptersDir, match), content, "utf-8");
-      return c.json({ ok: true, chapterNumber: num });
+      const versionPrefix = `${paddedNum}_v`;
+      const versions = files
+        .filter((f) => f.startsWith(versionPrefix) && f.endsWith(".md"))
+        .map((f) => {
+          const revNum = parseInt(f.slice(versionPrefix.length, -3), 10);
+          return { revision: revNum, filename: f };
+        })
+        .sort((a, b) => b.revision - a.revision);
+      return c.json({ versions, chapterNumber: num });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
   });
 
+  app.get("/api/v1/books/:id/chapters/:num/versions/:rev", async (c) => {
+    const id = c.req.param("id");
+    const num = parseInt(c.req.param("num"), 10);
+    const rev = parseInt(c.req.param("rev"), 10);
+    const bookDir = state.bookDir(id);
+    const versionsDir = join(bookDir, "chapters", "versions");
+
+    try {
+      await assertBookExists(state, id);
+      const paddedNum = String(num).padStart(4, "0");
+      const versionFile = `${paddedNum}_v${rev}.md`;
+      const content = await readFile(join(versionsDir, versionFile), "utf-8");
+      return c.json({ revision: rev, chapterNumber: num, content });
+    } catch {
+      return c.json({ error: "Version not found" }, 404);
+    }
+  });
+
+  /** @deprecated Use PUT /api/v1/books/:id instead. */
   app.patch("/api/v1/books/:id/config", async (c) => {
     const id = c.req.param("id");
     await assertBookExists(state, id);
@@ -2014,10 +2431,143 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.get("/api/v1/books/:id/analytics", async (c) => {
     const id = c.req.param("id");
     try {
-      const chapters = await state.loadChapterIndex(id);
+      const chapters = await state.loadChapterIndexStrict(id);
       return c.json(computeAnalytics(id, chapters));
     } catch {
       return c.json({ error: `Book "${id}" not found` }, 404);
+    }
+  });
+
+  // --- Health ---
+
+  type Metric<T> =
+    | { readonly status: "available"; readonly value: T }
+    | { readonly status: "unavailable"; readonly reason: string };
+
+  app.get("/api/v1/books/:id/health", async (c) => {
+    const id = c.req.param("id");
+    const bookDir = state.bookDir(id);
+    const storyDir = join(bookDir, "story");
+
+    try {
+      const chapters = await state.loadChapterIndexStrict(id);
+      const analytics = computeAnalytics(id, chapters);
+
+      let hookRisks: Metric<{ total: number; stale: number; criticalIds: readonly string[] }>;
+      try {
+        const hooksRaw = await readFile(join(storyDir, "pending_hooks.md"), "utf-8").catch(() => "");
+        const currentChapter = chapters.length > 0
+          ? Math.max(...chapters.map((ch: { number: number }) => ch.number))
+          : 0;
+        const summary = summarizePendingHookHealth({ markdown: hooksRaw, chapterNumber: currentChapter });
+        hookRisks = {
+          status: "available",
+          value: { total: summary.total, stale: summary.stale, criticalIds: summary.criticalIds },
+        };
+      } catch (error) {
+        hookRisks = { status: "unavailable", reason: String(error) };
+      }
+
+      let recentImports: Metric<number>;
+      try {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const sources = await listFoundationSources(bookDir);
+        recentImports = {
+          status: "available",
+          value: sources.filter((s: { importedAt: string }) => new Date(s.importedAt).getTime() > sevenDaysAgo).length,
+        };
+      } catch (error) {
+        recentImports = { status: "unavailable", reason: String(error) };
+      }
+
+      const styleStatus: Metric<"profile-ready"> = await stat(join(storyDir, "style_profile.json"))
+        .then(() => ({ status: "available" as const, value: "profile-ready" as const }))
+        .catch(() => ({ status: "unavailable" as const, reason: "No style profile" }));
+
+      const pipelineErrors: Metric<number> = {
+        status: "unavailable",
+        reason: "No durable pipeline error history",
+      };
+
+      return c.json({
+        auditPassRate: analytics.auditPassRate,
+        tokenStats: analytics.tokenStats ?? null,
+        hookRisks,
+        recentImports,
+        styleStatus,
+        pipelineErrors,
+      });
+    } catch (error) {
+      return c.json({ error: `Health check failed for "${id}": ${String(error)}` }, 500);
+    }
+  });
+
+  // --- Sources ---
+
+  app.get("/api/v1/books/:id/sources", async (c) => {
+    const id = c.req.param("id");
+    try {
+      const sources = await listFoundationSources(state.bookDir(id));
+      return c.json({ sources });
+    } catch (error) {
+      return c.json({ error: `Failed to list sources for "${id}": ${String(error)}` }, 500);
+    }
+  });
+
+  // POST /books/:id/sources — add a new foundation source from text
+  app.post("/api/v1/books/:id/sources", async (c) => {
+    const id = c.req.param("id");
+    let bodyJson: Record<string, unknown> | null = null;
+    try {
+      bodyJson = await c.req.json<Record<string, unknown>>();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    if (!bodyJson) return c.json({ error: "Invalid JSON body" }, 400);
+    const sourceName = typeof bodyJson.sourceName === "string" ? bodyJson.sourceName : "";
+    const text = typeof bodyJson.text === "string" ? bodyJson.text : "";
+    const fileType = typeof bodyJson.fileType === "string" ? bodyJson.fileType : "txt";
+    const purpose = typeof bodyJson.purpose === "string" ? bodyJson.purpose : "auto";
+    if (!sourceName.trim() || !text.trim()) {
+      return c.json({ error: "sourceName and text are required" }, 400);
+    }
+    if (!isDocumentFileType(fileType)) {
+      return c.json({ error: `Unsupported file type: ${fileType}` }, 400);
+    }
+    if (!isFoundationSourcePurpose(purpose)) {
+      return c.json({ error: `Unsupported purpose: ${purpose}` }, 400);
+    }
+    const release = await state.acquireBookLock(id);
+    try {
+      const sourceBundle = buildFoundationSourceBundle([{
+        sourceName: sourceName.trim(),
+        fileType,
+        text,
+        purpose,
+      }]);
+      await persistFoundationSourceBundle(state.bookDir(id), sourceBundle, "supplement");
+      return c.json({ ok: true, sourceName: sourceName.trim() });
+    } catch (error) {
+      return c.json({ error: String(error) }, 500);
+    } finally {
+      await release();
+    }
+  });
+
+  app.delete("/api/v1/books/:id/sources/:sourceId", async (c) => {
+    const id = c.req.param("id");
+    const sourceId = c.req.param("sourceId");
+    const release = await state.acquireBookLock(id);
+    try {
+      const archived = await archiveFoundationSource(state.bookDir(id), sourceId);
+      if (!archived) {
+        return c.json({ error: "Source not found" }, 404);
+      }
+      return c.json({ ok: true });
+    } catch (error) {
+      return c.json({ error: `Failed to archive source: ${String(error)}` }, 500);
+    } finally {
+      await release();
     }
   });
 
@@ -2036,6 +2586,41 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     readonly coreHook: string;
     readonly halfLife: string;
     readonly notes: string;
+  }
+
+  /** Sync Studio HookRecord[] to Core's story/state/hooks.json so the
+   *  Planner/Writer pipeline reads the same data the user sees in the UI.
+   *  pending_hooks.md stays as a human-readable rendering artifact. */
+  async function syncHooksToJSON(bookDir: string, hooks: HookRecord[]): Promise<void> {
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const stateDir = join(bookDir, "story", "state");
+    await mkdir(stateDir, { recursive: true });
+    const hooksPath = join(stateDir, "hooks.json");
+
+    // Convert Studio HookRecord → Core HookRecord (Zod-validated shape)
+    const coreHooks = hooks.map((h) => ({
+      hookId: h.hookId,
+      startChapter: h.startChapter || 0,
+      type: h.type || "",
+      status: h.status || "open",
+      lastAdvancedChapter: h.lastAdvancedChapter || 0,
+      expectedPayoff: h.expectedPayoff || "",
+      payoffTiming: h.payoffTiming || undefined,
+      notes: h.notes || "",
+      dependsOn: h.dependsOn
+        ? h.dependsOn.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      paysOffInArc: h.paysOffInArc || undefined,
+      coreHook: /是|true|yes|1/i.test(h.coreHook) ? true : undefined,
+      halfLifeChapters: parseInt(h.halfLife, 10) || undefined,
+    }));
+
+    await writeFile(
+      hooksPath,
+      JSON.stringify({ hooks: coreHooks, updatedAt: new Date().toISOString() }, null, 2),
+      "utf-8",
+    );
   }
 
   function normalizeHookHeader(value: string): string {
@@ -2102,12 +2687,148 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     const bookDir = state.bookDir(id);
+
+    // Prefer Core's authoritative hooks.json; fall back to pending_hooks.md
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const hooksJsonPath = join(bookDir, "story", "state", "hooks.json");
+      const raw = await readFile(hooksJsonPath, "utf-8");
+      const parsed = JSON.parse(raw) as { hooks?: Array<Record<string, unknown>> };
+      if (parsed.hooks?.length) {
+        // Convert Core HookRecord back to Studio HookRecord for UI compatibility
+        const hooks: HookRecord[] = parsed.hooks.map((h: Record<string, unknown>) => ({
+          hookId: String(h.hookId ?? ""),
+          startChapter: Number(h.startChapter) || 0,
+          type: String(h.type ?? ""),
+          status: String(h.status ?? "open"),
+          lastAdvancedChapter: Number(h.lastAdvancedChapter) || 0,
+          expectedPayoff: String(h.expectedPayoff ?? ""),
+          payoffTiming: String(h.payoffTiming ?? ""),
+          dependsOn: Array.isArray(h.dependsOn) ? (h.dependsOn as string[]).join(", ") : String(h.dependsOn ?? ""),
+          paysOffInArc: String(h.paysOffInArc ?? ""),
+          coreHook: h.coreHook === true ? "是" : "",
+          halfLife: String(h.halfLifeChapters ?? ""),
+          notes: String(h.notes ?? ""),
+        }));
+        return c.json({ hooks });
+      }
+    } catch {
+      // hooks.json not found or unreadable — fall back to pending_hooks.md
+    }
+
     const filePath = resolve(bookDir, "story", "pending_hooks.md");
     try {
       const content = await readFile(filePath, "utf-8");
       return c.json({ hooks: parseHooksMarkdown(content) });
     } catch {
       return c.json({ hooks: [] });
+    }
+  });
+
+  // --- Hooks CRUD ---
+
+  function serializeHooksToMarkdown(hooks: HookRecord[]): string {
+    const headers = ["HookId", "StartChapter", "Type", "Status", "LastAdvancedChapter", "ExpectedPayoff", "PayoffTiming", "DependsOn", "PaysOffInArc", "CoreHook", "HalfLife", "Notes"];
+    const align = "|" + headers.map(() => "---").join("|") + "|";
+    const rows = hooks.map((h) =>
+      "|" + [
+        h.hookId,
+        h.startChapter || "",
+        h.type,
+        h.status,
+        h.lastAdvancedChapter || "",
+        h.expectedPayoff,
+        h.payoffTiming,
+        h.dependsOn,
+        h.paysOffInArc,
+        h.coreHook,
+        h.halfLife,
+        h.notes,
+      ].join("|") + "|"
+    );
+    return `# Pending Hooks\n\n|${headers.join("|")}|\n${align}\n${rows.join("\n")}\n`;
+  }
+
+  app.post("/api/v1/books/:id/hooks", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const bookDir = state.bookDir(id);
+    const filePath = resolve(bookDir, "story", "pending_hooks.md");
+    const body = await c.req.json<Partial<HookRecord>>().catch((): Partial<HookRecord> => ({}));
+    const hookId = body.hookId || `hook-${Date.now()}`;
+
+    try {
+      let content = "";
+      try { content = await readFile(filePath, "utf-8"); } catch { content = ""; }
+      const hooks = content ? parseHooksMarkdown(content) : [];
+      if (hooks.some((h) => h.hookId === hookId)) {
+        return c.json({ error: "Hook ID already exists" }, 409);
+      }
+      hooks.push({
+        hookId,
+        startChapter: body.startChapter ?? 0,
+        type: body.type ?? "",
+        status: body.status ?? "open",
+        lastAdvancedChapter: body.lastAdvancedChapter ?? 0,
+        expectedPayoff: body.expectedPayoff ?? "",
+        payoffTiming: body.payoffTiming ?? "",
+        dependsOn: body.dependsOn ?? "",
+        paysOffInArc: body.paysOffInArc ?? "",
+        coreHook: body.coreHook ?? "",
+        halfLife: body.halfLife ?? "",
+        notes: body.notes ?? "",
+      });
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(filePath, serializeHooksToMarkdown(hooks), "utf-8");
+      await syncHooksToJSON(bookDir, hooks);
+      return c.json({ ok: true, hookId });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.put("/api/v1/books/:id/hooks/:hookId", async (c) => {
+    const id = c.req.param("id");
+    const hookId = c.req.param("hookId");
+    await assertBookExists(state, id);
+    const bookDir = state.bookDir(id);
+    const filePath = resolve(bookDir, "story", "pending_hooks.md");
+    const body = await c.req.json<Partial<HookRecord>>().catch((): Partial<HookRecord> => ({}));
+
+    try {
+      const content = await readFile(filePath, "utf-8");
+      const hooks = parseHooksMarkdown(content);
+      const idx = hooks.findIndex((h) => h.hookId === hookId);
+      if (idx === -1) return c.json({ error: "Hook not found" }, 404);
+      hooks[idx] = { ...hooks[idx], ...body, hookId };
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(filePath, serializeHooksToMarkdown(hooks), "utf-8");
+      await syncHooksToJSON(bookDir, hooks);
+      return c.json({ ok: true, hookId });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.delete("/api/v1/books/:id/hooks/:hookId", async (c) => {
+    const id = c.req.param("id");
+    const hookId = c.req.param("hookId");
+    await assertBookExists(state, id);
+    const bookDir = state.bookDir(id);
+    const filePath = resolve(bookDir, "story", "pending_hooks.md");
+
+    try {
+      const content = await readFile(filePath, "utf-8");
+      const hooks = parseHooksMarkdown(content);
+      const filtered = hooks.filter((h) => h.hookId !== hookId);
+      if (filtered.length === hooks.length) return c.json({ error: "Hook not found" }, 404);
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(filePath, serializeHooksToMarkdown(filtered), "utf-8");
+      await syncHooksToJSON(bookDir, filtered);
+      return c.json({ ok: true, hookId });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
     }
   });
 
@@ -2186,15 +2907,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     broadcast("write:start", { bookId: id });
 
     // Fire and forget — progress/completion/errors pushed via SSE
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    pipeline.writeNextChapter(id, body.wordCount).then(
-      (result) => {
-        broadcast("write:complete", { bookId: id, chapterNumber: result.chapterNumber, status: result.status, title: result.title, wordCount: result.wordCount });
-      },
-      (e) => {
-        broadcast("write:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
-      },
-    );
+    withPipeline("write-next", await buildPipelineConfig(), async (pipeline) => {
+      const result = await pipeline.writeNextChapter(id, body.wordCount);
+      broadcast("write:complete", { bookId: id, chapterNumber: result.chapterNumber, status: result.status, title: result.title, wordCount: result.wordCount });
+    }).catch((e) => {
+      broadcast("write:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    });
 
     return c.json({ status: "writing", bookId: id });
   });
@@ -2206,15 +2924,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("draft:start", { bookId: id });
 
-    const pipeline = new PipelineRunner(await buildPipelineConfig());
-    pipeline.writeDraft(id, body.context, body.wordCount).then(
-      (result) => {
-        broadcast("draft:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
-      },
-      (e) => {
-        broadcast("draft:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
-      },
-    );
+    withPipeline("draft", await buildPipelineConfig(), async (pipeline) => {
+      const result = await pipeline.writeDraft(id, body.context, body.wordCount);
+      broadcast("draft:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
+    }).catch((e) => {
+      broadcast("draft:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    });
 
     return c.json({ status: "drafting", bookId: id });
   });
@@ -2410,7 +3125,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: "Unsupported cover service" }, 400);
     }
     const secrets = await loadSecrets(root);
-    return c.json({ apiKey: secrets.services[coverSecretKey(service)]?.apiKey ?? "" });
+    const fullKey = secrets.services[coverSecretKey(service)]?.apiKey ?? "";
+    const hasApiKey = fullKey.length > 0;
+    const keyPreview = hasApiKey
+      ? fullKey.length > 8
+        ? fullKey.slice(0, 4) + "..." + fullKey.slice(-4)
+        : fullKey.slice(0, 2) + "..."
+      : "";
+    return c.json({ hasApiKey, keyPreview });
   });
 
   app.put("/api/v1/cover/secret/:service", async (c) => {
@@ -2418,20 +3140,24 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     if (!resolveCoverProviderPreset(service)) {
       return c.json({ error: "Unsupported cover service" }, 400);
     }
-    const body = await c.req.json<{ apiKey?: string }>();
+    const body = await c.req.json<{ apiKey?: string; clear?: boolean }>();
+    // Only save if key is provided and non-empty, or clear is explicitly requested
     const trimmedKey = body.apiKey?.trim() ?? "";
-    if (trimmedKey && !isHeaderSafeApiKey(trimmedKey)) {
+    if (body.clear === true) {
+      const key = coverSecretKey(service);
+      await setServiceApiKey(root, key, "");
+      return c.json({ ok: true, service, cleared: true });
+    }
+    if (!trimmedKey) {
+      // Empty key with no explicit clear — preserve existing key
+      return c.json({ ok: true, service, preserved: true });
+    }
+    if (!isHeaderSafeApiKey(trimmedKey)) {
       return c.json({ error: "API Key 包含不能放入 HTTP Authorization header 的字符，请只粘贴原始密钥。" }, 400);
     }
 
-    const secrets = await loadSecrets(root);
     const key = coverSecretKey(service);
-    if (trimmedKey) {
-      secrets.services[key] = { apiKey: trimmedKey };
-    } else {
-      delete secrets.services[key];
-    }
-    await saveSecrets(root, secrets);
+    await setServiceApiKey(root, key, trimmedKey);
     return c.json({ ok: true, service });
   });
 
@@ -2477,7 +3203,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       provider: resolveServiceProviderFamily(baseService) ?? "openai",
       baseUrl: resolvedBaseUrl,
     });
-    if (!apiKey?.trim() && !apiKeyOptional) {
+    // 如果前端未传入 API Key，尝试从 secrets 中读取已存储的 Key
+    let resolvedApiKey = apiKey?.trim() ?? "";
+    if (!resolvedApiKey && !apiKeyOptional) {
+      const secrets = await loadSecrets(root);
+      resolvedApiKey = secrets.services[service]?.apiKey?.trim() ?? "";
+    }
+    if (!resolvedApiKey && !apiKeyOptional) {
       return c.json({
         ok: false,
         error: "API Key 不能为空",
@@ -2489,7 +3221,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const probe = await probeServiceCapabilities({
       root,
       service,
-      apiKey: apiKey?.trim() ?? "",
+      apiKey: resolvedApiKey,
       baseUrl: resolvedBaseUrl,
       preferredApiFormat: apiFormat,
       preferredStream: stream,
@@ -2532,7 +3264,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.put("/api/v1/services/:service/secret", async (c) => {
     const service = c.req.param("service");
     const { apiKey } = await c.req.json<{ apiKey: string }>();
-    const secrets = await loadSecrets(root);
     const trimmedKey = apiKey?.trim() ?? "";
     if (trimmedKey) {
       if (!isHeaderSafeApiKey(trimmedKey)) {
@@ -2541,20 +3272,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           error: "API Key 只能包含可放进 HTTP Authorization header 的非空白 ASCII 字符；请不要粘贴连接失败提示或诊断文本。",
         }, 400);
       }
-      secrets.services[service] = { apiKey: trimmedKey };
-    } else {
-      delete secrets.services[service];
     }
-    await saveSecrets(root, secrets);
+    await setServiceApiKey(root, service, trimmedKey);
     return c.json({ ok: true });
   });
 
   app.get("/api/v1/services/:service/secret", async (c) => {
     const service = c.req.param("service");
     const secrets = await loadSecrets(root);
-    return c.json({
-      apiKey: secrets.services[service]?.apiKey ?? "",
-    });
+    const fullKey = secrets.services[service]?.apiKey ?? "";
+    const hasApiKey = fullKey.length > 0;
+    const keyPreview = hasApiKey
+      ? fullKey.length > 8
+        ? fullKey.slice(0, 4) + "..." + fullKey.slice(-4)
+        : fullKey.slice(0, 2) + "..."
+      : "";
+    return c.json({ hasApiKey, keyPreview });
   });
 
   app.get("/api/v1/services/models", async (c) => {
@@ -2654,8 +3387,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.get("/api/v1/project", async (c) => {
     const currentConfig = await loadCurrentProjectConfig({ requireApiKey: false });
     // Check if language was explicitly set in inkos.json (not just the schema default)
-    const raw = JSON.parse(await readFile(join(root, "inkos.json"), "utf-8"));
-    const languageExplicit = "language" in raw && raw.language !== "";
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(await readFile(join(root, "inkos.json"), "utf-8"));
+    } catch {
+      raw = {};
+    }
+    const languageExplicit = typeof raw === "object" && raw !== null && "language" in raw && raw.language !== "";
 
     return c.json({
       name: currentConfig.name,
@@ -2866,6 +3604,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Agent chat ---
 
+  /** @deprecated Use /api/v1/sessions endpoints instead. Kept for backward compatibility. */
   app.get("/api/v1/interaction/session", async (c) => {
     const session = await loadProjectSession(root);
     const activeBookId = await resolveSessionActiveBook(root, session);
@@ -3131,8 +3870,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         currentConfig: config,
         sessionIdForSSE: bookSession.sessionId,
       }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ensure dispose in all paths
+      const disposePipeline = () => {
+        if (typeof (pipeline as any).dispose === "function") {
+          (pipeline as any).dispose();
+        }
+      };
 
-      if (agentBookId && isWriteNextInstruction(instruction)) {
+      try {
+        if (agentBookId && isWriteNextInstruction(instruction)) {
         const toolCallId = `direct-writer-${Date.now().toString(36)}`;
         const toolArgs = { agent: "writer", bookId: agentBookId };
         broadcast("tool:start", {
@@ -3261,7 +4007,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
                   const title = typeof args?.title === "string" && args.title.trim()
                     ? args.title.trim()
                     : bookId;
-                  bookCreateStatus.set(bookId, { status: "creating" });
+                  bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
                   broadcast("book:creating", { bookId, title, sessionId: streamSessionId });
                 }
               }
@@ -3299,7 +4045,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
                   const bookId = resolveArchitectBookIdFromArgs(exec.args);
                   if (bookId) {
                     const error = exec.error ?? "Book creation failed";
-                    bookCreateStatus.set(bookId, { status: "error", error });
+                    bookCreateStatus.set(bookId, { status: "failed", error, createdAt: Date.now(), ttlMs: BOOK_CREATE_TTL_MS });
                     broadcast("book:error", { bookId, sessionId: streamSessionId, error });
                   }
                 }
@@ -3484,6 +4230,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           ...(bookSession.bookId ? { activeBookId: bookSession.bookId } : {}),
         },
       });
+      } finally {
+        disposePipeline();
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         throw e;
@@ -3493,6 +4242,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         throw new ApiError(409, "SESSION_ALREADY_MIGRATED", migratedMessage);
       }
       const msg = e instanceof Error ? e.message : String(e);
+      console.error("[studio] Agent error:", msg);
       broadcast("agent:error", { instruction, activeBookId, sessionId, error: msg });
 
       // Agent busy — return 429 with user-friendly message
@@ -3789,6 +4539,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         : null;
       const apiFormat = normalizeAuditApiFormat(config?.service, config?.apiFormat);
       const api = resolveAuditApiProtocol(config?.service, apiFormat);
+
+      // Determine the primary writing service from project config
+      let writingService = "";
+      try {
+        const projectConfig = await loadProjectConfig(root);
+        writingService = projectConfig?.llm?.provider ?? "";
+      } catch { /* fallback */ }
+
       return c.json({
         service: config?.service ?? null,
         model: config?.model ?? null,
@@ -3799,6 +4557,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         connected: Boolean(auditKey),
         auditKeyFingerprint: fingerprint(auditKey),
         writingKeyFingerprint: fingerprint(writingKey ?? ""),
+        writingService: writingService || config?.service || "",
         keySeparated: Boolean(auditKey && auditKey !== writingKey),
       });
     } catch (e) {
@@ -4030,7 +4789,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         projectRoot: root,
         bookId: id,
       });
-      const result = await auditor.auditChapter(bookDir, content, chapterNum, book.genre);
+      const result = await auditor.auditChapter(bookDir, content, chapterNum, book.genre, {
+        distillationRules: await loadDistillationRules(bookDir),
+      });
       await persistManualAuditResult(id, chapterNum, result);
       broadcast("audit:complete", { bookId: id, chapter: chapterNum, passed: result.passed });
       return c.json(result);
@@ -4039,6 +4800,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: String(e) }, 500);
     }
   });
+
+  /** Load distillation rules from book's style_distillation.json if it exists. */
+  async function loadDistillationRules(bookDir: string): Promise<string[]> {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const raw = await readFile(join(bookDir, "story", "style_distillation.json"), "utf-8");
+      const data = JSON.parse(raw) as { rules?: ReadonlyArray<{ instruction?: string; enabled?: boolean }> };
+      if (!data.rules) return [];
+      return data.rules
+        .filter((r) => r.enabled !== false && r.instruction)
+        .map((r) => r.instruction!);
+    } catch {
+      return [];
+    }
+  }
 
   // --- Revise ---
 
@@ -4059,15 +4836,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
       if (!match) return c.json({ error: "Chapter not found" }, 404);
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
+      const pipelineConfig = await buildPipelineConfig({ externalContext: body.brief });
       const normalizedMode = body.mode ?? "spot-fix";
-      const result = await pipeline.reviseDraft(
-        id,
-        chapterNum,
-        normalizedMode as "polish" | "rewrite" | "rework" | "spot-fix" | "anti-detect",
-      );
+      const result = await withPipeline("revise-draft", pipelineConfig, async (pipeline) => {
+        return pipeline.reviseDraft(
+          id,
+          chapterNum,
+          normalizedMode as "polish" | "rewrite" | "rework" | "spot-fix" | "anti-detect",
+        );
+      });
       broadcast("revise:complete", { bookId: id, chapter: chapterNum });
       return c.json(result);
     } catch (e) {
@@ -4085,7 +4862,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     try {
       const artifact = await buildExportArtifact(state, id, {
-        format: format as "txt" | "md" | "epub",
+        format: format as "txt" | "md" | "epub" | "html",
         approvedOnly,
       });
       const responseBody = typeof artifact.payload === "string"
@@ -4107,33 +4884,45 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.post("/api/v1/books/:id/export-save", async (c) => {
     const id = c.req.param("id");
     const { format, approvedOnly } = await c.req.json<{ format?: string; approvedOnly?: boolean }>().catch(() => ({ format: "txt", approvedOnly: false }));
+    // Runtime whitelist — prevent arbitrary file extension injection
+    const ALLOWED_EXPORT_FORMATS = new Set(["txt", "md", "html", "epub"]);
     const fmt = format ?? "txt";
+    if (!ALLOWED_EXPORT_FORMATS.has(fmt)) {
+      return c.json({ error: `不支持的导出格式 "${fmt}"，仅支持 txt/md/html/epub` }, 400);
+    }
 
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const tools = createInteractionToolsFromDeps(pipeline, state);
-      const bookDir = state.bookDir(id);
-      const outputPath = join(bookDir, `${id}.${fmt === "epub" ? "epub" : fmt}`);
-      const result = await processProjectInteractionRequest({
-        projectRoot: root,
-        request: {
-          intent: "export_book",
-          bookId: id,
-          format: fmt as "txt" | "md" | "epub",
-          approvedOnly,
-          outputPath,
-        },
-        tools,
-        activeBookId: id,
+      const result = await withPipeline("export-save", await buildPipelineConfig(), async (pipeline) => {
+        const tools = createInteractionToolsFromDeps(pipeline, state);
+        const bookDir = state.bookDir(id);
+        const outputPath = join(bookDir, `${id}.${fmt === "epub" ? "epub" : fmt}`);
+        const r = await processProjectInteractionRequest({
+          projectRoot: root,
+          request: {
+            intent: "export_book",
+            bookId: id,
+            format: fmt as "txt" | "md" | "epub" | "html",
+            approvedOnly,
+            outputPath,
+          },
+          tools,
+          activeBookId: id,
+        });
+        return {
+          ok: true,
+          path: (r.details?.outputPath as string | undefined) ?? outputPath,
+          format: fmt,
+          chapters: (r.details?.chaptersExported as number | undefined) ?? 0,
+        };
       });
-      return c.json({
-        ok: true,
-        path: (result.details?.outputPath as string | undefined) ?? outputPath,
-        format: fmt,
-        chapters: (result.details?.chaptersExported as number | undefined) ?? 0,
-      });
+      return c.json(result);
     } catch (e) {
-      return c.json({ error: String(e) }, 500);
+      const msg = e instanceof Error ? e.message : String(e);
+      // Provide a more specific error for empty books
+      if (msg.includes("no chapters") || msg.includes("No chapters") || msg.includes("empty")) {
+        return c.json({ error: "当前书籍没有可导出的章节，请先创作章节内容。" }, 400);
+      }
+      return c.json({ error: `导出失败：${msg}` }, 500);
     }
   });
 
@@ -4392,6 +5181,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       targetChapters?: number;
       status?: string;
       language?: string;
+      volumeCount?: number;
+      currentVolume?: number;
+      keywords?: string[];
+      targetAudience?: string;
+      serializationStatus?: string;
     }>();
     try {
       const book = await state.loadBookConfig(id);
@@ -4401,6 +5195,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         ...(updates.targetChapters !== undefined ? { targetChapters: Number(updates.targetChapters) } : {}),
         ...(updates.status !== undefined ? { status: updates.status as typeof book.status } : {}),
         ...(updates.language !== undefined ? { language: updates.language as "zh" | "en" } : {}),
+        ...(updates.volumeCount !== undefined ? { volumeCount: Number(updates.volumeCount) } : {}),
+        ...(updates.currentVolume !== undefined ? { currentVolume: Number(updates.currentVolume) } : {}),
+        ...(updates.keywords !== undefined ? { keywords: updates.keywords } : {}),
+        ...(updates.targetAudience !== undefined ? { targetAudience: updates.targetAudience } : {}),
+        ...(updates.serializationStatus !== undefined ? { serializationStatus: updates.serializationStatus as "draft" | "serializing" | "completed" | "hiatus" } : {}),
         updatedAt: new Date().toISOString(),
       };
       await state.saveBookConfig(id, updated);
@@ -4424,11 +5223,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     try {
       const rollbackTarget = chapterNum - 1;
       const discarded = await state.rollbackToChapter(id, rollbackTarget);
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
-      pipeline.writeNextChapter(id).then(
-        (result) => broadcast("rewrite:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount }),
+      const pipelineConfig = await buildPipelineConfig({ externalContext: body.brief });
+      withPipeline("rewrite-next", pipelineConfig, async (pipeline) => {
+        const result = await pipeline.writeNextChapter(id);
+        broadcast("rewrite:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
+      }).catch(
         (e) => broadcast("rewrite:error", { bookId: id, error: e instanceof Error ? e.message : String(e) }),
       );
       return c.json({ status: "rewriting", bookId: id, chapter: chapterNum, rolledBackTo: rollbackTarget, discarded });
@@ -4447,10 +5246,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       .catch(() => ({}));
 
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        externalContext: body.brief,
-      }));
-      const result = await pipeline.resyncChapterArtifacts(id, chapterNum);
+      const result = await withPipeline("resync-chapter", await buildPipelineConfig({ externalContext: body.brief }), async (pipeline) => {
+        return pipeline.resyncChapterArtifacts(id, chapterNum);
+      });
       return c.json(result);
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -4613,6 +5411,192 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- Pre-flight: check that @actalk/inkos-core is built before any style endpoint ---
+  async function ensureCoreBuilt(): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await import("@actalk/inkos-core");
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "@actalk/inkos-core is not built. Run `pnpm --filter @actalk/inkos-core exec tsc` first." };
+    }
+  }
+
+  app.post("/api/v1/style/diagnostics", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = DiagnosticsRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.message }, 400);
+    }
+    const { text, language } = parsed.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
+
+    try {
+      const { runFullDiagnostics } = await import("@actalk/inkos-core");
+      const diagnostics = runFullDiagnostics(text, language ?? "zh");
+      return c.json(diagnostics);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- AI-Tells analysis for arbitrary text (standalone, not chapter-bound) ---
+
+  app.post("/api/v1/style/ai-tells", async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    if (!raw || typeof raw.text !== "string" || !raw.text.trim()) {
+      return c.json({ error: "text is required" }, 400);
+    }
+    const { text, language } = raw as { text: string; language?: string };
+    try {
+      const { analyzeAITells } = await import("@actalk/inkos-core");
+      const result = analyzeAITells(text, language === "en" ? "en" : "zh");
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Comparison & Adjustment Plan ---
+
+  app.post("/api/v1/style/compare", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = CompareRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.message }, 400);
+    }
+    const { text, targetAuthorId, language } = parsed.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
+
+    try {
+      const authorData = await getAuthorProfile(root, targetAuthorId);
+      if (!authorData) {
+        return c.json({ error: `Author "${targetAuthorId}" not found` }, 404);
+      }
+      if (language && authorData.profile.language !== language) {
+        return c.json({ error: `Author language is "${authorData.profile.language}", not "${language}"` }, 400);
+      }
+      const result = compareWithAuthorProfile(text, authorData.profile);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/style/adjustments/plan", async (c) => {
+    const coreBuilt = await ensureCoreBuilt();
+    if (!coreBuilt.ok) return c.json({ error: coreBuilt.error }, 503);
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = AdjustmentPlanRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.message }, 400);
+    }
+    const { text, targetAuthorId, maxSuggestions } = parsed.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
+
+    try {
+      const { runFullDiagnostics } = await import("@actalk/inkos-core");
+      const diagnostics = runFullDiagnostics(text);
+
+      let comparison: ReturnType<typeof compareWithAuthorProfile> | undefined;
+      let authorProfile: AuthorStyleProfile | undefined;
+
+      if (targetAuthorId) {
+        const authorData = await getAuthorProfile(root, targetAuthorId);
+        if (!authorData) {
+          return c.json({ error: `Author "${targetAuthorId}" not found` }, 404);
+        }
+        authorProfile = authorData.profile;
+        comparison = compareWithAuthorProfile(text, authorProfile);
+      }
+
+      const plan = generateAdjustmentPlan(text, diagnostics, {
+        targetAuthorProfile: authorProfile,
+        comparison,
+        maxSuggestions,
+      });
+      return c.json(plan);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Rewrite Preview ---
+
+  app.post("/api/v1/style/adjustments/preview", async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = RewritePreviewRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.message }, 400);
+    }
+    const { text, sourceHash, targetAuthorId, authorProfileVersion, selectedSuggestionIds } = parsed.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
+
+    try {
+      // 1. Load author profile
+      const authorData = await getAuthorProfile(root, targetAuthorId);
+      if (!authorData) {
+        return c.json({ error: `Author "${targetAuthorId}" not found` }, 404);
+      }
+      if (authorData.profile.version !== authorProfileVersion) {
+        return c.json({ error: "Author profile version has changed; regenerate plan" }, 409);
+      }
+
+      // 2. Regenerate diagnostics and plan from current text
+      const { runFullDiagnostics } = await import("@actalk/inkos-core");
+      const diagnostics = runFullDiagnostics(text);
+      const plan = generateAdjustmentPlan(text, diagnostics, {
+        targetAuthorProfile: authorData.profile,
+        comparison: compareWithAuthorProfile(text, authorData.profile),
+      });
+
+      // 3. Validate sourceHash
+      if (plan.sourceHash !== sourceHash) {
+        return c.json({ error: "Source text has changed; regenerate plan" }, 409);
+      }
+
+      const validSuggestionIds = new Set(plan.suggestions.map((suggestion) => suggestion.id));
+      const missingSuggestionIds = selectedSuggestionIds.filter((id) => !validSuggestionIds.has(id));
+      if (missingSuggestionIds.length > 0) {
+        return c.json({ error: "Selected suggestions are stale; regenerate plan" }, 409);
+      }
+
+      // 4. Create LLM client and rewrite
+      const freshConfig = await loadProjectConfig(root, { consumer: "studio" });
+      if (!freshConfig.llm?.provider) {
+        return c.json({ error: "LLM provider not configured; please check your API settings" }, 503);
+      }
+      const client = createLLMClient(freshConfig.llm);
+      if (!client._apiKey) {
+        return c.json({ error: "API key not configured; please set INKOS_LLM_API_KEY in project .env or global ~/.inkos/.env" }, 503);
+      }
+      const model = freshConfig.llm.model ?? "deepseek-v4-flash";
+
+      const result = await rewriteWithAuthorProfile({
+        text,
+        authorProfile: authorData.profile,
+        plan,
+        selectedSuggestionIds,
+        preserveContent: true,
+      }, { client, model });
+
+      return c.json(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Distinguish LLM errors from validation errors
+      if (msg.includes("LLM rewrite failed") || msg.includes("API returned")) {
+        return c.json({ error: msg }, 503);
+      }
+      return c.json({ error: msg }, 500);
+    }
+  });
+
   // --- Style Import to Book ---
 
   app.post("/api/v1/books/:id/style/import", async (c) => {
@@ -4622,8 +5606,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("style:start", { bookId: id });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.generateStyleGuide(id, text, sourceName ?? "unknown");
+      const result = await withPipeline("style-guide", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.generateStyleGuide(id, text, sourceName ?? "unknown");
+      });
       broadcast("style:complete", { bookId: id });
       return c.json({ ok: true, result });
     } catch (e) {
@@ -4836,6 +5821,44 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  app.post("/api/v1/style/authors/:authorId/diagnostics", async (c) => {
+    const authorId = c.req.param("authorId");
+    if (!isSafeStyleId(authorId)) return c.json({ error: "invalid author id" }, 400);
+    const { data } = await c.req.json<{ data: unknown }>();
+    if (!data) return c.json({ error: "data is required" }, 400);
+    try {
+      const id = crypto.randomUUID().slice(0, 8);
+      const entry = await saveAuthorDiagnostics(root, authorId, id, data);
+      return c.json(entry);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.get("/api/v1/style/authors/:authorId/diagnostics", async (c) => {
+    const authorId = c.req.param("authorId");
+    if (!isSafeStyleId(authorId)) return c.json({ error: "invalid author id" }, 400);
+    try {
+      const entries = await listAuthorDiagnostics(root, authorId);
+      return c.json({ entries });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.get("/api/v1/style/authors/:authorId/diagnostics/:diagnosticsId", async (c) => {
+    const authorId = c.req.param("authorId");
+    const diagnosticsId = c.req.param("diagnosticsId");
+    if (!isSafeStyleId(authorId)) return c.json({ error: "invalid author id" }, 400);
+    try {
+      const data = await getAuthorDiagnostics(root, authorId, diagnosticsId);
+      if (!data) return c.json({ error: "not found" }, 404);
+      return c.json(data);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   app.post("/api/v1/books/:id/style/apply-author", async (c) => {
     const bookId = c.req.param("id");
     const { authorId } = await c.req.json<{ authorId: string }>();
@@ -4901,8 +5924,17 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   app.post("/api/v1/style/preprocess", async (c) => {
-    const { text, options } = await c.req.json<{ text: string; options?: Record<string, boolean | number> }>();
-    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+    const raw = await c.req.json();
+    const parse = PreprocessRequestSchema.safeParse(raw);
+    if (!parse.success) {
+      const first = parse.error.issues[0];
+      if (first?.code === "too_big") {
+        return c.json({ error: "PAYLOAD_TOO_LARGE", message: `Text exceeds ${MAX_PREPROCESS_TEXT_CHARS} characters`, maxChars: MAX_PREPROCESS_TEXT_CHARS }, 413);
+      }
+      return c.json({ error: "VALIDATION_ERROR", message: parse.error.message }, 400);
+    }
+    const { text, options } = parse.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
     try {
       const { preprocessText } = await import("@actalk/inkos-core");
       const result = preprocessText(text, options);
@@ -4913,8 +5945,17 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   app.post("/api/v1/style/relayout", async (c) => {
-    const { text, options } = await c.req.json<{ text: string; options?: Record<string, boolean | number> }>();
-    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+    const raw = await c.req.json();
+    const parse = RelayoutRequestSchema.safeParse(raw);
+    if (!parse.success) {
+      const first = parse.error.issues[0];
+      if (first?.code === "too_big") {
+        return c.json({ error: "PAYLOAD_TOO_LARGE", message: `Text exceeds ${MAX_PREPROCESS_TEXT_CHARS} characters`, maxChars: MAX_PREPROCESS_TEXT_CHARS }, 413);
+      }
+      return c.json({ error: "VALIDATION_ERROR", message: parse.error.message }, 400);
+    }
+    const { text, options } = parse.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
     try {
       const { relayoutText } = await import("@actalk/inkos-core");
       const result = relayoutText(text, options);
@@ -4927,12 +5968,375 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Style Input Inspection ---
 
   app.post("/api/v1/style/preprocess/inspect", async (c) => {
-    const { text, checks } = await c.req.json<{ text: string; checks?: string[] }>();
-    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+    const raw = await c.req.json();
+    const parse = InspectRequestSchema.safeParse(raw);
+    if (!parse.success) {
+      const first = parse.error.issues[0];
+      if (first?.code === "too_big") {
+        return c.json({ error: "PAYLOAD_TOO_LARGE", message: `Text exceeds ${MAX_PREPROCESS_TEXT_CHARS} characters`, maxChars: MAX_PREPROCESS_TEXT_CHARS }, 413);
+      }
+      return c.json({ error: "VALIDATION_ERROR", message: parse.error.message }, 400);
+    }
+    const { text, checks } = parse.data;
+    if (!text.trim()) return c.json({ error: "text is required" }, 400);
     try {
       const { inspectText: runInspect } = await import("./style-preprocess-adapter.js");
-      const result = runInspect(text, checks as any);
+      const result = runInspect(text, checks);
       return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Rhetoric Deduplication ---
+
+  /**
+   * POST /api/v1/style/rhetoric/rewrite
+   * Build a deduplication prompt for the given findings.
+   * The caller sends the prompt to the LLM provider separately.
+   */
+  app.post("/api/v1/style/rhetoric/rewrite", async (c) => {
+    const raw = await c.req.json<{
+      text: string;
+      findings?: unknown[];
+      categories?: string[];
+      mode?: string;
+    }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { buildDedupePrompt, detectDuplicateRhetoric } = await import("@actalk/inkos-core");
+      // Support both `findings` (pre-computed) and `categories` (frontend shorthand)
+      let findings: unknown[] | undefined;
+      if (Array.isArray(raw.findings)) {
+        findings = raw.findings;
+      } else if (Array.isArray(raw.categories) && raw.categories.length) {
+        findings = raw.categories.map((cat) => ({
+          category: cat,
+          label: cat,
+          count: 0,
+          perThousandChars: 0,
+          severity: "low" as const,
+          examples: [] as Array<{ text: string }>,
+        }));
+      } else {
+        const detected = detectDuplicateRhetoric(raw.text, "zh");
+        findings = detected?.findings as unknown[] | undefined;
+      }
+      if (!Array.isArray(findings)) {
+        return c.json({ error: "findings must be an array" }, 400);
+      }
+      const prompt = buildDedupePrompt(raw.text, findings as any[], (raw.mode ?? "replace") as any);
+      return c.json({ prompt });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/rhetoric/detect
+   * Detect duplicated rhetoric patterns — returns findings only, no prompt.
+   * Separate endpoint from /rewrite to avoid frontend reading {prompt} as {findings}.
+   */
+  app.post("/api/v1/style/rhetoric/detect", async (c) => {
+    const raw = await c.req.json<{ text: string; language?: string }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { detectDuplicateRhetoric } = await import("@actalk/inkos-core");
+      const language = raw.language === "en" ? "en" as const : "zh" as const;
+      const result = detectDuplicateRhetoric(raw.text, language);
+      const findings = Array.isArray(result?.findings) ? result.findings : [];
+      return c.json({ findings });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/rhetoric/aware-prompt
+   * Build a rhetoric-aware system prompt for Pipeline writer.
+   */
+  app.post("/api/v1/style/rhetoric/aware-prompt", async (c) => {
+    const raw = await c.req.json<{
+      basePrompt: string;
+      contextText: string;
+      maxPerThousandChars?: Record<string, number>;
+    }>();
+    if (!raw.basePrompt || !raw.contextText) return c.json({ error: "basePrompt and contextText are required" }, 400);
+    try {
+      const { buildRhetoricAwarePrompt } = await import("@actalk/inkos-core");
+      const prompt = buildRhetoricAwarePrompt(raw.basePrompt, raw.contextText, raw.maxPerThousandChars);
+      return c.json({ prompt });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Paragraph Deduplication ---
+
+  /**
+   * POST /api/v1/style/paragraph/dedup
+   * Detect duplicate and similar paragraphs in text.
+   */
+  app.post("/api/v1/style/paragraph/dedup", async (c) => {
+    const raw = await c.req.json<{ text: string; threshold?: number; minLength?: number }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    // Sanitise numeric inputs
+    const threshold = typeof raw.threshold === "number" && raw.threshold >= 0 && raw.threshold <= 1
+      ? raw.threshold : 0.8;
+    const minLength = typeof raw.minLength === "number" && Number.isFinite(raw.minLength) && raw.minLength >= 1
+      ? Math.floor(raw.minLength) : 20;
+    try {
+      const { detectDuplicateParagraphs } = await import("@actalk/inkos-core");
+      const result = detectDuplicateParagraphs(raw.text, {
+        similarityThreshold: threshold,
+        minParagraphLength: minLength,
+      });
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Style Readability Score ---
+
+  /**
+   * POST /api/v1/style/readability/score
+   * Compute readability score for the given text. Uses POST to avoid long text in URL.
+   */
+  app.post("/api/v1/style/readability/score", async (c) => {
+    const raw = await c.req.json<{ text: string; language?: string }>();
+    if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
+    try {
+      const { computeReadabilityScore } = await import("@actalk/inkos-core");
+      const score = computeReadabilityScore(raw.text);
+      return c.json(score);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Author Search ---
+
+  /**
+   * POST /api/v1/style/authors/search
+   * Search the internet for author works.
+   */
+  app.post("/api/v1/style/authors/search", async (c) => {
+    const raw = await c.req.json<{ authorName: string; language?: string }>();
+    if (!raw.authorName?.trim()) return c.json({ error: "authorName is required" }, 400);
+    try {
+      const { searchAuthorWorks } = await import("./author-search.js");
+      const results = await searchAuthorWorks({
+        authorName: raw.authorName.trim(),
+        language: (raw.language ?? "zh") as "zh" | "en",
+      });
+      return c.json({ results });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/fetch
+   * Fetch content from a URL for author analysis.
+   */
+  app.post("/api/v1/style/authors/fetch", async (c) => {
+    const raw = await c.req.json<{ url: string; maxChars?: number }>();
+    if (!raw.url?.trim()) return c.json({ error: "url is required" }, 400);
+    try {
+      // Reuse existing SSRF-safe URL parser
+      const url = parseSafeStyleImportUrl(raw.url);
+      await assertSafeStyleImportTarget(url);
+      const { fetchUrl } = await import("@actalk/inkos-core");
+      const content = await fetchUrl(url.toString(), raw.maxChars ?? 8000);
+      return c.json({ content });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/samples/write
+   * Write a fetched author sample to local MD file.
+   */
+  app.post("/api/v1/style/authors/samples/write", async (c) => {
+    const raw = await c.req.json<{
+      authorId: string;
+      authorName: string;
+      sourceUrl: string;
+      fetchedAt: string;
+      content: string;
+      charCount: number;
+    }>();
+    if (!raw.authorId || !raw.content) return c.json({ error: "authorId and content are required" }, 400);
+    try {
+      assertSafeAuthorId(raw.authorId);
+      const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+      const { writeAuthorSample } = await import("./author-sample-writer.js");
+      const result = await writeAuthorSample(prjRoot, raw);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Author Distillation ---
+
+  /**
+   * POST /api/v1/style/authors/:authorId/distillations
+   * Generate a new distillation draft from the current author profile.
+   */
+  app.post("/api/v1/style/authors/:authorId/distillations", async (c) => {
+    const authorId = assertSafeAuthorId(c.req.param("authorId"));
+    const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+    try {
+      const {
+        getAuthorProfile,
+        generateDistillation,
+        loadDistillationEvidence,
+        loadDistillationOverrides,
+        saveDistillationDraft,
+        loadCurrentDistillation,
+      } = await import("@actalk/inkos-core");
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      if (!authorData) return c.json({ error: "Author not found" }, 404);
+      // Load existing overrides as previous distillation context
+      const evidence = await loadDistillationEvidence(prjRoot, authorId);
+      const overrides = await loadDistillationOverrides(prjRoot, authorId);
+      const previous = await loadCurrentDistillation(prjRoot, authorId);
+      // Merge overrides into previous
+      const mergedPrevious = previous
+        ? { ...previous, rules: overrides.length > 0 ? overrides : previous.rules }
+        : undefined;
+      const result = generateDistillation({
+        profile: authorData.profile,
+        sources: authorData.sources,
+        evidence: [...evidence],
+        previous: mergedPrevious,
+      });
+      await saveDistillationDraft(prjRoot, authorId, result.distillation, result.markdown);
+      return c.json(result.distillation, 201);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * GET /api/v1/style/authors/:authorId/distillations/current
+   * Get the current distillation (draft or published).
+   */
+  app.get("/api/v1/style/authors/:authorId/distillations/current", async (c) => {
+    const authorId = assertSafeAuthorId(c.req.param("authorId"));
+    const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+    try {
+      const { loadCurrentDistillation, getAuthorProfile } = await import("@actalk/inkos-core");
+      const distillation = await loadCurrentDistillation(prjRoot, authorId);
+      if (!distillation) return c.json({ error: "No distillation found. Generate one first." }, 404);
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      const currentProfileVersion = authorData?.profile.version ?? distillation.authorProfileVersion;
+      return c.json({
+        ...distillation,
+        isStale: distillation.authorProfileVersion !== currentProfileVersion,
+        currentAuthorProfileVersion: currentProfileVersion,
+      });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * PATCH /api/v1/style/authors/:authorId/distillations/current
+   * Update distillation overrides (enable/disable rules, manual edits).
+   */
+  app.patch("/api/v1/style/authors/:authorId/distillations/current", async (c) => {
+    const authorId = assertSafeAuthorId(c.req.param("authorId"));
+    const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+    try {
+      const body = await c.req.json<{ overrides: unknown[] }>();
+      const {
+        saveDistillationOverrides,
+        loadCurrentDistillation,
+        saveDistillationDraft,
+        generateDistillation,
+        getAuthorProfile,
+        loadDistillationEvidence,
+      } = await import("@actalk/inkos-core");
+      if (!body.overrides || !Array.isArray(body.overrides)) {
+        return c.json({ error: "overrides array is required" }, 400);
+      }
+      await saveDistillationOverrides(prjRoot, authorId, body.overrides as any);
+      // Regenerate draft with overrides
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      if (!authorData) return c.json({ error: "Author not found" }, 404);
+      const evidence = await loadDistillationEvidence(prjRoot, authorId);
+      const previous = await loadCurrentDistillation(prjRoot, authorId);
+      const result = generateDistillation({
+        profile: authorData.profile,
+        sources: authorData.sources,
+        evidence: [...evidence],
+        previous: previous ?? undefined,
+      });
+      await saveDistillationDraft(prjRoot, authorId, result.distillation, result.markdown);
+      return c.json(result.distillation);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * POST /api/v1/style/authors/:authorId/distillations/current/publish
+   * Publish the current distillation as an immutable version.
+   */
+  app.post("/api/v1/style/authors/:authorId/distillations/current/publish", async (c) => {
+    const authorId = assertSafeAuthorId(c.req.param("authorId"));
+    const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+    try {
+      const {
+        loadCurrentDistillation,
+        publishDistillation,
+        getAuthorProfile,
+      } = await import("@actalk/inkos-core");
+      const distillation = await loadCurrentDistillation(prjRoot, authorId);
+      if (!distillation) return c.json({ error: "No distillation to publish" }, 400);
+      if (distillation.sampleAdequacy === "insufficient") {
+        return c.json({ error: "Insufficient samples — cannot publish. Add more sources first." }, 400);
+      }
+      const authorData = await getAuthorProfile(prjRoot, authorId);
+      const currentVersion = authorData?.profile.version ?? distillation.authorProfileVersion;
+      if (distillation.authorProfileVersion !== currentVersion) {
+        return c.json({
+          error: "Author profile has changed since this distillation was generated. Regenerate first.",
+          stale: true,
+        }, 400);
+      }
+      // Load markdown from current.md
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      let markdown = "";
+      try {
+        markdown = await readFile(
+          join(prjRoot, "style-library", "authors", authorId, "distillation", "current.md"),
+          "utf-8",
+        );
+      } catch { /* use empty */ }
+      const published = await publishDistillation(prjRoot, authorId, distillation, markdown);
+      return c.json(published);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * GET /api/v1/style/authors/:authorId/distillations/versions
+   * List published distillation versions.
+   */
+  app.get("/api/v1/style/authors/:authorId/distillations/versions", async (c) => {
+    const authorId = assertSafeAuthorId(c.req.param("authorId"));
+    const prjRoot = assertProjectRoot(process.env.INKOS_PROJECT_ROOT || c.req.header("x-project-root") || undefined, root);
+    try {
+      const { listDistillationVersions } = await import("@actalk/inkos-core");
+      const versions = await listDistillationVersions(prjRoot, authorId);
+      return c.json({ versions });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -4969,10 +6373,17 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const chapters = plan.chapters.map((ch) => ({
         title: ch.title,
         content: ch.content,
+        targetNumber: ch.targetNumber,
       }));
+      // Determine resumeFrom: the minimum targetNumber tells the pipeline whether
+      // this is a fresh import (1) or an append to an existing book (>1).
+      // When resumeFrom > 1, the pipeline skips foundation generation and index clearing.
+      const resumeFrom = Math.min(...chapters.map((ch) => ch.targetNumber ?? 0));
+      const validResumeFrom = Number.isFinite(resumeFrom) && resumeFrom > 0 ? resumeFrom : 1;
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.importChapters({ bookId: id, chapters });
+      const result = await withPipeline("import-chapters", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.importChapters({ bookId: id, chapters, resumeFrom: validResumeFrom });
+      });
       broadcast("import:complete", { bookId: id, type: "chapters", count: result.importedCount });
       return c.json(result);
     } catch (e) {
@@ -4982,6 +6393,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // Legacy direct import (kept for backward compatibility)
+  /** @deprecated Use POST /api/v1/books/:id/import/chapters/plan + /commit instead. */
   app.post("/api/v1/books/:id/import/chapters", async (c) => {
     const id = c.req.param("id");
     const { text, splitRegex } = await c.req.json<{ text: string; splitRegex?: string }>();
@@ -4992,8 +6404,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const { splitChapters } = await import("@actalk/inkos-core");
       const chapters = [...splitChapters(text, splitRegex)];
 
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.importChapters({ bookId: id, chapters });
+      const result = await withPipeline("import-chapters-legacy", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.importChapters({ bookId: id, chapters });
+      });
       broadcast("import:complete", { bookId: id, type: "chapters", count: result.importedCount });
       return c.json(result);
     } catch (e) {
@@ -5011,8 +6424,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("import:start", { bookId: id, type: "canon" });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.importCanon(id, fromBookId);
+      await withPipeline("import-canon", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.importCanon(id, fromBookId);
+      });
       broadcast("import:complete", { bookId: id, type: "canon" });
       return c.json({ ok: true });
     } catch (e) {
@@ -5054,8 +6468,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           purpose: source.purpose,
         });
       }
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.planFoundationImport(id, inputs, { mode, instruction });
+      const result = await withPipeline("plan-foundation", await buildPipelineConfig(), async (pipeline) => {
+        return pipeline.planFoundationImport(id, inputs, { mode, instruction });
+      });
 
       if (result.proposed && result.roleChanges && result.foundationRevision) {
         const sourceBundle = buildFoundationSourceBundle(
@@ -5078,6 +6493,10 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           sourceBundle,
           expiresAt: Date.now() + 30 * 60 * 1000,
         });
+        // Persist to disk so plans survive server restart
+        persistFoundationPlan(root, planId, foundationPlans.get(planId)!).catch((e) => {
+          console.error("[studio] Failed to persist foundation plan:", e);
+        });
         return c.json({
           planId,
           bundle: result.bundle,
@@ -5088,9 +6507,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       }
 
       return c.json({
+        planId: null,
         bundle: result.bundle,
         warnings: result.warnings,
         proposed: null,
+        roleChanges: null,
       });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -5101,21 +6522,29 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     const { planId } = await c.req.json<{ planId?: string }>();
     if (!planId) return c.json({ error: "planId is required" }, 400);
+    await foundationPlansPromise;
     const plan = foundationPlans.get(planId);
     if (!plan || plan.bookId !== id || plan.expiresAt < Date.now()) {
       foundationPlans.delete(planId);
+      removePersistedFoundationPlan(root, planId).catch((e) => {
+        console.error("[studio] Failed to remove expired foundation plan:", e);
+      });
       return c.json({ error: "foundation plan is missing or expired; generate a new preview" }, 409);
     }
 
     broadcast("import:start", { bookId: id, type: "foundation" });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.commitFoundationImport(id, plan.proposed, {
-        mode: plan.mode,
-        expectedRevision: plan.foundationRevision,
-        sourceBundle: plan.sourceBundle,
+      await withPipeline("commit-foundation-plan", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.commitFoundationImport(id, plan.proposed, {
+          mode: plan.mode,
+          expectedRevision: plan.foundationRevision,
+          sourceBundle: plan.sourceBundle,
+        });
+        foundationPlans.delete(planId);
+        removePersistedFoundationPlan(root, planId).catch((e) => {
+          console.error("[studio] Failed to remove committed foundation plan:", e);
+        });
       });
-      foundationPlans.delete(planId);
       broadcast("import:complete", { bookId: id, type: "foundation" });
       return c.json({ ok: true });
     } catch (e) {
@@ -5178,6 +6607,101 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const next = removeChapterGoal(index.goals, chapterNumber);
       await saveChapterGoals(bookDir, next);
       return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Chapter Intents (author interview) ---
+
+  app.get("/api/v1/books/:id/chapter-intents", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      return c.json(index);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.put("/api/v1/books/:id/chapter-intents/:chapterNumber", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    const body = await c.req.json<Partial<AuthorChapterIntent>>();
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      const existing = getChapterIntent(index.intents, chapterNumber);
+      const parsedIntent = AuthorChapterIntentSchema.safeParse({
+        chapterNumber,
+        coreNarrative: body.coreNarrative ?? existing?.coreNarrative ?? "",
+        readerTakeaway: body.readerTakeaway ?? existing?.readerTakeaway ?? "",
+        keyMoment: body.keyMoment ?? existing?.keyMoment ?? "",
+        scenes: body.scenes ?? existing?.scenes ?? [],
+        characterStates: body.characterStates ?? existing?.characterStates ?? [],
+        requiredBeats: body.requiredBeats ?? existing?.requiredBeats ?? [],
+        forbiddenMoves: body.forbiddenMoves ?? existing?.forbiddenMoves ?? [],
+        pendingHookIds: body.pendingHookIds ?? existing?.pendingHookIds ?? [],
+        narrativePosition: body.narrativePosition ?? existing?.narrativePosition ?? "rising",
+        plotLine: body.plotLine ?? existing?.plotLine,
+        interviewCompletedAt: body.interviewCompletedAt ?? existing?.interviewCompletedAt,
+      });
+      if (!parsedIntent.success) {
+        return c.json({
+          error: "Invalid chapter intent",
+          issues: parsedIntent.error.issues,
+        }, 400);
+      }
+      const intent: AuthorChapterIntent = parsedIntent.data;
+      const next = upsertChapterIntent(index.intents, intent);
+      await saveChapterIntents(bookDir, next);
+      return c.json({ ok: true, intent: getChapterIntent(next, chapterNumber) });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.delete("/api/v1/books/:id/chapter-intents/:chapterNumber", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const index = await loadChapterIntents(bookDir);
+      const next = removeChapterIntent(index.intents, chapterNumber);
+      await saveChapterIntents(bookDir, next);
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Chapter Intent Suggestions (rule-based, no LLM) ---
+
+  app.get("/api/v1/books/:id/chapter-intents/:chapterNumber/suggestions", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const state = new StateManager(root);
+      const bookDir = state.bookDir(id);
+      const suggestions = await generateSuggestions(bookDir, chapterNumber);
+      return c.json({ suggestions });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -5297,8 +6821,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
     broadcast("fanfic:start", { bookId, title: body.title });
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.initFanficBook(bookConfig, body.sourceText, body.sourceName ?? "source", (body.mode ?? "canon") as "canon");
+      await withPipeline("fanfic-init", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.initFanficBook(bookConfig, body.sourceText, body.sourceName ?? "source", (body.mode ?? "canon") as "canon");
+      });
       broadcast("fanfic:complete", { bookId });
       return c.json({ ok: true, bookId });
     } catch (e) {
@@ -5331,8 +6856,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     broadcast("fanfic:refresh:start", { bookId: id });
     try {
       const book = await state.loadBookConfig(id);
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      await pipeline.importFanficCanon(id, sourceText, sourceName ?? "source", (book.fanficMode ?? "canon") as "canon");
+      await withPipeline("fanfic-import-canon", await buildPipelineConfig(), async (pipeline) => {
+        await pipeline.importFanficCanon(id, sourceText, sourceName ?? "source", (book.fanficMode ?? "canon") as "canon");
+      });
       broadcast("fanfic:refresh:complete", { bookId: id });
       return c.json({ ok: true });
     } catch (e) {
@@ -5346,9 +6872,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   app.post("/api/v1/radar/scan", async (c) => {
     broadcast("radar:start", {});
     try {
-      const pipeline = new PipelineRunner(await buildPipelineConfig());
-      const result = await pipeline.runRadar();
-      await saveRadarScan(root, result);
+      const result = await withPipeline("radar-scan", await buildPipelineConfig(), async (pipeline) => {
+        const r = await pipeline.runRadar();
+        await saveRadarScan(root, r);
+        return r;
+      });
       broadcast("radar:complete", { result });
       return c.json(result);
     } catch (e) {
@@ -5427,7 +6955,14 @@ export async function startStudioServer(
 
     // Serve static assets (js, css, etc.)
     app.get("/assets/*", async (c) => {
-      const filePath = joinPath(options.staticDir!, c.req.path);
+      const rawPath = c.req.path;
+      // Prevent path traversal: resolve + relative check
+      const resolved = resolve(options.staticDir!, "." + rawPath);
+      const rel = relative(options.staticDir!, resolved);
+      if (rel.startsWith("..") || rel.startsWith("/") || isAbsolute(rel)) {
+        return c.notFound();
+      }
+      const filePath = joinPath(options.staticDir!, rawPath);
       try {
         const content = await readFileFs(filePath);
         const ext = filePath.split(".").pop() ?? "";
@@ -5458,6 +6993,7 @@ export async function startStudioServer(
     }
   }
 
-  console.log(`InkOS Studio running on http://localhost:${port}`);
-  serve({ fetch: app.fetch, port });
+  const host = process.env.STUDIO_HOST || "127.0.0.1";
+  console.log(`InkOS Studio running on http://${host}:${port}`);
+  serve({ fetch: app.fetch, hostname: host, port });
 }

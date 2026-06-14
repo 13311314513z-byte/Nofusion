@@ -1,6 +1,8 @@
 export interface ChatPageModelInfo {
   readonly id: string;
   readonly name?: string;
+  readonly maxOutput?: number;
+  readonly contextWindow?: number;
 }
 
 export interface ChatPageModelGroup {

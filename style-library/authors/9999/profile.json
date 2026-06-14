@@ -1,0 +1,68 @@
+{
+  "id": "9999",
+  "name": "学习卡测试风格",
+  "language": "zh",
+  "tags": [
+    "学习卡"
+  ],
+  "sourceIds": [
+    "1780938628412",
+    "1780938739189"
+  ],
+  "aggregateProfile": {
+    "avgSentenceLength": 39.3,
+    "sentenceLengthStdDev": 27.8,
+    "avgParagraphLength": 549,
+    "paragraphLengthRange": {
+      "min": 7,
+      "max": 7799
+    },
+    "vocabularyDiversity": 0.005,
+    "topPatterns": [
+      "她的......(1次)",
+      "- ......(1次)",
+      "杨曼......(1次)",
+      "那些......(1次)",
+      "司雯......(1次)"
+    ],
+    "rhetoricalFeatures": [
+      "比喻(像/如/仿佛)(2处)",
+      "短句节奏(2处)",
+      "反问(1处)"
+    ],
+    "fingerprint": {
+      "dialogueRatio": 0.04,
+      "actionDensity": 0.44,
+      "psychologicalRatio": 0.15,
+      "sensoryDensity": 0.72,
+      "colloquialismScore": 0.32,
+      "rhetoricDensity": 0.08,
+      "punctuationRhythm": {
+        "commaRatio": 0.54,
+        "periodRatio": 0.25,
+        "questionRatio": 0.02,
+        "exclamationRatio": 0.01,
+        "ellipsisRatio": 0.18,
+        "semicolonRatio": 0.01
+      },
+      "aiTellRisk": 0.44,
+      "sensoryBreakdown": {
+        "visual": 0.37,
+        "auditory": 0.23,
+        "tactile": 0.32,
+        "olfactory": 0.06,
+        "gustatory": 0.03
+      }
+    },
+    "sourceName": "学习卡测试风格",
+    "analyzedAt": "2026-06-08T17:26:24.772Z"
+  },
+  "sampleStats": {
+    "sourceCount": 2,
+    "totalChars": 852402,
+    "avgCharsPerSource": 426201
+  },
+  "version": 4,
+  "createdAt": "2026-06-08T17:10:28.405Z",
+  "updatedAt": "2026-06-08T17:26:24.772Z"
+}

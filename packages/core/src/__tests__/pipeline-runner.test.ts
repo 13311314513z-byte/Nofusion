@@ -22,6 +22,7 @@ import type { ChapterMeta } from "../models/chapter.js";
 import { MemoryDB } from "../state/memory-db.js";
 import * as memoryDbModule from "../state/memory-db.js";
 import { countChapterLength } from "../utils/length-metrics.js";
+import { saveChapterIntents } from "../models/chapter-intent.js";
 
 const require = createRequire(import.meta.url);
 const hasNodeSqlite = (() => {
@@ -312,6 +313,29 @@ describe("PipelineRunner", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("blocks every write entrypoint before planning when strict interview data is incomplete", async () => {
+    const { root, runner, state, bookId } = await createRunnerFixture({
+      strictInterview: true,
+    });
+    const planSpy = vi.spyOn(PlannerAgent.prototype, "planChapter");
+
+    try {
+      await saveChapterIntents(state.bookDir(bookId), [{
+        chapterNumber: 1,
+        coreNarrative: "Advance the mentor conflict.",
+        readerTakeaway: " ",
+        keyMoment: "The oath token cracks.",
+      }]);
+
+      await expect(runner.writeNextChapter(bookId)).rejects.toThrow(
+        /Strict interview blocked chapter 1: missing readerTakeaway/,
+      );
+      expect(planSpy).not.toHaveBeenCalled();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("does not reuse override clients when credential sources differ", () => {
@@ -1106,11 +1130,7 @@ describe("PipelineRunner", () => {
       ),
     ]);
 
-    vi.spyOn(memoryDbModule, "MemoryDB").mockImplementation(() => {
-      const error = new Error("No such built-in module: node:sqlite");
-      (error as Error & { code?: string }).code = "ERR_UNKNOWN_BUILTIN_MODULE";
-      throw error;
-    });
+    vi.spyOn(memoryDbModule, "tryCreateMemoryDB").mockReturnValue(null);
     vi.spyOn(WriterAgent.prototype, "writeChapter").mockResolvedValue(
       createWriterOutput({
         chapterNumber: 1,
@@ -1156,7 +1176,7 @@ describe("PipelineRunner", () => {
       ),
     ]);
 
-    vi.spyOn(memoryDbModule, "MemoryDB").mockImplementation(() => {
+    vi.spyOn(memoryDbModule, "tryCreateMemoryDB").mockImplementation(() => {
       throw new Error("sync failed while handling cached node:sqlite telemetry text");
     });
     vi.spyOn(WriterAgent.prototype, "writeChapter").mockResolvedValue(
@@ -1200,17 +1220,11 @@ describe("PipelineRunner", () => {
       ),
     ]);
 
-    const RealMemoryDB = memoryDbModule.MemoryDB;
-    let constructorCalls = 0;
-    vi.spyOn(memoryDbModule, "MemoryDB").mockImplementation((...args: ConstructorParameters<typeof memoryDbModule.MemoryDB>) => {
-      if (constructorCalls === 0) {
-        constructorCalls += 1;
-        const error = new Error("No such built-in module: node:sqlite");
-        (error as Error & { code?: string }).code = "ERR_UNKNOWN_BUILTIN_MODULE";
-        throw error;
-      }
-      constructorCalls += 1;
-      return new RealMemoryDB(...args);
+    let calls = 0;
+    vi.spyOn(memoryDbModule, "tryCreateMemoryDB").mockImplementation((bookDir: string) => {
+      calls++;
+      if (calls === 1) return null;
+      return new MemoryDB(bookDir);
     });
     vi.spyOn(WriterAgent.prototype, "writeChapter").mockResolvedValue(
       createWriterOutput({
@@ -1276,17 +1290,15 @@ describe("PipelineRunner", () => {
       ),
     ]);
 
-    const RealMemoryDB = memoryDbModule.MemoryDB;
-    let constructorCalls = 0;
-    vi.spyOn(memoryDbModule, "MemoryDB").mockImplementation((...args: ConstructorParameters<typeof memoryDbModule.MemoryDB>) => {
-      if (constructorCalls === 0) {
-        constructorCalls += 1;
+    let calls = 0;
+    vi.spyOn(memoryDbModule, "tryCreateMemoryDB").mockImplementation((bookDir: string) => {
+      calls++;
+      if (calls === 1) {
         const error = new Error("database is locked");
         (error as Error & { code?: string }).code = "SQLITE_BUSY";
         throw error;
       }
-      constructorCalls += 1;
-      return new RealMemoryDB(...args);
+      return new MemoryDB(bookDir);
     });
     vi.spyOn(WriterAgent.prototype, "writeChapter").mockResolvedValue(
       createWriterOutput({
@@ -2245,7 +2257,15 @@ describe("PipelineRunner", () => {
 
       expect(result.status).toBe("audit-failed");
       expect(result.auditResult.summary).toBe("needs revision");
-      expect(result.auditResult.issues).toEqual([CRITICAL_ISSUE]);
+      expect(result.auditResult.issues).toHaveLength(1);
+      expect(result.auditResult.issues[0]).toMatchObject({
+        ...CRITICAL_ISSUE,
+        source: "continuity",
+        fixScope: "chapter",
+        blocking: true,
+      });
+      expect(result.auditResult.issues[0]?.id).toBeTruthy();
+      expect(result.auditResult.issues[0]?.createdAt).toBeTruthy();
       expect(savedIndex[0]?.auditIssues).toEqual([
         `[critical] ${CRITICAL_ISSUE.description}`,
       ]);

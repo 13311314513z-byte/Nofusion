@@ -36,6 +36,14 @@ export interface StyleFingerprint {
   readonly aiTellRisk: number;
   /** 五感分布 */
   readonly sensoryBreakdown: SensoryBreakdown;
+  /** 句式分布（可选，向后兼容） */
+  readonly sentenceTypeDistribution?: import("../utils/style-dimensions.js").SentenceTypeDistribution;
+  /** 段落节奏（可选，向后兼容） */
+  readonly paragraphRhythm?: import("../utils/style-dimensions.js").ParagraphRhythm;
+  /** 修辞细分（可选，向后兼容） */
+  readonly rhetoricBreakdown?: import("../utils/style-dimensions.js").RhetoricBreakdown;
+  /** 对话特征（可选，向后兼容） */
+  readonly dialogueFeatures?: import("../utils/style-dimensions.js").DialogueFeatures;
 }
 
 export interface StyleProfile {

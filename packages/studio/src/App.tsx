@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useHashRoute } from "./hooks/use-hash-route";
 import type { HashRoute } from "./hooks/use-hash-route";
 import { Sidebar } from "./components/Sidebar";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Dashboard } from "./pages/Dashboard";
 import { ChatPage } from "./pages/ChatPage";
 import { BookDetail } from "./pages/BookDetail";
@@ -19,6 +20,7 @@ import { RadarView } from "./pages/RadarView";
 import { DoctorView } from "./pages/DoctorView";
 import { AuditView } from "./pages/AuditView";
 import { AutomationGuide } from "./pages/AutomationGuide";
+import { CoverConfigPage } from "./pages/CoverConfigPage";
 import { LanguageSelector } from "./pages/LanguageSelector";
 
 import { BookWorkspace } from "./pages/book-workspace/BookWorkspace";
@@ -79,7 +81,7 @@ export function App() {
     toAnalytics: (bookId: string) => setRoute({ page: "analytics", bookId }),
     toServices: () => setRoute({ page: "services" }),
     toServiceDetail: (id: string) => setRoute({ page: "service-detail", serviceId: id }),
-    toTruth: (bookId: string) => setRoute({ page: "book", bookId, section: "truth" }),
+    toTruth: (bookId: string) => setRoute({ page: "truth", bookId }),
     toBookSection: (bookId: string, section: string) => setRoute({ page: "book", bookId, section }),
     toDaemon: () => setRoute({ page: "daemon" }),
     toLogs: () => setRoute({ page: "logs" }),
@@ -174,6 +176,7 @@ export function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 relative overflow-y-auto scroll-smooth">
+          <ErrorBoundary>
           {route.page === "dashboard" && (
             <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
               <Dashboard nav={nav} sse={sse} theme={theme} t={t} />
@@ -231,7 +234,7 @@ export function App() {
             </div>
           )}
           {route.page === "chapter" && (
-            <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
+            <div className="w-full max-w-full mx-auto px-4 md:px-8 lg:px-12 py-12 fade-in">
               <ChapterReader bookId={route.bookId} chapterNumber={route.chapterNumber} nav={nav} theme={theme} t={t} />
             </div>
           )}
@@ -307,6 +310,12 @@ export function App() {
               <AutomationGuide nav={nav} theme={theme} t={t} />
             </div>
           )}
+          {route.page === "cover-config" && (
+            <div className="max-w-4xl mx-auto px-6 py-12 md:px-12 lg:py-16 fade-in">
+              <CoverConfigPage t={t as unknown as (key: string) => string} />
+            </div>
+          )}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

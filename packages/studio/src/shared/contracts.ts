@@ -133,6 +133,58 @@ export interface RunStreamEvent {
   readonly error?: string;
 }
 
+// --- Style Preprocess Inspection ---
+
+export type InspectionCode =
+  | "explicit-think-block"
+  | "similar-paragraphs"
+  | "repeated-phrase"
+  | "mixed-language"
+  | "encoded-data"
+  | "asr-marker"
+  | "translation-pair"
+  | "quote-block"
+  | "rp-marker"
+  | "high-whitespace"
+  | "possible-garbled-text"
+  // === 语义查重（修辞重复检测）===
+  | "duplicate-parallelism"       // 排比句式
+  | "duplicate-metaphor"          // 比喻手法
+  | "duplicate-personification"   // 拟人手法
+  | "duplicate-repetition"        // 词语反复
+  | "duplicate-transition"        // 过渡词聚集
+  | "duplicate-hyperbole"         // 夸张修辞
+  | "duplicate-rhetorical-question" // 反问句式
+  | "duplicate-anaphora"          // 首语重复
+  | "duplicate-epistrophe"        // 尾语重复
+  | "duplicate-parallel-structure"; // 并列结构
+
+export interface InspectionFinding {
+  readonly code: InspectionCode;
+  readonly severity: "info" | "warning";
+  readonly count: number;
+  readonly lineNumbers?: readonly number[];
+  readonly samples: readonly string[];
+  readonly messageKey: string;
+  /** 字符级位置范围，用于编辑器高亮（修辞检测专用） */
+  readonly ranges?: readonly { readonly start: number; readonly end: number }[];
+  /** 三级严重度（修辞检测原生精度） */
+  readonly rhetoricSeverity?: "low" | "medium" | "high";
+  /** 每千字出现次数 */
+  readonly perThousandChars?: number;
+  /** 置信度 0-1 */
+  readonly confidence?: number;
+  /** 唯一标识（用于忽略/标记状态持久化） */
+  readonly findingId?: string;
+}
+
+export interface InspectionResult {
+  readonly charCount: number;
+  readonly lineCount: number;
+  readonly paragraphCount: number;
+  readonly findings: readonly InspectionFinding[];
+}
+
 // --- API Error Response ---
 
 export interface ApiErrorResponse {

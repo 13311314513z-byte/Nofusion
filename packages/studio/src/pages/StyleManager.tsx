@@ -1,94 +1,23 @@
-import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useState, useCallback, useRef, useMemo, type ChangeEvent } from "react";
 import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link, ChevronDown, ChevronRight, AlertTriangle, Stethoscope, User } from "lucide-react";
+import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel.js";
+import { AITellsPanel } from "../components/style/AITellsPanel.js";
+import { AdjustmentSuggestionsPanel } from "./style-manager/AdjustmentSuggestionsPanel.js";
+import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
+import { ReadabilityDashboard } from "../components/readability/ReadabilityDashboard.js";
+import { DuplicateParagraphPanel } from "../components/readability/DuplicateParagraphPanel.js";
+import { RhetoricIssuePanel } from "../components/readability/RhetoricIssuePanel.js";
+import { StyleTextTab } from "./StyleTextTab.js";
+import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
+import type { CoreStyleProfile, AuthorIndexItem, AuthorDetail, ExtractedDoc, BookSummary } from "./style-types.js";
 
-
-interface PunctuationRhythm {
-  readonly commaRatio: number;
-  readonly periodRatio: number;
-  readonly questionRatio: number;
-  readonly exclamationRatio: number;
-  readonly ellipsisRatio: number;
-  readonly semicolonRatio: number;
-}
-
-interface StyleFingerprint {
-  readonly dialogueRatio: number;
-  readonly actionDensity: number;
-  readonly psychologicalRatio: number;
-  readonly sensoryDensity: number;
-  readonly colloquialismScore: number;
-  readonly rhetoricDensity: number;
-  readonly punctuationRhythm: PunctuationRhythm;
-  readonly aiTellRisk: number;
-  readonly sensoryBreakdown: {
-    readonly visual: number;
-    readonly auditory: number;
-    readonly tactile: number;
-    readonly olfactory: number;
-    readonly gustatory: number;
-  };
-}
-
-interface CoreStyleProfile {
-  readonly sourceName: string;
-  readonly avgSentenceLength: number;
-  readonly sentenceLengthStdDev: number;
-  readonly avgParagraphLength: number;
-  readonly vocabularyDiversity: number;
-  readonly topPatterns: ReadonlyArray<string>;
-  readonly rhetoricalFeatures: ReadonlyArray<string>;
-  readonly fingerprint: StyleFingerprint;
-}
-
-interface AuthorIndexItem {
-  readonly id: string;
-  readonly name: string;
-  readonly language: "zh" | "en";
-  readonly tags: ReadonlyArray<string>;
-  readonly sourceCount: number;
-  readonly updatedAt: string;
-}
-
-interface AuthorProfile {
-  readonly id: string;
-  readonly name: string;
-  readonly language: "zh" | "en";
-  readonly tags: ReadonlyArray<string>;
-  readonly sampleStats: { readonly sourceCount: number; readonly totalChars: number; readonly avgCharsPerSource: number };
-  readonly aggregateProfile: CoreStyleProfile;
-}
-
-interface AuthorDetail {
-  readonly profile: AuthorProfile;
-  readonly sources: ReadonlyArray<{
-    readonly id: string;
-    readonly fileName: string;
-    readonly fileType: string;
-    readonly charCount: number;
-    readonly status: string;
-    readonly error?: string;
-  }>;
-}
-
-interface BookSummary {
-  readonly id: string;
-  readonly title: string;
-}
-
-interface ExtractedDoc {
-  readonly sourceName?: string;
-  readonly text: string;
-  readonly charCount: number;
-  readonly warnings: ReadonlyArray<string>;
-}
-
-type StyleTab = "text" | "files" | "library" | "apply";
+type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit";
 type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
 
 interface Nav { toDashboard: () => void }
@@ -141,19 +70,108 @@ function readLocalTextFile(file: File): Promise<string> {
   });
 }
 
+/** Style drift score display — compares current text against book's style profile. */
+function StyleDriftScoreSection({ bookId, chapterNumber, t }: { bookId: string; chapterNumber?: number; t: (key: string) => string }) {
+  const [scoreData, setScoreData] = useState<{ score: number | null; chapterFingerprint?: unknown; profileFingerprint?: unknown } | null>(null);
+  const [loadingScore, setLoadingScore] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const { data: booksData } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
+  const bookTitle = booksData?.books.find((b) => b.id === bookId)?.title ?? bookId;
+  const chNum = chapterNumber ?? 1;
+
+  const handleFetchScore = async () => {
+    setLoadingScore(true);
+    setScoreError(null);
+    try {
+      const data = await fetchJson<{ score: number | null; message?: string }>(`/books/${bookId}/chapters/${chNum}/style-score`, {
+        method: "POST",
+      });
+      setScoreData(data);
+    } catch (e) {
+      setScoreError(e instanceof Error ? e.message : String(e));
+    }
+    setLoadingScore(false);
+  };
+
+  return (
+    <div className="border border-border/40 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <BarChart3 size={14} />
+          风格漂移评分 — {bookTitle} 第 {chNum} 章
+        </h4>
+        <button
+          onClick={handleFetchScore}
+          disabled={loadingScore}
+          className="px-3 py-1 text-xs rounded-lg bg-secondary/30 hover:bg-secondary/50 border border-border disabled:opacity-30"
+        >
+          {loadingScore ? "计算中..." : "计算评分"}
+        </button>
+      </div>
+      {scoreError && (
+        <div className="text-xs text-destructive">{scoreError}</div>
+      )}
+      {scoreData && (
+        <div className="flex items-center gap-3">
+          <div className={`text-2xl font-bold font-mono ${
+            scoreData.score === null
+              ? "text-muted-foreground"
+              : scoreData.score >= 80
+                ? "text-emerald-500"
+                : scoreData.score >= 60
+                  ? "text-amber-500"
+                  : "text-destructive"
+          }`}>
+            {scoreData.score !== null ? `${scoreData.score}%` : "N/A"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {scoreData.score === null
+              ? "该书暂无风格档案，请先导入文风指南"
+              : scoreData.score >= 80
+                ? "与全书风格高度一致"
+                : scoreData.score >= 60
+                  ? "有轻微风格漂移，建议检查"
+                  : "存在明显风格漂移，建议调整"}
+          </div>
+        </div>
+      )}
+      {scoreData === null && !loadingScore && (
+        <div className="text-xs text-muted-foreground">点击「计算评分」以比较当前文本与全书风格档案</div>
+      )}
+    </div>
+  );
+}
+
 export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunction }) {
   const c = useColors(theme);
-  const [activeTab, setActiveTab] = useState<StyleTab>("text");
+  const [activeTab, setActiveTab] = useState<StyleTab>("import");
   const textFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileAnalysisInputRef = useRef<HTMLInputElement | null>(null);
   const authorSampleInputRef = useRef<HTMLInputElement | null>(null);
 
   // Text analysis state
-  const [text, setText] = useState("");
-  const [sourceName, setSourceName] = useState("");
+  const [text, setText] = useState(() => {
+    // Restore chapter text passed from BookChaptersSection via sessionStorage
+    const saved = sessionStorage.getItem("style-chapter-text");
+    if (saved) {
+      sessionStorage.removeItem("style-chapter-text");
+      return saved;
+    }
+    return "";
+  });
+  const [sourceName, setSourceName] = useState(() => {
+    const saved = sessionStorage.getItem("style-chapter-source");
+    if (saved) {
+      sessionStorage.removeItem("style-chapter-source");
+      return saved;
+    }
+    return "";
+  });
   const [urlSource, setUrlSource] = useState("");
   const [profile, setProfile] = useState<CoreStyleProfile | null>(null);
+  const [diagnostics, setDiagnostics] = useState<FullStyleDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [analyzeStatus, setAnalyzeStatus] = useState("");
 
   // File analysis state
@@ -161,8 +179,21 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [fileSourceName, setFileSourceName] = useState("");
   const [fileType, setFileType] = useState<LocalStyleFileType>("txt");
   const [extractedDoc, setExtractedDoc] = useState<ExtractedDoc | null>(null);
+  // Chunked extraction tracking
+  const [loadedChunks, setLoadedChunks] = useState<number>(1);
+  const [loadingChunk, setLoadingChunk] = useState(false);
 
-  // --- Four-stage preprocess state ---
+  function stableHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36).slice(0, 6);
+}
+
+// --- Four-stage preprocess state ---
   const [activePreset, setActivePreset] = useState<PresetId>("fidelity");
   const [analysisStage, setAnalysisStage] = useState<"extracted" | "cleaned" | "relayouted">("extracted");
 
@@ -170,28 +201,33 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [preprocessedText, setPreprocessedText] = useState("");
   const [preprocessActions, setPreprocessActions] = useState<ReadonlyArray<string>>([]);
   const [showPreprocessPanel, setShowPreprocessPanel] = useState(true);
-  const [filterCode, setFilterCode] = useState(true);
-  const [filterRepeatedPrompts, setFilterRepeatedPrompts] = useState(true);
-  const [filterUrls, setFilterUrls] = useState(true);
-  const [filterStructuredData, setFilterStructuredData] = useState(true);
-  const [stripMarkdown, setStripMarkdown] = useState(true);
-  const [deduplicateParagraphs, setDeduplicateParagraphs] = useState(true);
-  const [filterTimestamps, setFilterTimestamps] = useState(true);
-  const [filterIds, setFilterIds] = useState(true);
-  const [filterNoiseMarkers, setFilterNoiseMarkers] = useState(true);
+  // Initial state matches "fidelity" preset (all cleaning off)
+  const [filterCode, setFilterCode] = useState(false);
+  const [filterRepeatedPrompts, setFilterRepeatedPrompts] = useState(false);
+  const [filterUrls, setFilterUrls] = useState(false);
+  const [filterStructuredData, setFilterStructuredData] = useState(false);
+  const [stripMarkdown, setStripMarkdown] = useState(false);
+  const [deduplicateParagraphs, setDeduplicateParagraphs] = useState(false);
+  const [filterTimestamps, setFilterTimestamps] = useState(false);
+  const [filterIds, setFilterIds] = useState(false);
+  const [filterNoiseMarkers, setFilterNoiseMarkers] = useState(false);
   const [minLineLength, setMinLineLength] = useState(0);
 
   // Relayout state
   const [relayoutedText, setRelayoutedText] = useState("");
   const [showRelayoutPanel, setShowRelayoutPanel] = useState(false);
-  const [mergeShortParagraphs, setMergeShortParagraphs] = useState(true);
-  const [formatDialogue, setFormatDialogue] = useState(true);
-  const [normalizeQuotes, setNormalizeQuotes] = useState(true);
+  // Relayout options also start from "fidelity" preset (all off)
+  const [mergeShortParagraphs, setMergeShortParagraphs] = useState(false);
+  const [formatDialogue, setFormatDialogue] = useState(false);
+  const [ensureParagraphSpacing, setEnsureParagraphSpacing] = useState(false);
+  const [normalizeQuotes, setNormalizeQuotes] = useState(false);
+  const [compressBlankLines, setCompressBlankLines] = useState(false);
 
   // Inspection & risk state
   const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>(null);
   const [showRiskConfirm, setShowRiskConfirm] = useState(false);
   const [pendingRiskAction, setPendingRiskAction] = useState<(() => void) | null>(null);
+  const [pendingRiskStats, setPendingRiskStats] = useState<ReturnType<typeof computeRemovalStats> | null>(null);
 
   // Export state
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -207,6 +243,10 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   const [newAuthorName, setNewAuthorName] = useState("");
   const [newAuthorTags, setNewAuthorTags] = useState("");
 
+  // Audit section toggle (library browsing vs apply to book)
+  const [activeAuditSection, setActiveAuditSection] = useState<"library" | "apply">("library");
+  const [reanalyzing, setReanalyzing] = useState(false);
+
   // Apply state
   const [applyAuthorId, setApplyAuthorId] = useState("");
   const [applyBookId, setApplyBookId] = useState("");
@@ -214,9 +254,33 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
   // Shared
   const [importBookId, setImportBookId] = useState("");
+  const [importChapterNumber, setImportChapterNumber] = useState(1);
+  const [chapterIndex, setChapterIndex] = useState<ReadonlyArray<{ number: number; title: string }> | null>(null);
   const [importStatus, setImportStatus] = useState("");
   const { data: booksData } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
   const statusNotice = buildStyleStatusNotice(analyzeStatus, importStatus || applyStatus);
+
+  // Derive source hash from text for staleness tracking
+  const sourceHash = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36).slice(0, 8);
+  }, [text]);
+
+  // Step 4: Deduplication state
+  const [dedupData, setDedupData] = useState<{
+    duplicateGroups: ReadonlyArray<import("@actalk/inkos-core").DuplicateParagraphGroup>;
+    similarGroups: ReadonlyArray<import("@actalk/inkos-core").SimilarParagraphGroup>;
+    rhetoricFindings: ReadonlyArray<import("@actalk/inkos-core").DuplicateRhetoricFinding>;
+    readabilityScore: import("@actalk/inkos-core").ReadabilityScore | null;
+  } | null>(null);
+  const [loadingDedup, setLoadingDedup] = useState(false);
+  const [ignoredRhetoricIds, setIgnoredRhetoricIds] = useState<readonly string[]>([]);
+  const [fixedRhetoricIds, setFixedRhetoricIds] = useState<readonly string[]>([]);
 
   const loadAuthorDetail = useCallback(async (authorId: string) => {
     if (!authorId) { setAuthorDetail(null); return; }
@@ -282,6 +346,91 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     } finally {
       setLoading(false);
     }
+  };
+
+  /** Import a specific chapter from a book for style analysis. Defaults to chapter 1. */
+  const handleImportBookChapter = async (bookId: string, chapterNumber?: number) => {
+    const chNum = chapterNumber ?? importChapterNumber;
+    setLoading(true);
+    setAnalyzeStatus("");
+    setProfile(null);
+    setImportBookId(bookId);
+    try {
+      // Fetch chapter index when a book is first selected
+      if (!chapterIndex) {
+        try {
+          const data = await fetchJson<{ chapters: ReadonlyArray<{ number: number; title: string }> }>(`/books/${bookId}`);
+          setChapterIndex(data.chapters);
+        } catch {
+          // Chapter index not available — proceed with default
+        }
+      }
+
+      const data = await fetchJson<{ content: string }>(`/books/${bookId}/chapters/${chNum}`);
+      if (!data.content?.trim()) {
+        setAnalyzeStatus("Error: 该书暂无章节内容");
+        return;
+      }
+      setText(data.content);
+      setSourceName(bookId);
+      setImportChapterNumber(chNum);
+      setAnalyzeStatus(`已导入「${booksData?.books.find((b) => b.id === bookId)?.title ?? bookId}」第 ${chNum} 章`);
+    } catch (e) {
+      setAnalyzeStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Fetch book detail (including chapter index) for a book without importing. */
+  const handleSelectBook = async (bookId: string) => {
+    setImportBookId(bookId);
+    setImportChapterNumber(1);
+    setChapterIndex(null);
+    if (bookId) {
+      try {
+        const data = await fetchJson<{ chapters: ReadonlyArray<{ number: number; title: string }> }>(`/books/${bookId}`);
+        setChapterIndex(data.chapters);
+      } catch {
+        setChapterIndex([]);
+      }
+    }
+  };
+
+  /** Fetch deduplication and readability data for Step 4. */
+  const handleFetchDedupData = async () => {
+    if (!text.trim()) return;
+    setLoadingDedup(true);
+    setDedupData(null);
+    try {
+      const [paragraphResult, rhetoricResult, readabilityResult] = await Promise.allSettled([
+        fetchJson<{ duplicateGroups: ReadonlyArray<import("@actalk/inkos-core").DuplicateParagraphGroup>; similarGroups: ReadonlyArray<import("@actalk/inkos-core").SimilarParagraphGroup> }>("/style/paragraph/dedup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+        fetchJson<{ findings: ReadonlyArray<import("@actalk/inkos-core").DuplicateRhetoricFinding> }>("/style/rhetoric/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+        fetchJson<import("@actalk/inkos-core").ReadabilityScore>("/style/readability/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: "zh" }),
+        }),
+      ]);
+      const duplicateGroups = paragraphResult.status === "fulfilled" ? paragraphResult.value.duplicateGroups : [];
+      const similarGroups = paragraphResult.status === "fulfilled" ? paragraphResult.value.similarGroups : [];
+      const rhetoricFindings = rhetoricResult.status === "fulfilled" && Array.isArray(rhetoricResult.value?.findings)
+        ? rhetoricResult.value.findings
+        : [];
+      const readabilityScore = readabilityResult.status === "fulfilled" ? readabilityResult.value : null;
+      setDedupData({ duplicateGroups, similarGroups, rhetoricFindings, readabilityScore });
+    } catch {
+      // Individual failures already handled by allSettled
+    }
+    setLoadingDedup(false);
   };
 
   const handleFileAnalysisLocalFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -367,6 +516,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     if (!text.trim()) return;
     setLoading(true);
     setProfile(null);
+    setDiagnostics(null);
     setAnalyzeStatus("");
     try {
       const data = await fetchJson<CoreStyleProfile>("/style/analyze", {
@@ -379,6 +529,24 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
       setAnalyzeStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
     }
     setLoading(false);
+  };
+
+  const handleDiagnostics = async () => {
+    if (!text.trim()) return;
+    setLoadingDiagnostics(true);
+    setDiagnostics(null);
+    setAnalyzeStatus("");
+    try {
+      const data = await fetchJson<FullStyleDiagnostics>("/style/diagnostics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, language: "zh" }),
+      });
+      setDiagnostics(data);
+    } catch (e) {
+      setAnalyzeStatus(`Diagnostics Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setLoadingDiagnostics(false);
   };
 
   const handleImport = async () => {
@@ -396,6 +564,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     if (!fileText.trim()) return;
     setLoading(true);
     setExtractedDoc(null);
+    setLoadedChunks(1);
     setPreprocessedText("");
     setPreprocessActions([]);
     setRelayoutedText("");
@@ -426,6 +595,35 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
       setAnalyzeStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
     }
     setLoading(false);
+  };
+
+  /** Load the next chunk and append it to the current extracted text. */
+  const handleLoadNextChunk = async () => {
+    if (!extractedDoc || loadingChunk) return;
+    const nextIndex = loadedChunks;
+    if (extractedDoc.totalChunks !== undefined && nextIndex >= extractedDoc.totalChunks) return;
+    setLoadingChunk(true);
+    try {
+      const chunk = await fetchJson<ExtractedDoc>("/style/extract-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: fileText,
+          sourceName: fileSourceName || "sample",
+          fileType,
+          chunk: nextIndex,
+        }),
+      });
+      setExtractedDoc((prev) => prev ? {
+        ...prev,
+        text: prev.text + chunk.text,
+        chunkIndex: nextIndex,
+      } : prev);
+      setLoadedChunks(nextIndex + 1);
+    } catch (e) {
+      console.warn(`[StyleManager] Failed to load chunk ${nextIndex}: ${e}`);
+    }
+    setLoadingChunk(false);
   };
 
   const runPreprocess = async (sourceText: string, skipRelayout = false) => {
@@ -471,8 +669,11 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           text: sourceText,
           options: {
             mergeShortParagraphs,
+            shortParagraphThreshold: 20,
             formatDialogue,
+            ensureParagraphSpacing,
             normalizeQuotes,
+            compressBlankLines,
           },
         }),
       });
@@ -483,11 +684,61 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     }
   };
 
+  const handleRunPreprocess = (sourceText: string, skipRelayout = false) => {
+    // Build current options to compute risk before calling API
+    const preprocessOpts = {
+      filterCode,
+      filterRepeatedPrompts,
+      filterUrls,
+      filterStructuredData,
+      stripMarkdown,
+      minLineLength: minLineLength > 0 ? minLineLength : undefined,
+      deduplicateParagraphs,
+      filterTimestamps,
+      filterIds,
+      filterNoiseMarkers,
+    };
+    const relayoutOpts = {
+      mergeShortParagraphs,
+      formatDialogue,
+      ensureParagraphSpacing,
+      normalizeQuotes,
+      compressBlankLines,
+    };
+    // Use a rough estimate: assume 5% removal for conservative presets,
+    // actual removal is computed server-side. Here we use the high-risk
+    // option count as a proxy for pre-flight check.
+    const estimatedRemoval = 0;
+    const stats = computeRemovalStats(sourceText.length, sourceText.length - estimatedRemoval, preprocessOpts, relayoutOpts);
+    if (requiresConfirmation(stats)) {
+      setPendingRiskStats(stats);
+      setShowRiskConfirm(true);
+      return;
+    }
+    runPreprocess(sourceText, skipRelayout);
+  };
+
   const getStageText = (): string => {
     if (analysisStage === "relayouted" && relayoutedText) return relayoutedText;
     if (analysisStage === "cleaned" && preprocessedText) return preprocessedText;
     return extractedDoc?.text || fileText;
   };
+
+  const LARGE_TEXT_THRESHOLD = 100_000;
+
+  /** Sample large text for UI rendering without mounting full content. */
+  function sampleLargeText(text: string): { display: string; isSampled: boolean } {
+    if (text.length <= LARGE_TEXT_THRESHOLD) {
+      return { display: text, isSampled: false };
+    }
+    const head = text.slice(0, 30_000);
+    const tail = text.slice(-30_000);
+    const omitted = text.length - head.length - tail.length;
+    return {
+      display: `${head}\n\n[… ${omitted.toLocaleString()} characters omitted for preview …]\n\n${tail}`,
+      isSampled: true,
+    };
+  }
 
   const setAnalysisToExtracted = () => setAnalysisStage("extracted");
   const setAnalysisToCleaned = () => setAnalysisStage("cleaned");
@@ -501,7 +752,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
     setProfile(null);
     const stageKey = analysisStage === "extracted" ? "style.stage.extracted" : analysisStage === "cleaned" ? "style.stage.cleaned" : "style.stage.relayouted";
     setAnalyzeStatus(`已使用「${t(stageKey as any)}」版本`);
-    setActiveTab("text");
+    setActiveTab("diagnose");
   };
 
   const handleExport = () => {
@@ -874,117 +1125,248 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         {t("style.title")}
       </h1>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
+      {/* Step progression — unified style analysis workflow */}
+      <div className="flex gap-0 border border-border/40 rounded-lg overflow-hidden">
         {([
-          { key: "text", label: t("style.tabs.text") },
-          { key: "files", label: t("style.tabs.files") },
-          { key: "library", label: t("style.tabs.library") },
-          { key: "apply", label: t("style.tabs.apply") },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { key: "import", label: "1. 文本导入" },
+          { key: "diagnose", label: "2. 文风诊断" },
+          { key: "ai-detect", label: "3. AI 检测" },
+          { key: "deduplicate", label: "4. 修辞去重" },
+          { key: "audit", label: "5. 应用审计" },
+        ] as const).map((step, idx) => {
+          const stepKeys: ReadonlyArray<StyleTab> = ["import", "diagnose", "ai-detect", "deduplicate", "audit"];
+          const currentIdx = stepKeys.indexOf(activeTab);
+          const thisIdx = stepKeys.indexOf(step.key);
+          const completed = thisIdx >= 0 && thisIdx < currentIdx;
+          const active = thisIdx === currentIdx;
+          return (
+            <button
+              key={step.key}
+              onClick={() => setActiveTab(step.key)}
+              className={`flex-1 px-3 py-2.5 text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : completed
+                    ? "bg-primary/10 text-primary hover:bg-primary/15"
+                    : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              <span className="hidden sm:inline">{step.label}</span>
+              {completed && <span className="text-[10px] opacity-70 ml-1">✓</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tab: Text Analysis */}
-      {activeTab === "text" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.sourceName")}</label>
-              <input
-                type="text"
-                value={sourceName}
-                onChange={(e) => setSourceName(e.target.value)}
-                placeholder={t("style.sourceExample")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.urlSource")}</label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={urlSource}
-                  onChange={(e) => setUrlSource(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void handleImportUrl();
-                    }
-                  }}
-                  placeholder={t("style.urlPlaceholder")}
-                  className="min-w-0 flex-1 px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
-                />
-                <button
-                  onClick={handleImportUrl}
-                  disabled={!urlSource.trim() || loading}
-                  className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-                >
-                  <Link size={14} />
-                  {t("style.importUrl")}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={12}
-                placeholder={t("style.pasteHint")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary resize-none font-mono"
-              />
-            </div>
-            <div className="flex gap-3">
-              <input
-                ref={textFileInputRef}
-                type="file"
-                accept=".txt,.md,.markdown,text/plain,text/markdown"
-                className="hidden"
-                onChange={handleTextLocalFile}
-              />
-              <button
-                onClick={() => textFileInputRef.current?.click()}
-                disabled={loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <Upload size={14} />
-                {t("style.importLocalFile")}
-              </button>
-              <button
-                onClick={handleAnalyze}
-                disabled={!text.trim() || loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnPrimary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <BarChart3 size={14} />
-                {loading ? t("style.analyzing") : t("style.analyze")}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {renderProfileCard(profile, true)}
-            {!profile && !loading && (
-              <div className={`border border-dashed ${c.cardStatic} rounded-lg p-8 text-center text-muted-foreground text-sm italic`}>
-                {t("style.emptyHint")}
-              </div>
-            )}
-          </div>
+      {/* Step 1: Text Import & Analysis */}
+      {activeTab === "import" && (
+        <StyleTextTab
+          text={text}
+          setText={setText}
+          sourceName={sourceName}
+          setSourceName={setSourceName}
+          urlSource={urlSource}
+          setUrlSource={setUrlSource}
+          profile={profile}
+          diagnostics={diagnostics}
+          loading={loading}
+          loadingDiagnostics={loadingDiagnostics}
+          textFileInputRef={textFileInputRef}
+          libraryData={libraryData}
+          booksData={booksData}
+          c={c}
+          t={t as unknown as (key: string) => string}
+          handleTextLocalFile={handleTextLocalFile}
+          handleImportUrl={handleImportUrl}
+          handleAnalyze={handleAnalyze}
+          handleDiagnostics={handleDiagnostics}
+          handleImportBookChapter={handleImportBookChapter}
+          renderProfileCard={renderProfileCard}
+          importBookId={importBookId}
+          chapterIndex={chapterIndex}
+          importChapterNumber={importChapterNumber}
+          handleSelectBook={handleSelectBook}
+          onSelectChapter={setImportChapterNumber}
+        />
+      )}
+
+      {/* Step 3: AI Detection */}
+      {activeTab === "ai-detect" && (
+        <div className="max-w-2xl mx-auto py-4">
+          <AITellsPanel
+            t={t as unknown as (key: string) => string}
+            initialText={text || undefined}
+            language="zh"
+          />
         </div>
       )}
 
-      {/* Tab: File Analysis */}
-      {activeTab === "files" && (
+      {/* Step 2: Style Diagnosis */}
+      {activeTab === "diagnose" && (
+        <div className="max-w-4xl mx-auto py-4 space-y-6">
+          {profile ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">文风诊断报告</h2>
+                <button
+                  onClick={handleDiagnostics}
+                  disabled={loadingDiagnostics || !text.trim()}
+                  className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                >
+                  {loadingDiagnostics ? <div className="w-3 h-3 border-2 border-muted-foreground/20 border-t-mforeground rounded-full animate-spin" /> : <Stethoscope size={12} />}
+                  完整诊断
+                </button>
+              </div>
+              {renderProfileCard(profile, true)}
+              {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} text={text} t={t as any} />}
+
+              {/* Style drift score — shown when source is a book */}
+              {importBookId && (
+                <StyleDriftScoreSection bookId={importBookId} chapterNumber={importChapterNumber} t={t as unknown as (key: string) => string} />
+              )}
+            </>
+          ) : (
+            <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
+              <p className="text-sm">请在「文本导入」步骤中先粘贴或上传文本并运行分析</p>
+              <p className="text-xs mt-2">分析完成后将在此展示详细的文风诊断报告</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Rhetoric Deduplication */}
+      {activeTab === "deduplicate" && (
+        <div className="max-w-4xl mx-auto py-4 space-y-6">
+          {!text.trim() ? (
+            <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
+              <p className="text-sm">请先在「文本导入」步骤中导入文本</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">修辞去重</h2>
+                <button
+                  onClick={handleFetchDedupData}
+                  disabled={loadingDedup}
+                  className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                >
+                  {loadingDedup ? <div className="w-3 h-3 border-2 border-muted-foreground/20 border-t-mforeground rounded-full animate-spin" /> : <BarChart3 size={12} />}
+                  {loadingDedup ? "检测中..." : "开始检测"}
+                </button>
+              </div>
+
+              {/* Readability Dashboard */}
+              {dedupData?.readabilityScore && (
+                <ReadabilityDashboard score={dedupData.readabilityScore} source="style" />
+              )}
+
+              {/* Duplicate Paragraph Panel */}
+              {dedupData && (dedupData.duplicateGroups.length > 0 || dedupData.similarGroups.length > 0) && (
+                <DuplicateParagraphPanel
+                  duplicateGroups={dedupData.duplicateGroups}
+                  similarGroups={dedupData.similarGroups}
+                  onDelete={(ids) => {
+                    // Remove deleted paragraphs from text by replacing with empty lines
+                    const lines = text.split("\n");
+                    // ids are 1-based line numbers, convert to 0-based indices
+                    const indicesToRemove = [...ids]
+                      .map((id) => id - 1)          // 1基→0基
+                      .filter((i) => i >= 0 && i < lines.length)
+                      .sort((a, b) => b - a);       // 从后往前删除
+                    for (const idx of indicesToRemove) {
+                      lines[idx] = "";
+                    }
+                    setText(lines.filter((l) => l !== "").join("\n"));
+                    setAnalyzeStatus(`已删除 ${ids.length} 段重复内容`);
+                  }}
+                  onMerge={(group, mergedText) => {
+                    // Replace the first paragraph of the group with merged text,
+                    // remove the rest
+                    const lines = text.split("\n");
+                    if (group.paragraphs && group.paragraphs.length > 0) {
+                      const firstLineIndex = group.paragraphs[0].lineNumber - 1; // 1基→0基
+                      if (firstLineIndex >= 0 && firstLineIndex < lines.length) {
+                        lines[firstLineIndex] = mergedText;
+                      }
+                      const restIndices = group.paragraphs
+                        .slice(1)
+                        .map((p) => p.lineNumber - 1)   // 1基→0基
+                        .filter((i) => i >= 0 && i < lines.length)
+                        .sort((a, b) => b - a);
+                      for (const idx of restIndices) {
+                        lines[idx] = "";
+                      }
+                    }
+                    setText(lines.filter((l) => l !== "").join("\n"));
+                    setAnalyzeStatus("已合并相似段落");
+                  }}
+                />
+              )}
+
+              {/* Rhetoric Issue Panel */}
+              {dedupData && dedupData.rhetoricFindings.filter((f) => !ignoredRhetoricIds.includes(f.id)).length > 0 && (
+                <RhetoricIssuePanel
+                  findings={dedupData.rhetoricFindings.filter((f) => !ignoredRhetoricIds.includes(f.id) && !fixedRhetoricIds.includes(f.id))}
+                  mode="full"
+                  actions={["highlight", "ignore", "ai-rewrite", "mark-fixed"]}
+                  storageKey="style-dedup-rhetoric"
+                  onAction={async (action, findingId) => {
+                    if (action === "ignore") {
+                      setIgnoredRhetoricIds((prev) => [...prev, findingId]);
+                    } else if (action === "mark-fixed") {
+                      setFixedRhetoricIds((prev) => [...prev, findingId]);
+                    } else if (action === "highlight") {
+                      // Scroll to the finding's first example in the text area
+                      const finding = dedupData?.rhetoricFindings.find((f) => f.id === findingId);
+                      if (finding?.examples?.[0]?.text) {
+                        const exampleText = finding.examples[0].text;
+                        const findIdx = text.indexOf(exampleText);
+                        if (findIdx >= 0) {
+                          const textArea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="粘贴"]');
+                          if (textArea) {
+                            textArea.focus();
+                            textArea.selectionStart = findIdx;
+                            textArea.selectionEnd = Math.min(findIdx + exampleText.length, text.length);
+                            textArea.scrollTop = (findIdx / text.length) * textArea.scrollHeight;
+                          }
+                        }
+                      }
+                    } else if (action === "ai-rewrite") {
+                      try {
+                        const { rewriteRhetoric } = await import("../hooks/use-api.js");
+                        const result = await rewriteRhetoric(text, []);
+                        const prompt = result.prompt;
+                        if (prompt) {
+                          setAnalyzeStatus(`AI 改写建议已生成，已复制到剪贴板`);
+                          navigator.clipboard.writeText(prompt).catch(() => {});
+                        }
+                      } catch (e) {
+                        setAnalyzeStatus(`Error: 生成改写建议失败 — ${e instanceof Error ? e.message : String(e)}`);
+                      }
+                    }
+                  }}
+                />
+              )}
+
+              {/* Empty state */}
+              {dedupData && dedupData.duplicateGroups.length === 0 && dedupData.similarGroups.length === 0 && dedupData.rhetoricFindings.length === 0 && (
+                <div className="text-center text-muted-foreground py-8 border border-dashed border-border/40 rounded-lg">
+                  <p className="text-sm">未发现需要去重或优化的内容</p>
+                </div>
+              )}
+
+              {!dedupData && !loadingDedup && (
+                <div className="text-center text-muted-foreground py-8 border border-dashed border-border/40 rounded-lg">
+                  <p className="text-sm">点击「开始检测」分析文本中的重复段落和修辞问题</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Step: File Processing (shown alongside import) */}
+      {activeTab === "import" && fileText && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
@@ -999,13 +1381,25 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
-              <textarea
-                value={fileText}
-                onChange={(e) => setFileText(e.target.value)}
-                rows={10}
-                placeholder={t("style.uploadHint")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary resize-none font-mono"
-              />
+              {(() => {
+                const { display, isSampled } = sampleLargeText(fileText);
+                return (
+                  <>
+                    {isSampled && (
+                      <div className="text-xs text-amber-600 mb-1">
+                        {t("style.largeTextSampled")} ({fileText.length.toLocaleString()} chars)
+                      </div>
+                    )}
+                    <textarea
+                      value={display}
+                      onChange={(e) => setFileText(e.target.value)}
+                      rows={10}
+                      placeholder={t("style.uploadHint")}
+                      className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary resize-none font-mono"
+                    />
+                  </>
+                );
+              })()}
             </div>
             <div className="flex gap-3 items-center flex-wrap">
               <input
@@ -1065,6 +1459,28 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
               </div>
             )}
 
+            {/* Chunked extraction indicator */}
+            {extractedDoc && extractedDoc.totalChunks !== undefined && extractedDoc.totalChunks > 1 && (
+              <div className="flex items-center gap-2 text-xs text-secondary">
+                <FileText size={12} />
+                <span>
+                  {t("style.chunkProgress").replace("{{loaded}}", String(loadedChunks)).replace("{{total}}", String(extractedDoc.totalChunks))}
+                </span>
+                {loadedChunks < extractedDoc.totalChunks && (
+                  <button
+                    className={`text-xs px-2 py-0.5 rounded ${c.btnSecondary} hover:opacity-80`}
+                    onClick={handleLoadNextChunk}
+                    disabled={loadingChunk}
+                  >
+                    {loadingChunk ? t("common.loading") : t("style.loadNextChunk")}
+                  </button>
+                )}
+                {loadedChunks === extractedDoc.totalChunks && (
+                  <span className="text-green-600">{t("style.allChunksLoaded")}</span>
+                )}
+              </div>
+            )}
+
             {/* Preprocess Panel */}
             <div className={`border ${c.cardStatic} rounded-lg p-4 space-y-3`}>
               <div className="flex items-center justify-between">
@@ -1085,16 +1501,22 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                         key={preset.id}
                         onClick={() => {
                           setActivePreset(preset.id);
-                          setFilterCode(preset.preprocess.filterCode ?? true);
-                          setFilterRepeatedPrompts(preset.preprocess.filterRepeatedPrompts ?? true);
-                          setFilterUrls(preset.preprocess.filterUrls ?? true);
-                          setFilterStructuredData(preset.preprocess.filterStructuredData ?? true);
-                          setStripMarkdown(preset.preprocess.stripMarkdown ?? true);
-                          setDeduplicateParagraphs(preset.preprocess.deduplicateParagraphs ?? true);
-                          setFilterTimestamps(preset.preprocess.filterTimestamps ?? true);
-                          setFilterIds(preset.preprocess.filterIds ?? true);
-                          setFilterNoiseMarkers(preset.preprocess.filterNoiseMarkers ?? true);
+                          setFilterCode(preset.preprocess.filterCode ?? false);
+                          setFilterRepeatedPrompts(preset.preprocess.filterRepeatedPrompts ?? false);
+                          setFilterUrls(preset.preprocess.filterUrls ?? false);
+                          setFilterStructuredData(preset.preprocess.filterStructuredData ?? false);
+                          setStripMarkdown(preset.preprocess.stripMarkdown ?? false);
+                          setDeduplicateParagraphs(preset.preprocess.deduplicateParagraphs ?? false);
+                          setFilterTimestamps(preset.preprocess.filterTimestamps ?? false);
+                          setFilterIds(preset.preprocess.filterIds ?? false);
+                          setFilterNoiseMarkers(preset.preprocess.filterNoiseMarkers ?? false);
                           setMinLineLength(preset.preprocess.minLineLength ?? 0);
+                          // Also update relayout options to match preset
+                          setMergeShortParagraphs(preset.relayout.mergeShortParagraphs ?? false);
+                          setFormatDialogue(preset.relayout.formatDialogue ?? false);
+                          setEnsureParagraphSpacing(preset.relayout.ensureParagraphSpacing ?? false);
+                          setNormalizeQuotes(preset.relayout.normalizeQuotes ?? false);
+                          setCompressBlankLines(preset.relayout.compressBlankLines ?? false);
                         }}
                         className={`text-xs px-2 py-1 rounded-full border transition-colors ${
                           activePreset === preset.id
@@ -1189,7 +1611,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                   {/* Run button with risk warning */}
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => runPreprocess(extractedDoc?.text || fileText)}
+                      onClick={() => handleRunPreprocess(extractedDoc?.text || fileText)}
                       disabled={!(extractedDoc?.text || fileText).trim() || loading}
                       className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
                     >
@@ -1372,14 +1794,40 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Tab: Library */}
-      {activeTab === "library" && (
+      {/* Step 5: Audit - Author Library */}
+      {activeTab === "audit" && (
+        <>
+          {/* Section toggle: Library / Apply */}
+          <div className="flex gap-0 border border-border/40 rounded-lg overflow-hidden mb-4">
+            <button
+              onClick={() => setActiveAuditSection("library")}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-all ${
+                activeAuditSection === "library"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {t("style.tabs.library")}
+            </button>
+            <button
+              onClick={() => setActiveAuditSection("apply")}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-all ${
+                activeAuditSection === "apply"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {t("style.tabs.apply")}
+            </button>
+          </div>
+
+          {activeAuditSection === "library" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">{t("style.tabs.library")}</h3>
               <button
-                onClick={() => { setShowCreateForm(true); setActiveTab("library"); }}
+                onClick={() => { setShowCreateForm(true); setActiveAuditSection("library"); }}
                 className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} flex items-center gap-1`}
               >
                 <Plus size={12} />
@@ -1463,11 +1911,18 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        await fetchJson(`/style/authors/${selectedAuthorId}/reanalyze`, { method: "POST" });
-                        loadAuthorDetail(selectedAuthorId);
-                        refetchLibrary();
+                        if (reanalyzing) return;
+                        setReanalyzing(true);
+                        try {
+                          await fetchJson(`/style/authors/${selectedAuthorId}/reanalyze`, { method: "POST" });
+                          loadAuthorDetail(selectedAuthorId);
+                          refetchLibrary();
+                        } finally {
+                          setReanalyzing(false);
+                        }
                       }}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} flex items-center gap-1`}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
+                      disabled={reanalyzing}
                     >
                       <RefreshCw size={12} />
                       {t("style.reanalyzeAuthor")}
@@ -1579,9 +2034,8 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Tab: Apply */}
-      {activeTab === "apply" && (
-        <div className="max-w-xl space-y-6">
+      {activeAuditSection === "apply" && (
+        <div className="max-w-[48rem] space-y-6">
           <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.tabs.apply")}</h3>
 
@@ -1628,7 +2082,43 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
               </div>
             )}
           </div>
+
+          {/* Adjustment recommendations for the current text */}
+          <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.adjustmentSuggestions")}</h3>
+            <AdjustmentSuggestionsPanel
+              text={text}
+              onTextChange={setText}
+              diagnostics={diagnostics}
+              t={t as unknown as (key: string) => string}
+              onApply={() => {
+                // Auto-trigger re-diagnosis after applying an adjustment
+                setProfile(null);
+                setDiagnostics(null);
+                // Navigate back to diagnose step so user can see fresh results
+                setTimeout(() => {
+                  handleAnalyze();
+                  handleDiagnostics();
+                }, 300);
+              }}
+            />
+          </div>
+
+          {/* Compare current text with an author profile */}
+          <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.compareWithAuthor")}</h3>
+            <AuthorStyleComparison
+              text={text}
+              onComparisonResult={(result) => {
+                // Store comparison result — can be logged or displayed
+                console.log("[StyleManager] Comparison result:", result);
+              }}
+              t={t as unknown as (key: string) => string}
+            />
+          </div>
         </div>
+      )}
+      </>
       )}
 
       {statusNotice && (
@@ -1642,6 +2132,43 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           }`}
         >
           {statusNotice.message}
+        </div>
+      )}
+
+      {/* Risk confirmation modal */}
+      {showRiskConfirm && pendingRiskStats && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md p-6 rounded-xl bg-background border border-border shadow-xl space-y-4">
+            <h3 className="text-lg font-semibold text-destructive">{t("style.riskConfirmTitle")}</h3>
+            <div className="space-y-2 text-sm">
+              <p>{t("style.riskConfirmMessage")}</p>
+              <ul className="list-disc list-inside text-muted-foreground">
+                {pendingRiskStats.highRiskOptions.map((opt) => (
+                  <li key={opt}>{opt}</li>
+                ))}
+              </ul>
+              <p className="font-medium">{t("style.removalRate")}: {(pendingRiskStats.removalRate * 100).toFixed(1)}%</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setShowRiskConfirm(false); setPendingRiskStats(null); }}
+                className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary}`}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={() => {
+                  setShowRiskConfirm(false);
+                  const text = extractedDoc?.text || fileText;
+                  runPreprocess(text);
+                  setPendingRiskStats(null);
+                }}
+                className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary}`}
+              >
+                {t("common.confirm")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

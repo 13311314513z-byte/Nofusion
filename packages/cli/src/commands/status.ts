@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { StateManager, formatLengthCount, readGenreProfile, resolveLengthCountingMode } from "@actalk/inkos-core";
-import { findProjectRoot, getLegacyMigrationHint, log, logError } from "../utils.js";
+import { findProjectRoot, getLegacyMigrationHint, log, logError, formatJsonOutput } from "../utils.js";
 
 export const statusCommand = new Command("status")
   .description("Show project status")
@@ -125,7 +125,7 @@ export const statusCommand = new Command("status")
       }
 
       if (opts.json) {
-        log(JSON.stringify({ project: root, books: booksData }, null, 2));
+        log(formatJsonOutput({ project: root, books: booksData }, undefined, true));
       }
     } catch (e) {
       if (opts.json) {

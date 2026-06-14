@@ -4,8 +4,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    "noEmit": false
   },
-  "include": ["src/api"],
-  "exclude": ["src/api/**/*.test.ts"]
+  "include": ["src/api", "src/shared/**/*.ts"],
+  "exclude": ["src/api/**/*.test.ts", "src/shared/source-utils.ts", "src/shared/extract-adapter.ts"]
 }

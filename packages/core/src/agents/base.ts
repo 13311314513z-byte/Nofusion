@@ -73,7 +73,7 @@ export abstract class BaseAgent {
       try {
         fullContent = await fetchUrl(results[0]!.url, 4000);
       } catch {
-        // Fetch failed, use snippets only
+        this.log?.warn("[search] Failed to fetch top result, using snippets only");
       }
 
       const searchContext = [

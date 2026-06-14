@@ -62,7 +62,7 @@ function uniqueSorted(values: ReadonlyArray<string | undefined>): string[] {
 }
 
 export function BookScenesSection({ bookId, nav, t }: BookScenesSectionProps) {
-  const { data, loading, error } = useApi<BookData>(`/books/${bookId}`);
+  const { data, loading, error, refetch } = useApi<BookData>(`/books/${bookId}`);
   const [sceneSearch, setSceneSearch] = useState("");
 
   // All hooks must be called before early returns (React Rules of Hooks).
@@ -143,9 +143,15 @@ export function BookScenesSection({ bookId, nav, t }: BookScenesSectionProps) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-destructive p-8 bg-destructive/5 rounded-xl border border-destructive/20">
-          Error: {error}
+      <div className="flex flex-col items-center justify-center h-full space-y-4">
+        <div className="text-destructive p-8 bg-destructive/5 rounded-xl border border-destructive/20 text-center">
+          <p className="text-sm mb-3">{t("book.loadError") ?? "Error: "}{error}</p>
+          <button
+            onClick={refetch}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+          >
+            {t("common.retry")}
+          </button>
         </div>
       </div>
     );

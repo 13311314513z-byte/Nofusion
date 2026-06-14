@@ -61,6 +61,11 @@ export async function probeServiceForDetail(
   );
 }
 
+export interface ServiceSecretInfo {
+  readonly hasApiKey: boolean;
+  readonly keyPreview: string;
+}
+
 export async function rehydrateServiceConnectionStatus(args: {
   readonly effectiveServiceId: string;
   readonly shouldVerify: boolean;
@@ -71,18 +76,22 @@ export async function rehydrateServiceConnectionStatus(args: {
   readonly fetchJsonImpl?: JsonFetcher;
 }): Promise<{
   readonly apiKey: string;
+  readonly hasStoredKey: boolean;
   readonly status: ServiceDetailConnectionStatus;
   readonly detectedModel: string;
   readonly detectedConfig: ServiceDetailDetectedConfig | null;
 }> {
   const fetchJsonImpl = args.fetchJsonImpl ?? fetchJson;
-  const secret = await fetchJsonImpl<{ apiKey?: string }>(
+  const secret = await fetchJsonImpl<ServiceSecretInfo>(
     `/services/${encodeURIComponent(args.effectiveServiceId)}/secret`,
   );
-  const apiKey = String(secret.apiKey ?? "");
+  // 不再返回完整 API Key，前端只能看到是否已配置
+  const hasStoredKey = secret.hasApiKey;
+  const apiKey = ""; // 前端不再持有完整 Key，用户需主动输入
 
   return {
     apiKey,
+    hasStoredKey,
     status: { state: "idle" },
     detectedModel: "",
     detectedConfig: null,
@@ -109,6 +118,7 @@ export async function saveServiceConfig(args: {
   readonly isCustom: boolean;
   readonly resolvedCustomName: string;
   readonly apiKey: string;
+  readonly hasStoredKey?: boolean;
   readonly baseUrl: string;
   readonly apiFormat: "chat" | "responses";
   readonly stream: boolean;
@@ -116,6 +126,8 @@ export async function saveServiceConfig(args: {
   readonly detectedModel: string;
   readonly verifiedProbe?: ServiceDetailVerifiedProbe | null;
   readonly fetchJsonImpl?: JsonFetcher;
+  // ✅ 写作参数（top_p / presence_penalty / frequency_penalty / seed / repetition_penalty）
+  readonly extra?: Record<string, number>;
 }): Promise<{
   readonly status: ServiceDetailConnectionStatus;
   readonly detectedModel: string;
@@ -125,7 +137,7 @@ export async function saveServiceConfig(args: {
   const trimmedKey = args.apiKey.trim();
   const trimmedBaseUrl = args.baseUrl.trim();
 
-  if (!trimmedKey && !args.isCustom) {
+  if (!trimmedKey && !args.isCustom && !args.hasStoredKey) {
     return {
       status: { state: "error", message: "请先输入 API Key" },
       detectedModel: "",
@@ -183,7 +195,14 @@ export async function saveServiceConfig(args: {
     };
   }
 
-  const detectedModel = probe.selectedModel ?? args.detectedModel;
+  const availableModels = probe.models ?? [];
+  const selectedModelIsAvailable = Boolean(
+    args.detectedModel
+      && availableModels.some((model) => model.id === args.detectedModel),
+  );
+  const detectedModel = selectedModelIsAvailable
+    ? args.detectedModel
+    : probe.selectedModel ?? availableModels[0]?.id ?? "";
   const detectedConfig = probe.detected ?? null;
   const savedApiFormat = detectedConfig?.apiFormat ?? args.apiFormat;
   const savedStream = typeof detectedConfig?.stream === "boolean" ? detectedConfig.stream : args.stream;
@@ -207,6 +226,7 @@ export async function saveServiceConfig(args: {
           temperature: parseFloat(args.temperature),
           apiFormat: savedApiFormat,
           stream: savedStream,
+          ...(args.extra && Object.keys(args.extra).length > 0 ? { extra: args.extra } : {}),
           ...(args.isCustom ? {
             name: args.resolvedCustomName,
             baseUrl: savedBaseUrl,

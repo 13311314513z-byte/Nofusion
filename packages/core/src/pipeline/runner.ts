@@ -26,9 +26,29 @@ import { RadarAgent } from "../agents/radar.js";
 import type { RadarSource } from "../agents/radar-source.js";
 import { readGenreProfile } from "../agents/rules-reader.js";
 import { analyzeAITells } from "../agents/ai-tells.js";
-import { analyzeSensitiveWords } from "../agents/sensitive-words.js";
+import {
+  loadChapterIntents,
+  getChapterIntent,
+  confirmChapterIntent,
+  saveChapterIntents,
+} from "../models/chapter-intent.js";
+import { validateAuthorIntentInContent } from "../agents/post-write-validator.js";
+import { BetaReader, type BetaReaderMode } from "../agents/beta-reader.js";
+import { IssueNormalizer } from "../agents/issue-normalizer.js";
+import { createIssue, resolveAuditIssue } from "../models/audit-issue.js";
+import { checkPatchBoundary, issueLocationsToParagraphSet } from "../utils/patch-boundary.js";
+import {
+  loadIssueConsecutiveCounts,
+  saveIssueConsecutiveCounts,
+  updateConsecutiveCounts,
+} from "../utils/issue-persistence.js";
+import { anchorAuditIssues } from "../utils/location-anchor.js";
+import {
+  evaluateBetaReaderModelConstraint,
+  persistBetaReaderShadow,
+} from "../utils/beta-reader-runtime.js";
 import { StateManager } from "../state/manager.js";
-import { MemoryDB, type Fact } from "../state/memory-db.js";
+import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
 import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
 import type { WebhookEvent } from "../notify/webhook.js";
 import type { AgentContext } from "../agents/base.js";
@@ -233,6 +253,11 @@ export interface PipelineConfig {
   readonly defaultLLMConfig?: LLMConfig;
   readonly foundationReviewRetries?: number;
   readonly writingReviewRetries?: number;
+  readonly qualityBudget?: "economy" | "normal" | "premium";
+  readonly strictInterview?: boolean;
+  readonly betaReaderMode?: BetaReaderMode;
+  /** Expected model family for Beta Reader — used to warn when Writer and Reader share the same model family. */
+  readonly betaReaderModelFamily?: string;
   readonly notifyChannels?: ReadonlyArray<NotifyChannel>;
   readonly radarSources?: ReadonlyArray<RadarSource>;
   readonly externalContext?: string;
@@ -327,7 +352,12 @@ interface MergedAuditEvaluation {
 
 export interface ImportChaptersInput {
   readonly bookId: string;
-  readonly chapters: ReadonlyArray<{ readonly title: string; readonly content: string }>;
+  readonly chapters: ReadonlyArray<{
+    readonly title: string;
+    readonly content: string;
+    /** Optional target chapter number from the import plan. If omitted, sequential numbering starts from resumeFrom. */
+    readonly targetNumber?: number;
+  }>;
   readonly resumeFrom?: number;
   /** "continuation" (default) = pick up where the text left off, no new spacetime.
    *  "series" = shared universe but independent new story, requires new spacetime. */
@@ -356,6 +386,9 @@ export class PipelineRunner {
 
   /** Dispose of cached LLM clients to prevent memory leaks across long runs. */
   dispose(): void {
+    for (const client of this.agentClients.values()) {
+      client.dispose?.();
+    }
     this.agentClients.clear();
   }
 
@@ -364,6 +397,10 @@ export class PipelineRunner {
     if (this.agentClients.size >= MAX_CACHED_CLIENTS && !this.agentClients.has(cacheKey)) {
       const firstKey = this.agentClients.keys().next().value;
       if (firstKey !== undefined) {
+        const evicted = this.agentClients.get(firstKey);
+        if (evicted) {
+          evicted.dispose?.();
+        }
         this.agentClients.delete(firstKey);
       }
     }
@@ -643,9 +680,13 @@ export class PipelineRunner {
     );
     const stageLanguage = await this.resolveBookLanguage(book);
     const baseExternalContext = options.externalContext ?? this.config.externalContext;
+    const sourceBundleContext = options.sourceBundle?.contextBlock.trim();
+    if (options.sourceBundle && !sourceBundleContext) {
+      this.config.logger?.warn("sourceBundle provided but contextBlock is empty after trim; it will be skipped");
+    }
     const effectiveExternalContext = [
       baseExternalContext?.trim(),
-      options.sourceBundle?.contextBlock.trim(),
+      sourceBundleContext,
     ].filter(Boolean).join("\n\n") || undefined;
 
     this.logStage(stageLanguage, { zh: "生成基础设定", en: "generating foundation" });
@@ -1576,6 +1617,54 @@ export class PipelineRunner {
       if (reviseOutput.revisedContent.length === 0) {
         throw new Error("Reviser returned empty content");
       }
+
+      // Patch boundary check: verify the reviser only modified targeted paragraphs.
+      // Only runs when issues carry location data (shared AuditIssue model only).
+      {
+        const locationsWithRange = preRevision.auditResult.issues
+          .filter((i): i is typeof i & { location: { startParagraph: number; endParagraph: number } } =>
+            "location" in i &&
+            (i as any).location?.startParagraph > 0 &&
+            (i as any).location?.endParagraph > 0,
+          )
+          .map((i) => i.location);
+        if (locationsWithRange.length > 0) {
+          const targetSet = issueLocationsToParagraphSet(locationsWithRange);
+          const splitParagraphs = (text: string) => text
+            .split(/\r?\n\s*\r?\n/)
+            .map((paragraph) => paragraph.trim())
+            .filter(Boolean);
+          const originalParas = splitParagraphs(content);
+          const revisedParas = splitParagraphs(reviseOutput.revisedContent);
+          const boundaryReport = checkPatchBoundary(originalParas, revisedParas, targetSet);
+          if (!boundaryReport.withinBounds) {
+            this.config.logger?.warn(
+              `[patch-boundary] Chapter ${targetChapter}: ${boundaryReport.overstepCount} paragraph(s) modified outside target range. ` +
+              `Target: ${targetSet.size} paragraphs, Modified within target: ${boundaryReport.targetModified}`,
+            );
+            if (stageLanguage === "zh") {
+              this.config.logger?.warn(`[patch-boundary] 越界段落: ${boundaryReport.oversteps.slice(0, 3).join("; ")}`);
+            } else {
+              this.config.logger?.warn(`[patch-boundary] Oversteps: ${boundaryReport.oversteps.slice(0, 3).join("; ")}`);
+            }
+            // REJECT: boundary violation → fall back to original content
+            this.config.logger?.warn(
+              `[patch-boundary] Chapter ${targetChapter}: revision REJECTED due to boundary violation. ` +
+              `Using original content instead.`,
+            );
+            // Return the original content unchanged — no revision applied
+            return {
+              chapterNumber: targetChapter,
+              wordCount: countChapterLength(content, countingMode),
+              fixedIssues: [],
+              applied: false,
+              status: "unchanged",
+              skippedReason: `Revision rejected: ${boundaryReport.overstepCount} paragraph(s) modified outside target range`,
+            };
+          }
+        }
+      }
+
       const normalizedRevision = await this.normalizeDraftLengthIfNeeded({
         bookId,
         chapterNumber: targetChapter,
@@ -1837,6 +1926,26 @@ export class PipelineRunner {
     const bookDir = this.state.bookDir(bookId);
     await this.assertNoPendingStateRepair(bookId);
     const chapterNumber = await this.state.getNextChapterNumber(bookId);
+    if (this.config.strictInterview) {
+      const intentsIndex = await loadChapterIntents(bookDir);
+      const intent = getChapterIntent(intentsIndex.intents, chapterNumber);
+      const missingFields = [
+        !intent?.coreNarrative?.trim() ? "coreNarrative" : "",
+        !intent?.readerTakeaway?.trim() ? "readerTakeaway" : "",
+        !intent?.keyMoment?.trim() ? "keyMoment" : "",
+      ].filter(Boolean);
+      if (missingFields.length > 0) {
+        throw new Error(
+          `Strict interview blocked chapter ${chapterNumber}: missing ${missingFields.join(", ")}`,
+        );
+      }
+    }
+    // Load intent revision for tracking (Stage 0: intentRevision → chapter link)
+    const chapterIntentForRevision = getChapterIntent(
+      (await loadChapterIntents(bookDir)).intents,
+      chapterNumber,
+    );
+    const currentIntentRevision = chapterIntentForRevision?.revision;
     const stageLanguage = await this.resolveBookLanguage(book);
     this.logStage(stageLanguage, { zh: "准备章节输入", en: "preparing chapter inputs" });
     const writeInput = await this.prepareWriteInput(
@@ -1863,6 +1972,7 @@ export class PipelineRunner {
     const {
       normalizePostWriteSurface,
       validatePostWrite: postWriteValidate,
+      validateAuthorIntentInContent,
     } = await import("../agents/post-write-validator.js");
     const { validateHookLedger } = await import("../utils/hook-ledger-validator.js");
     const { readBookRules } = await import("../agents/rules-reader.js");
@@ -1908,8 +2018,7 @@ export class PipelineRunner {
         this.assertChapterContentNotEmpty(content, chapterNumber, stage),
       addUsage: PipelineRunner.addUsage,
       analyzeAITells: (content) => analyzeAITells(content, pipelineLang),
-      analyzeSensitiveWords: (content) => analyzeSensitiveWords(content, undefined, pipelineLang),
-      runPostWriteChecks: (content) => {
+      runPostWriteChecks: async (content) => {
         const baseIssues = postWriteValidate(content, gp, parsedBookRules, pipelineLang)
           .filter((v) => v.severity === "error")
           .map((v) => ({
@@ -1923,7 +2032,24 @@ export class PipelineRunner {
         const ledgerIssues = memoBody
           ? validateHookLedger(memoBody, content)
           : [];
-        return [...baseIssues, ...ledgerIssues];
+        // Check author's intent commitments (key moment, core narrative)
+        const chapterIntentsIndex = await loadChapterIntents(bookDir);
+        const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, chapterNumber);
+        const intentIssues = chapterIntent
+          ? validateAuthorIntentInContent(
+              content,
+              chapterIntent.keyMoment ?? "",
+              chapterIntent.coreNarrative ?? "",
+              chapterIntent.readerTakeaway ?? "",
+            ).filter((v) => v.severity === "warning" || v.severity === "info")
+            .map((v) => ({
+              severity: v.severity === "info" ? "info" as const : "warning" as const,
+              category: v.rule,
+              description: v.description,
+              suggestion: v.suggestion,
+            }))
+          : [];
+        return [...baseIssues, ...ledgerIssues, ...intentIssues];
       },
       maxReviewIterations: this.config.writingReviewRetries,
       logWarn: (message) => this.logWarn(pipelineLang, message),
@@ -2003,14 +2129,17 @@ export class PipelineRunner {
       this.config.logger?.warn(`[title] ${description}`);
       auditResult = {
         ...auditResult,
-        issues: [...auditResult.issues, {
+        issues: [...auditResult.issues, createIssue({
+          source: "post-write",
           severity: "warning",
           category: "title-dedup",
           description,
           suggestion: pipelineLang === "en"
             ? "If the auto-renamed title is weak, revise the chapter title manually."
             : "如果自动改名不理想，可以在后续手动修订章节标题。",
-        }],
+          fixScope: "word",
+          confidence: 1,
+        })],
       };
     }
     const longSpanFatigue = await analyzeLongSpanFatigue({
@@ -2024,10 +2153,105 @@ export class PipelineRunner {
       ...auditResult,
       issues: [
         ...auditResult.issues,
-        ...longSpanFatigue.issues,
+        ...longSpanFatigue.issues.map((issue) => resolveAuditIssue(issue, "long-span-fatigue")),
         ...(persistenceOutput.hookHealthIssues ?? []),
       ],
     };
+
+    // Stage 4: Beta Reader evaluation is opt-in and never blocks persistence.
+    const betaReaderMode = this.config.betaReaderMode ?? "off";
+    const qualityBudget = this.config.qualityBudget ?? "economy";
+    const betaReaderEnabled = betaReaderMode !== "off" && qualityBudget !== "economy";
+    if (betaReaderMode !== "off" && !betaReaderEnabled) {
+      this.config.logger?.info(
+        `[beta-reader] Skipped for chapter ${chapterNumber}: qualityBudget=economy`,
+      );
+    }
+    if (betaReaderEnabled) {
+      const writerModel = this.resolveOverride("writer").model;
+      const readerModel = this.resolveOverride("beta-reader").model;
+      const modelConstraint = evaluateBetaReaderModelConstraint(
+        writerModel,
+        readerModel,
+        this.config.betaReaderModelFamily,
+      );
+      if (!modelConstraint.allowed) {
+        this.config.logger?.warn(
+          `[beta-reader] Skipped for chapter ${chapterNumber}: ${modelConstraint.reason}. ` +
+          `Writer="${writerModel}", reader="${readerModel}".`,
+        );
+      } else try {
+        const betaReader = new BetaReader(this.agentCtxFor("beta-reader", bookId));
+        const betaResult = await betaReader.read({
+          chapterContent: finalContent,
+          chapterNumber,
+          genre: book.genre,
+          title: persistenceOutput.title,
+        });
+        // Always persist shadow results for calibration (Stage 4 requirement)
+        try {
+          let gitCommit = "";
+          try {
+            const { execSync } = await import("node:child_process");
+            gitCommit = execSync("git rev-parse HEAD", { timeout: 3000, encoding: "utf-8" }).trim().slice(0, 12);
+          } catch { /* git not available — leave empty */ }
+
+          const { runId } = await persistBetaReaderShadow({
+            bookDir,
+            chapterNumber,
+            title: persistenceOutput.title,
+            gitCommit,
+            writerModel,
+            writerPromptHash: persistenceOutput.writerPromptHash ?? output.writerPromptHash,
+            readerModel: betaResult.modelInfo,
+            observations: betaResult.observations,
+          });
+          if (betaResult.observations.length > 0) {
+            const positive = betaResult.observations.filter((o) => o.judgment === "positive").length;
+            const negative = betaResult.observations.filter((o) => o.judgment === "negative").length;
+            this.config.logger?.info(
+              `[beta-reader] Chapter ${chapterNumber}: ${betaResult.observations.length} observations ` +
+              `(${positive} positive, ${negative} negative) — shadow persisted (run ${runId})`,
+            );
+          }
+        } catch (persistError) {
+          this.config.logger?.warn(`[beta-reader] Failed to persist shadow for chapter ${chapterNumber}: ${persistError}`);
+        }
+
+        if (betaReaderMode === "advisory" || betaReaderMode === "actionable") {
+          const readerIssues: ReadonlyArray<AuditIssue> = betaResult.observations
+            .filter((observation) => observation.judgment !== "positive")
+            .map((observation) => createIssue({
+              source: "beta-reader",
+              severity: observation.judgment === "negative" ? "warning" : "info",
+              category: `Beta Reader: ${observation.dimension}`,
+              description: observation.evidence.map((item) => item.reason).join("; "),
+              suggestion: pipelineLang === "en"
+                ? "Review the cited paragraphs and decide whether a localized revision is warranted."
+                : "请检查对应段落，并判断是否需要局部修订。",
+              location: {
+                startParagraph: Math.min(...observation.evidence.map((item) => item.startParagraph)),
+                endParagraph: Math.max(...observation.evidence.map((item) => item.endParagraph)),
+              },
+              evidence: observation.evidence.map((item) => item.reason),
+              confidence: observation.confidence,
+              fixScope: "paragraph",
+            }));
+          auditResult = {
+            ...auditResult,
+            issues: [...auditResult.issues, ...readerIssues],
+          };
+        }
+        if (betaReaderMode === "actionable") {
+          this.config.logger?.warn(
+            "[beta-reader] actionable mode ran as advisory because no calibrated auto-revision policy is configured",
+          );
+        }
+      } catch (e) {
+        this.config.logger?.warn(`[beta-reader] Skipped for chapter ${chapterNumber}: ${e}`);
+      }
+    }
+
     finalWordCount = persistenceOutput.wordCount;
     const lengthWarnings = this.buildLengthWarnings(
       chapterNumber,
@@ -2111,14 +2335,54 @@ export class PipelineRunner {
         }
         auditResult = {
           ...auditResult,
-          issues: [...auditResult.issues, ...paragraphIssues.map((v) => ({
-            severity: v.severity as "warning",
+          issues: [...auditResult.issues, ...paragraphIssues.map((v) => createIssue({
+            source: "post-write",
+            severity: "warning",
             category: "paragraph-shape",
             description: v.description,
             suggestion: v.suggestion,
+            fixScope: "paragraph",
+            confidence: 1,
           }))],
         };
       }
+    }
+
+    // Resolve every producer only after all post-write and state checks have
+    // contributed, so persistence and reporting never receive legacy issues.
+    {
+      const anchorReport = anchorAuditIssues(finalContent, auditResult.issues);
+      if (
+        anchorReport.rejectedLocations > 0
+        || anchorReport.relocatedLocations > 0
+        || anchorReport.degradedIssues > 0
+      ) {
+        this.config.logger?.info(
+          `[location-anchor] ${anchorReport.rejectedLocations} rejected, ` +
+          `${anchorReport.relocatedLocations} relocated, ` +
+          `${anchorReport.degradedIssues} degraded`,
+        );
+      }
+      auditResult = { ...auditResult, issues: anchorReport.issues };
+
+      // Load cross-chapter consecutive issue counts for severity escalation
+      const consecutiveCounts = await loadIssueConsecutiveCounts(bookDir);
+      // Update counts with current chapter's issues BEFORE normalization,
+      // so severity escalation takes effect at the correct threshold
+      // (e.g. 3rd consecutive appearance → warning, not 4th).
+      const updatedCounts = updateConsecutiveCounts(
+        consecutiveCounts,
+        auditResult.issues,
+      );
+      const normalized = new IssueNormalizer().normalize(auditResult.issues, updatedCounts);
+      auditResult = { ...auditResult, issues: normalized.issues };
+      degradedIssues = new IssueNormalizer().normalize(
+        degradedIssues,
+        undefined,
+        "state-validation",
+      ).issues;
+      // Persist updated counts for next chapter
+      await saveIssueConsecutiveCounts(bookDir, updatedCounts, chapterNumber);
     }
 
     const resolvedStatus = chapterStatus ?? (auditResult.passed ? "ready-for-review" : "audit-failed");
@@ -2132,6 +2396,7 @@ export class PipelineRunner {
       lengthTelemetry,
       degradedIssues,
       tokenUsage: totalUsage,
+      intentRevision: currentIntentRevision,
       loadChapterIndex: () => this.state.loadChapterIndex(bookId),
       saveChapter: () => writer.saveChapter(bookDir, persistenceOutput, gp.numericalSystem, pipelineLang),
       saveTruthFiles: async () => {
@@ -2184,6 +2449,39 @@ export class PipelineRunner {
       revised,
       status: resolvedStatus,
     });
+
+    // Stage 0: confirm intent after successful chapter persistence.
+    // Must confirm the EXACT revision that was captured at generation start,
+    // not whatever getChapterIntent() returns (which could be a newer revision
+    // submitted by the author during generation).
+    if (currentIntentRevision !== undefined && chapterIntentForRevision) {
+      try {
+        const intentsIndex = await loadChapterIntents(bookDir);
+        // Find intent by chapterNumber + exact captured revision
+        const intentToConfirm = intentsIndex.intents.find(
+          (i) => i.chapterNumber === chapterNumber && i.revision === currentIntentRevision,
+        );
+        if (intentToConfirm && intentToConfirm.status !== "confirmed") {
+          const confirmed = confirmChapterIntent(intentToConfirm);
+          const updatedIntents = intentsIndex.intents.map((i) =>
+            i.chapterNumber === chapterNumber && i.revision === currentIntentRevision
+              ? confirmed
+              : i,
+          );
+          await saveChapterIntents(bookDir, updatedIntents);
+          this.config.logger?.info(
+            `[intent] Chapter ${chapterNumber} intent (rev ${currentIntentRevision}) confirmed`,
+          );
+        } else if (!intentToConfirm) {
+          this.config.logger?.warn(
+            `[intent] Chapter ${chapterNumber} intent revision ${currentIntentRevision} not found — may have been superseded during generation`,
+          );
+        }
+      } catch (e) {
+        // Non-blocking: intent confirmation failure should not roll back the chapter
+        this.config.logger?.warn(`[intent] Failed to confirm intent for chapter ${chapterNumber}: ${e}`);
+      }
+    }
 
     return {
       chapterNumber,
@@ -2870,7 +3168,8 @@ ${matrix}`,
 
       for (let i = startFrom - 1; i < input.chapters.length; i++) {
         const ch = input.chapters[i]!;
-        const chapterNumber = i + 1;
+        // Use the plan's targetNumber when provided, otherwise fall back to sequential numbering
+        const chapterNumber = ch.targetNumber ?? i + 1;
         const governedInput = await this.prepareWriteInput(book, bookDir, chapterNumber);
 
         log?.info(this.localize(resolvedLanguage, {
@@ -2936,10 +3235,16 @@ ${matrix}`,
 
       if (input.chapters.length > 0) {
         await this.markBookActiveIfNeeded(input.bookId);
-        await this.syncCurrentStateFactHistory(input.bookId, input.chapters.length);
+        // Use the actual max chapter number for state sync, not array length
+        const maxChapterNumber = Math.max(...input.chapters.map((ch) => ch.targetNumber ?? 0), input.chapters.length);
+        await this.syncCurrentStateFactHistory(input.bookId, maxChapterNumber);
       }
 
-      const nextChapter = input.chapters.length + 1;
+      // Compute nextChapter from the actual target numbers, not array length
+      const maxTargetNumber = input.chapters.reduce(
+        (max, ch) => Math.max(max, ch.targetNumber ?? 0), 0
+      );
+      const nextChapter = maxTargetNumber > 0 ? maxTargetNumber + 1 : input.chapters.length + 1;
       log?.info(this.localize(resolvedLanguage, {
         zh: `完成。已导入 ${importedCount} 章，共 ${formatLengthCount(totalWords, countingMode)}。下一章：${nextChapter}`,
         en: `Done. ${importedCount} chapters imported, ${formatLengthCount(totalWords, countingMode)}. Next chapter: ${nextChapter}`,
@@ -3287,7 +3592,12 @@ ${matrix}`,
 
   private async rebuildCurrentStateFactHistory(bookDir: string, uptoChapter: number): Promise<void> {
     const memoryDb = await this.withMemoryIndexRetry(async () => {
-      const db = new MemoryDB(bookDir);
+      const db = tryCreateMemoryDB(bookDir);
+      if (!db) {
+        const err = new Error("No such built-in module: node:sqlite");
+        (err as NodeJS.ErrnoException).code = "ERR_UNKNOWN_BUILTIN_MODULE";
+        throw err;
+      }
       try {
         db.resetFacts();
 
@@ -3342,7 +3652,12 @@ ${matrix}`,
     const memorySeed = await loadNarrativeMemorySeed(bookDir);
 
     const memoryDb = await this.withMemoryIndexRetry(() => {
-      const db = new MemoryDB(bookDir);
+      const db = tryCreateMemoryDB(bookDir);
+      if (!db) {
+        const err = new Error("No such built-in module: node:sqlite");
+        (err as NodeJS.ErrnoException).code = "ERR_UNKNOWN_BUILTIN_MODULE";
+        throw err;
+      }
       try {
         db.replaceSummaries(memorySeed.summaries);
         db.replaceHooks(memorySeed.hooks);
@@ -3361,15 +3676,12 @@ ${matrix}`,
   }
 
   private canOpenMemoryIndex(bookDir: string): boolean {
-    let memoryDb: MemoryDB | null = null;
-    try {
-      memoryDb = new MemoryDB(bookDir);
+    const memoryDb = tryCreateMemoryDB(bookDir);
+    if (memoryDb) {
+      memoryDb.close();
       return true;
-    } catch {
-      return false;
-    } finally {
-      memoryDb?.close();
     }
+    return false;
   }
 
   private async logMemoryIndexDebugInfo(bookId: string, error: unknown): Promise<void> {
@@ -3630,33 +3942,31 @@ ${matrix}`,
       params.auditOptions,
     );
     const aiTells = analyzeAITells(params.chapterContent, params.language);
-    const sensitiveResult = analyzeSensitiveWords(params.chapterContent, undefined, params.language);
     const longSpanFatigue = await analyzeLongSpanFatigue({
       bookDir: params.bookDir,
       chapterNumber: params.chapterNumber,
       chapterContent: params.chapterContent,
       language: params.language,
     });
-    const hasBlockedWords = sensitiveResult.found.some((f) => f.severity === "block");
     const issues: ReadonlyArray<AuditIssue> = [
       ...llmAudit.issues,
       ...aiTells.issues,
-      ...sensitiveResult.issues,
-      ...longSpanFatigue.issues,
+      ...longSpanFatigue.issues.map((issue) => resolveAuditIssue(issue, "long-span-fatigue")),
     ];
-    // revisionBlockingIssues excludes long-span-fatigue issues by
-    // construction (not by category name) so that an LLM-reported issue
-    // sharing a category label with a long-span issue is still counted.
-    const revisionBlockingIssues: ReadonlyArray<AuditIssue> = [
-      ...llmAudit.issues,
-      ...aiTells.issues,
-      ...sensitiveResult.issues,
-    ];
+    // Apply deterministic dedup + severity escalation before returning.
+    // This ensures that multiple audit sources don't produce duplicate issues
+    // for the same problem, and that recurring issues are properly escalated.
+    const normalizer = new IssueNormalizer();
+    const normalized = normalizer.normalize(issues);
+    const finalIssues: ReadonlyArray<AuditIssue> = normalized.issues;
+
+    const revisionBlockingIssues: ReadonlyArray<AuditIssue> = finalIssues
+      .filter((issue) => issue.source !== "long-span-fatigue");
 
     return {
       auditResult: {
-        passed: hasBlockedWords ? false : llmAudit.passed,
-        issues,
+        passed: llmAudit.passed,
+        issues: finalIssues,
         summary: llmAudit.summary,
         tokenUsage: llmAudit.tokenUsage,
       },

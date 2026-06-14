@@ -70,14 +70,17 @@ export interface ArchitectRole {
 function extractYamlFrontmatter(raw: string): { frontmatter: string | null; body: string } {
   if (!raw) return { frontmatter: null, body: "" };
   const stripped = raw.replace(/^```(?:md|markdown|yaml)?\s*\n/, "").replace(/\n```\s*$/, "");
-  const leadingMatch = stripped.match(/^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
-  if (!leadingMatch) {
-    return { frontmatter: null, body: stripped };
-  }
-  return {
-    frontmatter: `---\n${leadingMatch[1]}\n---`,
-    body: leadingMatch[2].trim(),
-  };
+  // Use indexOf for YAML frontmatter detection to avoid ReDoS on large inputs.
+  // Only recognises a frontmatter block that starts on the FIRST non-empty line.
+  const startMatch = stripped.match(/^\s*---\s*\n/);
+  if (!startMatch) return { frontmatter: null, body: stripped };
+  const startIdx = startMatch.index! + startMatch[0].length;
+  const endMarker = "\n---";
+  const endIdx = stripped.indexOf(endMarker, startIdx);
+  if (endIdx === -1) return { frontmatter: null, body: stripped };
+  const frontmatter = `---\n${stripped.slice(startIdx, endIdx)}\n---`;
+  const body = stripped.slice(endIdx + endMarker.length).replace(/^\s*\n?/, "").trim();
+  return { frontmatter, body };
 }
 
 export interface ArchitectOutput {
@@ -150,6 +153,14 @@ export class ArchitectAgent extends BaseAgent {
       { role: "system", content: langPrefix + systemPrompt + revisePrompt },
       { role: "user", content: userMessage },
     ], { temperature: 0.8 });
+
+    if (response.stopReason === "length") {
+      this.log?.warn(
+        resolvedLanguage === "en"
+          ? `Architect response was truncated (stopReason=length). Foundation may be incomplete.`
+          : `架构师响应被截断（stopReason=length），基础设定可能不完整。`,
+      );
+    }
 
     return this.parseSections(response.content, resolvedLanguage);
   }
@@ -659,6 +670,17 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
     }
 
     const roles = this.parseRoles(rolesRaw);
+
+    // 检查 roles 段末尾是否可能被截断：如果最后一个 ---ROLE--- 没有对应的
+    // ---CONTENT---，说明输出被截断，最后一个角色卡不完整。
+    const lastRoleBlock = rolesRaw.split(/^---ROLE---$/m).filter(Boolean).pop()?.trim();
+    if (lastRoleBlock && !lastRoleBlock.includes("---CONTENT---")) {
+      this.log?.warn(
+        language === "en"
+          ? "Roles section appears truncated: last ROLE block is missing CONTENT."
+          : "角色卡段可能被截断：最后一个 ---ROLE--- 缺少 ---CONTENT---。",
+      );
+    }
     const pendingHooks = this.normalizePendingHooksSection(
       this.stripTrailingAssistantCoda(pendingHooksRaw!),
       effectiveVolumeMap,

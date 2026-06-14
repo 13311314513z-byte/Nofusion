@@ -8,6 +8,7 @@ import type { DetectionHistoryEntry } from "../models/detection.js";
 import type { AgentContext } from "../agents/base.js";
 import { detectAIContent, type DetectionResult } from "../agents/detector.js";
 import { ReviserAgent } from "../agents/reviser.js";
+import { createIssue } from "../models/audit-issue.js";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -89,12 +90,15 @@ export async function detectAndRewrite(
       bookDir,
       currentContent,
       chapterNumber,
-      [{
+      [createIssue({
+        source: "detection",
         severity: "warning",
         category: "AIGC检测",
         description: `AI检测分数 ${finalScore.toFixed(2)} 超过阈值 ${config.threshold}`,
         suggestion: "降低AI生成痕迹：增加段落长度差异、减少套话、用口语化表达替代书面语",
-      }],
+        fixScope: "chapter",
+        confidence: 1,
+      })],
       "anti-detect",
       genre,
     );

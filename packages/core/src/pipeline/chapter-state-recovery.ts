@@ -1,4 +1,5 @@
 import type { AuditIssue } from "../agents/continuity.js";
+import { createIssue } from "../models/audit-issue.js";
 import type {
   ValidationResult,
   ValidationWarning,
@@ -135,17 +136,21 @@ export function buildStateDegradedIssues(
   language: LengthLanguage,
 ): ReadonlyArray<AuditIssue> {
   if (warnings.length > 0) {
-    return warnings.map((warning) => ({
-      severity: "warning" as const,
+    return warnings.map((warning) => createIssue({
+      source: "state-validation",
+      severity: "warning",
       category: "state-validation",
       description: warning.description,
       suggestion: language === "en"
         ? "Repair chapter state from the persisted body before continuing."
         : "请先基于已保存正文修复本章 state，再继续后续章节。",
+      fixScope: "chapter",
+      confidence: 1,
     }));
   }
 
-  return [{
+  return [createIssue({
+    source: "state-validation",
     severity: "warning",
     category: "state-validation",
     description: language === "en"
@@ -154,7 +159,9 @@ export function buildStateDegradedIssues(
     suggestion: language === "en"
       ? "Repair chapter state from the persisted body before continuing."
       : "请先基于已保存正文修复本章 state，再继续后续章节。",
-  }];
+    fixScope: "chapter",
+    confidence: 1,
+  })];
 }
 
 export function buildStateDegradedPersistenceOutput(params: {

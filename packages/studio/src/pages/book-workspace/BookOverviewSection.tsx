@@ -142,6 +142,14 @@ export function BookOverviewSection({ bookId, nav, t, sse }: BookOverviewSection
   const [hooksError, setHooksError] = useState<string | null>(null);
 
   const [runtime, setRuntime] = useState<RuntimeData | null>(null);
+
+  const { data: healthData } = useApi<{
+    readonly auditPassRate: number;
+    readonly hookRisks: { readonly status: string; readonly value?: { readonly total: number; readonly stale: number }; readonly reason?: string };
+    readonly recentImports: { readonly status: string; readonly value?: number; readonly reason?: string };
+    readonly styleStatus: { readonly status: string; readonly reason?: string };
+    readonly pipelineErrors: { readonly status: string };
+  } | null>(`/books/${encodeURIComponent(bookId)}/health`);
   const [runtimeLoading, setRuntimeLoading] = useState(true);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
@@ -229,6 +237,43 @@ export function BookOverviewSection({ bookId, nav, t, sse }: BookOverviewSection
             </button>
           </div>
         ))}
+
+        {/* Health overview cards */}
+        {healthData && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <StatCard
+              label={t("overview.auditPassRate")}
+              value={`${healthData.auditPassRate}%`}
+              icon={<ShieldCheck size={16} />}
+              accent={healthData.auditPassRate >= 80}
+              danger={healthData.auditPassRate < 60}
+              onClick={() => nav.toBookSection(bookId, "audit")}
+            />
+            <StatCard
+              label={t("overview.hookRisk")}
+              value={healthData.hookRisks.status === "available"
+                ? `${healthData.hookRisks.value!.stale}/${healthData.hookRisks.value!.total}`
+                : "--"}
+              icon={<GitBranch size={16} />}
+              danger={healthData.hookRisks.status === "available" && healthData.hookRisks.value!.stale > 0}
+              onClick={() => nav.toBookSection(bookId, "hooks")}
+            />
+            <StatCard
+              label={t("overview.recentImports")}
+              value={healthData.recentImports.status === "available"
+                ? healthData.recentImports.value!.toString()
+                : "--"}
+              icon={<Files size={16} />}
+              onClick={() => nav.toBookSection(bookId, "sources")}
+            />
+            <StatCard
+              label={t("overview.styleStatus")}
+              value={healthData.styleStatus.status === "available" ? t("overview.profileReady") : "--"}
+              icon={<Activity size={16} />}
+              onClick={() => nav.toBookSection(bookId, "chapters")}
+            />
+          </div>
+        )}
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

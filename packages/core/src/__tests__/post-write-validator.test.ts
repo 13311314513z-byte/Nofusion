@@ -22,6 +22,7 @@ const baseProfile: GenreProfile = {
   eraResearch: false,
   auditDimensions: [],
   satisfactionTypes: [],
+  promises: [],
 };
 
 function findRule(violations: ReadonlyArray<PostWriteViolation>, rule: string): PostWriteViolation | undefined {

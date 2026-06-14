@@ -208,7 +208,7 @@ function toggleTag(tag: string, tagsStr: string, setter: (s: string) => void): v
   setter(tags.join(", "));
 }
 
-export function BookCharactersSection({ bookId, t }: BookCharactersSectionProps) {
+export function BookCharactersSection({ bookId, nav, t }: BookCharactersSectionProps) {
   const { data: rolesData, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useApi<RolesData>(`/books/${bookId}/roles`);
   const { data: bookData } = useApi<BookData>(`/books/${bookId}`);
   const [selectedRoleId, setSelectedRoleId] = useState("");
@@ -414,7 +414,7 @@ export function BookCharactersSection({ bookId, t }: BookCharactersSectionProps)
         {actionError && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between mb-4">
             <span>{actionError}</span>
-            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">Dismiss</button>
+            <button onClick={() => setActionError(null)} className="text-xs font-bold hover:underline">{t("common.dismiss")}</button>
           </div>
         )}
         {/* Header */}
@@ -745,8 +745,12 @@ export function BookCharactersSection({ bookId, t }: BookCharactersSectionProps)
                   {/* Actions */}
                   <div className="flex items-center justify-between gap-2">
                     <button
-                      disabled
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-3 py-2 text-xs font-bold text-muted-foreground/60 cursor-not-allowed"
+                      onClick={() => {
+                        if (selectedRoleId) {
+                          nav.toChapter(bookId, 1);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-3 py-2 text-xs font-bold text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
                     >
                       {t("book.voiceDriftCheck")}
                     </button>

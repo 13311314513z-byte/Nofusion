@@ -15,6 +15,7 @@ const defaultGenreProfile: GenreProfile = {
   pacingRule: "",
   satisfactionTypes: [],
   auditDimensions: [],
+  promises: [],
 };
 
 function callParseOutput(

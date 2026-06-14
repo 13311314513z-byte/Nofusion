@@ -286,7 +286,8 @@ async function buildRecentEndingTrail(
         }
       }
       return endings.length >= 2 ? endings.join(" | ") : undefined;
-    } catch {
+    } catch (e) {
+      console.warn(`[composer] Failed to build ending preview: ${e instanceof Error ? e.message : String(e)}`);
       return undefined;
     }
 }
@@ -426,7 +427,8 @@ function toFactAnchor(predicate: string): string {
 async function readFileOrDefault(path: string): Promise<string> {
   try {
     return await readFile(path, "utf-8");
-  } catch {
+  } catch (e) {
+    console.warn(`[composer] Failed to read ${path}: ${e instanceof Error ? e.message : String(e)}`);
     return "(文件尚未创建)";
   }
 }

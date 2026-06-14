@@ -7,6 +7,7 @@ export interface SecretsFile {
 
 const SECRETS_DIR = ".inkos";
 const SECRETS_FILE = "secrets.json";
+const writeQueues = new Map<string, Promise<void>>();
 
 const LEGACY_SERVICE_ID_REMAP: Record<string, string> = {
   siliconflow: "siliconcloud",
@@ -58,6 +59,35 @@ export async function saveSecrets(
     JSON.stringify(secrets, null, 2),
     "utf-8",
   );
+}
+
+export async function setServiceApiKey(
+  projectRoot: string,
+  service: string,
+  apiKey: string,
+): Promise<void> {
+  const previous = writeQueues.get(projectRoot) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const secrets = await loadSecrets(projectRoot);
+      const trimmedKey = apiKey.trim();
+      if (trimmedKey) {
+        secrets.services[service] = { apiKey: trimmedKey };
+      } else {
+        delete secrets.services[service];
+      }
+      await saveSecrets(projectRoot, secrets);
+    });
+
+  writeQueues.set(projectRoot, next);
+  try {
+    await next;
+  } finally {
+    if (writeQueues.get(projectRoot) === next) {
+      writeQueues.delete(projectRoot);
+    }
+  }
 }
 
 export async function getServiceApiKey(

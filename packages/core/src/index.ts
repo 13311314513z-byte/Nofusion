@@ -1,8 +1,19 @@
 // Models
 export { type BookConfig, type Platform, type Genre, type BookStatus, type FanficMode, BookConfigSchema, PlatformSchema, GenreSchema, BookStatusSchema, FanficModeSchema, normalizePlatformId, normalizePlatformOrOther } from "./models/book.js";
 export { type ChapterMeta, type ChapterStatus, ChapterMetaSchema, ChapterStatusSchema } from "./models/chapter.js";
-export { type ProjectConfig, type LLMConfig, type NotifyChannel, type DetectionConfig, type QualityGates, type FoundationConfig, type WritingConfig, type AgentLLMOverride, type InputGovernanceMode, ProjectConfigSchema, LLMConfigSchema, AgentLLMOverrideSchema, DetectionConfigSchema, QualityGatesSchema, FoundationConfigSchema, WritingConfigSchema, InputGovernanceModeSchema } from "./models/project.js";
+export { type ProjectConfig, type LLMConfig, type NotifyChannel, type DetectionConfig, type QualityGates, type FoundationConfig, type WritingConfig, type AgentLLMOverride, type InputGovernanceMode, ProjectConfigSchema, LLMConfigSchema, AgentLLMOverrideSchema, DetectionConfigSchema, QualityGatesSchema, FoundationConfigSchema, WritingConfigSchema, InputGovernanceModeSchema, resolveWritingReviewRetries } from "./models/project.js";
 export { type CurrentState, type ParticleLedger, type PendingHooks, type PendingHook, type LedgerEntry } from "./models/state.js";
+export {
+  buildPromptManifest,
+  estimateTokens,
+  getAvailableInputTokens,
+  type PromptFragment,
+  type PromptManifest,
+} from "./models/prompt-manifest.js";
+export {
+  buildManifestFromMessages,
+  logPromptManifest,
+} from "./utils/prompt-tracing.js";
 export { type GenreProfile, type ParsedGenreProfile, GenreProfileSchema, parseGenreProfile } from "./models/genre-profile.js";
 export { type BookRules, type ParsedBookRules, BookRulesSchema, parseBookRules, tryParseBookRulesFrontmatter } from "./models/book-rules.js";
 export { type DetectionHistoryEntry, type DetectionStats } from "./models/detection.js";
@@ -85,6 +96,32 @@ export {
 } from "./utils/proxy-fetch.js";
 export { assertSafeBookId, deriveBookIdFromTitle, isSafeBookId } from "./utils/book-id.js";
 export { safeChildPath } from "./utils/path-safety.js";
+export { ResourceRegistry, globalRegistry, type Resource } from "./utils/resource-registry.js";
+export {
+  computePreferenceMetrics,
+  type PairedPreference,
+  type PairedPreferenceQuestion,
+  type PreferenceMetrics,
+} from "./evaluation/paired-preference.js";
+export {
+  checkGenrePromises,
+  getCriticalGenrePromises,
+  type GenrePromiseStatus,
+} from "./evaluation/genre-promises.js";
+export {
+  IssueNormalizer,
+  type NormalizedIssues,
+  type NormalizableAuditIssue,
+} from "./agents/issue-normalizer.js";
+export {
+  createIssue,
+  fromLegacyContinuityIssue,
+  generateIssueId,
+  resolveAuditIssue,
+  type AuditIssueSource,
+  type ResolvedAuditIssue,
+  type AuditIssue as UnifiedAuditIssue,
+} from "./models/audit-issue.js";
 export {
   AutomationModeSchema,
   type AutomationMode,
@@ -271,7 +308,7 @@ export {
   type ModelInfo,
 } from "./llm/service-presets.js";
 export { resolveServiceModel, type ResolvedModel } from "./llm/service-resolver.js";
-export { loadSecrets, saveSecrets, getServiceApiKey, type SecretsFile } from "./llm/secrets.js";
+export { loadSecrets, saveSecrets, setServiceApiKey, getServiceApiKey, type SecretsFile } from "./llm/secrets.js";
 export {
   COVER_PROVIDER_PRESETS,
   coverSecretKey,
@@ -292,14 +329,48 @@ export { ContinuityAuditor, type AuditResult, type AuditIssue } from "./agents/c
 export { ReviserAgent, DEFAULT_REVISE_MODE, type ReviseOutput, type ReviseMode } from "./agents/reviser.js";
 export { PolisherAgent, type PolishChapterInput, type PolishChapterOutput } from "./agents/polisher.js";
 export { RadarAgent, type RadarResult, type RadarRecommendation } from "./agents/radar.js";
+export { BetaReader, type BetaReaderInput, type BetaReaderOutput, type ReaderObservation, type BetaReaderMode } from "./agents/beta-reader.js";
+export { summarizeObservations } from "./models/beta-reader-output.js";
+export { checkPatchBoundary, issueLocationsToParagraphSet, selectReviseModeFromFixScope, type PatchBoundaryReport } from "./utils/patch-boundary.js";
 export { FanqieRadarSource, QidianRadarSource, TextRadarSource, type RadarSource, type PlatformRankings, type RankingEntry } from "./agents/radar-source.js";
 export { readGenreProfile, readBookRules, listAvailableGenres, getBuiltinGenresDir } from "./agents/rules-reader.js";
 export { buildWriterSystemPrompt, buildGoldenOpeningDiscipline } from "./agents/writer-prompts.js";
 export { analyzeAITells, type AITellResult, type AITellIssue } from "./agents/ai-tells.js";
-export { analyzeSensitiveWords, type SensitiveWordResult, type SensitiveWordMatch } from "./agents/sensitive-words.js";
 export { detectAIContent, type DetectionResult } from "./agents/detector.js";
 export { analyzeStyle } from "./agents/style-analyzer.js";
 export { analyzeStyleFingerprint, type StyleFingerprint } from "./agents/style-fingerprint.js";
+export { Interviewer, type InterviewQuestion, type InterviewerInput, type InterviewerOutput } from "./agents/interviewer.js";
+export {
+  detectIntentRepetition,
+  detectRepeatedDescriptions,
+  detectTransitionClustering,
+  detectClauseComplexity,
+  summarizeAIStyleTags,
+  runFullDiagnostics,
+  type IntentRepetitionFinding,
+  type RepeatedDescriptionFinding,
+  type TransitionClusteringFinding,
+  type ClauseComplexityFinding,
+  type AIStyleTagSummary,
+  type FullStyleDiagnostics,
+} from "./agents/style-diagnostics.js";
+export {
+  rewriteWithAuthorProfile,
+  type StyleRewriteRequest,
+  type StyleRewritePreview,
+  type ChangedRange,
+} from "./agents/style-rewriter.js";
+export {
+  compareWithAuthorProfile,
+  type StyleComparisonResult,
+  type Deviation,
+} from "./agents/style-comparator.js";
+export {
+  generateAdjustmentPlan,
+  type AdjustmentSuggestion,
+  type AdjustmentPlan,
+  type TextPatch,
+} from "./agents/style-adjuster.js";
 export { type PunctuationRhythm, type SensoryBreakdown } from "./models/style-profile.js";
 
 // Style Library
@@ -308,6 +379,11 @@ export {
   type StyleSourceDocument,
   type StyleLibraryIndex,
   type ApplyStyleResult,
+  type AuthorDistillation,
+  type DistillationRule,
+  type DistillationEvidence,
+  type DistillationStatus,
+  type SampleAdequacyLevel,
 } from "./style-library/models.js";
 export {
   listAuthorProfiles,
@@ -321,6 +397,31 @@ export {
   type AddStyleSourceInput,
 } from "./style-library/store.js";
 export { mergeStyleProfiles, buildAuthorProfile, buildLibraryIndex } from "./style-library/aggregate.js";
+export {
+  saveAuthorDiagnostics,
+  listAuthorDiagnostics,
+  getAuthorDiagnostics,
+  type AuthorDiagnosticsEntry,
+} from "./style-library/store.js";
+export {
+  generateDistillation,
+  evaluateAuthorSampleAdequacy,
+  type DistillationInput,
+  type DistillationOutput,
+} from "./style-library/distillation.js";
+export {
+  loadCurrentDistillation,
+  saveDistillationDraft,
+  loadDistillationEvidence,
+  saveDistillationEvidence,
+  loadDistillationOverrides,
+  saveDistillationOverrides,
+  publishDistillation,
+  listDistillationVersions,
+  loadDistillationVersion,
+  getDistillationStatus,
+  type DistillationStatusInfo,
+} from "./style-library/distillation-store.js";
 export { extractDocument, extractDocumentFromText, extractDocumentChunked, extractFromJsonlChunked, extractFromJsonChunked, MAX_CHARS, MAX_CHARS_PER_CHUNK, type ExtractedDocument, type DocumentFileType } from "./utils/document-reader.js";
 export {
   assembleFoundationContext,
@@ -338,7 +439,30 @@ export {
   type FoundationSource,
   type FoundationSourceBundle,
 } from "./import/foundation-source.js";
+export {
+  listFoundationSources,
+  archiveFoundationSource,
+  type FoundationSourceIndexEntry,
+} from "./import/foundation-source.js";
 export { preprocessText, exportPreprocessed, type PreprocessOptions, type PreprocessResult, type PreprocessExportFormat, type PreprocessExportResult } from "./utils/text-preprocessor.js";
+export { detectDuplicateRhetoric, type DuplicateRhetoricFinding, type DuplicateRhetoricResult, type RhetoricCategory } from "./utils/semantic-duplication.js";
+export { detectDuplicateParagraphs, findDuplicateParagraphs, findSimilarParagraphs, type DuplicateParagraphGroup, type SimilarParagraphGroup, type DedupResult } from "./utils/paragraph-dedup.js";
+export { computeReadabilityScore, type ReadabilityScore, type ReadabilityTrend } from "./utils/readability-score.js";
+export { buildRhetoricAwarePrompt, buildDedupePrompt, RHETORIC_SAFE_THRESHOLDS, type RewriteMode, type RhetoricChange } from "./agents/rhetoric-rewriter.js";
+export {
+  computeSentenceTypeDistribution,
+  computeParagraphRhythm,
+  computeRhetoricBreakdown,
+  computeDialogueFeatures,
+  computeExpandedFingerprint,
+  extractDimensionSamples,
+  type SentenceTypeDistribution,
+  type ParagraphRhythm,
+  type RhetoricBreakdown,
+  type DialogueFeatures,
+  type ExpandedFingerprint,
+  type DimensionSample,
+} from "./utils/style-dimensions.js";
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { exportDocument, type ExportFormat, type ExportResult } from "./utils/document-writer.js";
 export { analyzeDetectionInsights } from "./agents/detection-insights.js";
@@ -356,6 +480,7 @@ export * from "./prompts/index.js";
 // Utils
 export { isNewLayoutBook } from "./utils/outline-paths.js";
 export { fetchUrl, searchWeb } from "./utils/web-search.js";
+export { summarizePendingHookHealth, type HookHealthSummary } from "./utils/hook-health-summary.js";
 export { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filterCharacterMatrix } from "./utils/context-filter.js";
 export { extractPOVFromOutline, filterMatrixByPOV, filterHooksByPOV } from "./utils/pov-filter.js";
 export { ConsolidatorAgent } from "./agents/consolidator.js";
@@ -383,6 +508,36 @@ export {
   type ChapterGoalCard,
   type ChapterGoalsIndex,
 } from "./models/chapter-goal.js";
+export {
+  loadChapterIntents,
+  saveChapterIntents,
+  getChapterIntent,
+  upsertChapterIntent,
+  removeChapterIntent,
+  confirmChapterIntent,
+  supersedeChapterIntent,
+  type AuthorChapterIntent,
+  type ChapterIntentsIndex,
+  type AuthorScenePlan,
+  type AuthorCharacterState,
+} from "./models/chapter-intent.js";
+export {
+  AuthorChapterIntentSchema,
+  AuthorScenePlanSchema,
+  AuthorCharacterStateSchema,
+  ChapterIntentsIndexSchema,
+  migrateLegacyIntent,
+  migrateIntentsIndex,
+} from "./models/chapter-intent.schema.js";
+export {
+  buildAuthorIntentBlock,
+  buildAuthorCommitmentChecklist,
+  buildWriterIntentBrief,
+} from "./utils/intent-injection.js";
+export {
+  generateSuggestions,
+  type Suggestion,
+} from "./utils/suggestion-generator.js";
 export {
   listRoleCards,
   loadRoleCard,

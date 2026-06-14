@@ -3,6 +3,7 @@ import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
 import { useApi, fetchJson, postApi } from "../hooks/use-api";
+import { ApiKeyInput } from "../components/ApiKeyInput";
 import {
   ShieldCheck,
   BookOpen,
@@ -25,6 +26,8 @@ import {
   X,
   Filter,
   ListOrdered,
+  FileText,
+  Stethoscope,
 } from "lucide-react";
 
 interface BookSummary {
@@ -44,6 +47,8 @@ interface AuditProviderInfo {
   readonly models: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
+    readonly maxOutput?: number;
+    readonly contextWindow?: number;
   }>;
   readonly connected: boolean;
   readonly writingConnected: boolean;
@@ -59,6 +64,7 @@ interface AuditConfig {
   readonly connected: boolean;
   readonly auditKeyFingerprint: string;
   readonly writingKeyFingerprint: string;
+  readonly writingService: string;
   readonly keySeparated: boolean;
 }
 
@@ -101,6 +107,10 @@ interface AuditSummary {
 interface Nav {
   toBook: (id: string) => void;
   toChapter: (bookId: string, chapterNumber: number) => void;
+  toDashboard?: () => void;
+  toServices?: () => void;
+  toStyle?: () => void;
+  toDoctor?: () => void;
 }
 
 export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunction }) {
@@ -109,6 +119,7 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
   const books = booksData?.books ?? [];
 
   const { data: providersData } = useApi<{ providers: ReadonlyArray<AuditProviderInfo> }>("/audit/providers");
+  const { data: overridesData } = useApi<{ overrides: Record<string, { provider?: string; model?: string }> }>("/project/model-overrides");
   const auditProviders = providersData?.providers ?? [];
 
   const [selectedBookId, setSelectedBookId] = useState<string>("");
@@ -132,6 +143,7 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
   const [configModel, setConfigModel] = useState("");
   const [configBaseUrl, setConfigBaseUrl] = useState("");
   const [configApiKey, setConfigApiKey] = useState("");
+  const [configApiKeyVisible, setConfigApiKeyVisible] = useState(false);
   const [configApiFormat, setConfigApiFormat] = useState<"chat" | "responses">("chat");
   const [savingConfig, setSavingConfig] = useState(false);
   const [configMessage, setConfigMessage] = useState("");
@@ -308,7 +320,25 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
           <ShieldCheck className="w-7 h-7 text-primary" />
           <h1 className="text-2xl font-bold tracking-tight">{t("nav.audit")}</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {nav.toServices && (
+            <button onClick={nav.toServices} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-card/60 text-xs font-medium text-foreground hover:bg-secondary/50 transition-colors">
+              <Server size={12} />
+              服务商
+            </button>
+          )}
+          {nav.toStyle && (
+            <button onClick={nav.toStyle} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-card/60 text-xs font-medium text-foreground hover:bg-secondary/50 transition-colors">
+              <FileText size={12} />
+              文风
+            </button>
+          )}
+          {nav.toDoctor && (
+            <button onClick={nav.toDoctor} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-card/60 text-xs font-medium text-foreground hover:bg-secondary/50 transition-colors">
+              <Stethoscope size={12} />
+              诊断
+            </button>
+          )}
           <select
             className={`${c.input} px-3 py-2 rounded-lg text-sm min-w-[200px]`}
             value={selectedBookId}
@@ -342,6 +372,12 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
           </h2>
           {auditConfig && (
             <div className="flex items-center gap-2 text-xs">
+              {auditConfig.writingService && (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <BookOpen size={12} />
+                  写作源: {auditConfig.writingService}
+                </span>
+              )}
               {auditConfig.keySeparated ? (
                 <span className="flex items-center gap-1 text-emerald-600 font-medium">
                   <Lock size={12} />
@@ -373,7 +409,7 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
               <option value="">{t("audit.selectService")}</option>
               {auditProviders.map((s) => (
                 <option key={s.service} value={s.service}>
-                  {s.label}{s.group ? ` - ${s.group}` : ""}
+                  {s.label}{s.group ? ` - ${s.group}` : ""}{s.writingConnected ? " ✏️" : ""}
                 </option>
               ))}
             </select>
@@ -401,21 +437,34 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
           </div>
           <div className="space-y-1">
             <label className={`text-xs font-medium ${c.muted}`}>{t("audit.model")}</label>
-            <input
-              type="text"
-              className={`${c.input} w-full px-3 py-2 rounded-lg text-sm`}
-              placeholder={t("audit.modelPlaceholder")}
-              list="audit-model-options"
-              value={configModel}
-              onChange={(e) => setConfigModel(e.target.value)}
-            />
-            <datalist id="audit-model-options">
-              {(selectedProvider?.models ?? []).map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </datalist>
+            {selectedProvider && selectedProvider.models.length > 0 ? (
+              <select
+                className={`${c.input} w-full px-3 py-2 rounded-lg text-sm font-mono`}
+                value={configModel}
+                onChange={(e) => setConfigModel(e.target.value)}
+              >
+                {selectedProvider.models.map((model) => {
+                  const tags: string[] = [];
+                  if ((model.contextWindow ?? 0) >= 32000) tags.push("32k");
+                  if ((model.contextWindow ?? 0) >= 128000) tags.push("128k");
+                  if ((model.maxOutput ?? 0) >= 4096) tags.push("高输出");
+                  const tagStr = tags.length > 0 ? ` [${tags.join("/")}]` : "";
+                  return (
+                    <option key={model.id} value={model.id}>
+                      {model.name ?? model.id}{tagStr}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <input
+                type="text"
+                className={`${c.input} w-full px-3 py-2 rounded-lg text-sm`}
+                placeholder={t("audit.modelPlaceholder")}
+                value={configModel}
+                onChange={(e) => setConfigModel(e.target.value)}
+              />
+            )}
           </div>
           <div className="space-y-1">
             <label className={`text-xs font-medium ${c.muted}`}>{t("audit.baseUrl")}</label>
@@ -429,12 +478,12 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
           </div>
           <div className="space-y-1">
             <label className={`text-xs font-medium ${c.muted}`}>{t("audit.apiKey")}</label>
-            <input
-              type="password"
-              className={`${c.input} w-full px-3 py-2 rounded-lg text-sm`}
-              placeholder={t("audit.apiKeyPlaceholder")}
+            <ApiKeyInput
               value={configApiKey}
-              onChange={(e) => setConfigApiKey(e.target.value)}
+              visible={configApiKeyVisible}
+              onChange={setConfigApiKey}
+              onToggleVisible={() => setConfigApiKeyVisible((v) => !v)}
+              placeholder={t("audit.apiKeyPlaceholder")}
             />
           </div>
         </div>
@@ -472,6 +521,37 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
           <div className={`mt-3 text-xs ${c.muted} flex flex-wrap gap-4`}>
             <span>{t("audit.auditKey")}: {auditConfig.auditKeyFingerprint}</span>
             <span>{t("audit.writingKey")}: {auditConfig.writingKeyFingerprint}</span>
+          </div>
+        )}
+        {auditConfig?.connected && overridesData?.overrides && configService && (
+          <div className="mt-3 text-xs space-y-1">
+            <p className="text-muted-foreground/70 font-medium">使用此服务的模块</p>
+            {Object.entries(overridesData.overrides)
+              .filter(([, entry]) => entry.provider === configService)
+              .map(([agent, entry]) => (
+                <div key={agent} className="flex items-center gap-2">
+                  <span className="text-muted-foreground capitalize">{agent}</span>
+                  <span className="font-mono text-foreground">{entry.model ?? "默认"}</span>
+                </div>
+              ))
+            }
+            <div className="flex items-center gap-2 text-amber-600">
+              <span className="text-muted-foreground">auditor</span>
+              <span className="font-mono">{auditConfig.model ?? "默认"} (审计)</span>
+            </div>
+          </div>
+        )}
+        {auditConfig?.connected && !auditConfig.keySeparated && (
+          <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">审计 Key 与写作 Key 相同</p>
+              <p className="mt-1">当前审计使用的服务 "{auditConfig.service}" 的 API Key 与写作 Key 一致。</p>
+              <p>建议使用不同的服务或为审计单独配置 Key，以避免审计行为影响写作配额和安全性。</p>
+              {auditConfig.writingService && auditConfig.writingService !== auditConfig.service && (
+                <p className="mt-1">写作主服务: <strong>{auditConfig.writingService}</strong></p>
+              )}
+            </div>
           </div>
         )}
       </div>

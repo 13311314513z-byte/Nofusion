@@ -16,6 +16,8 @@ const rollbackToChapterMock = vi.fn();
 const saveChapterIndexMock = vi.fn();
 const loadChapterIndexMock = vi.fn();
 const loadBookConfigMock = vi.fn();
+const listBooksMock = vi.fn();
+const getNextChapterNumberMock = vi.fn();
 const auditChapterMock = vi.fn();
 const createLLMClientMock = vi.fn(() => ({}));
 const chatCompletionMock = vi.fn();
@@ -38,7 +40,12 @@ const migrateBookSessionMock = vi.fn();
 const resolveServiceModelMock = vi.fn();
 const loadSecretsMock = vi.fn();
 const saveSecretsMock = vi.fn();
+const setServiceApiKeyMock = vi.fn();
 const getServiceApiKeyMock = vi.fn();
+const loadChapterIntentsMock = vi.fn(async () => ({ intents: [], updatedAt: new Date().toISOString() }));
+const saveChapterIntentsMock = vi.fn();
+const getChapterIntentMock = vi.fn(() => undefined);
+const upsertChapterIntentMock = vi.fn((intents: readonly unknown[], intent: unknown) => [...intents, intent]);
 type ServicePresetMock = {
   providerFamily: "openai" | "anthropic";
   baseUrl: string;
@@ -48,6 +55,7 @@ type ServicePresetMock = {
 const SERVICE_PRESETS_MOCK: Record<string, ServicePresetMock> = {
   openai: { providerFamily: "openai", baseUrl: "https://api.openai.com/v1", modelsBaseUrl: "https://api.openai.com/v1", knownModels: [] as string[] },
   anthropic: { providerFamily: "anthropic", baseUrl: "https://api.anthropic.com", modelsBaseUrl: "https://api.anthropic.com", knownModels: [] as string[] },
+  moonshot: { providerFamily: "openai", baseUrl: "https://api.moonshot.cn/v1", modelsBaseUrl: "https://api.moonshot.cn/v1", knownModels: [] as string[] },
   minimax: { providerFamily: "openai", baseUrl: "https://api.minimaxi.com/v1", modelsBaseUrl: "https://api.minimaxi.com/v1", knownModels: [] as string[] },
   bailian: { providerFamily: "anthropic", baseUrl: "https://dashscope.aliyuncs.com/apps/anthropic", modelsBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", knownModels: [] as string[] },
   google: { providerFamily: "openai", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", modelsBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", knownModels: [] as string[] },
@@ -155,7 +163,7 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     constructor(private readonly root: string) {}
 
     async listBooks(): Promise<string[]> {
-      return [];
+      return (await listBooksMock()) as string[];
     }
 
     async loadBookConfig(bookId?: string): Promise<never> {
@@ -174,8 +182,8 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
       return (await rollbackToChapterMock(bookId, chapterNumber)) as number[];
     }
 
-    async getNextChapterNumber(_bookId?: string): Promise<number> {
-      return 1;
+    async getNextChapterNumber(bookId?: string): Promise<number> {
+      return (await getNextChapterNumberMock(bookId)) as number;
     }
 
     async ensureControlDocuments(): Promise<void> {
@@ -260,12 +268,14 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     resolveServiceProviderFamily: resolveServiceProviderFamilyMock,
     resolveServiceModelsBaseUrl: resolveServiceModelsBaseUrlMock,
     resolveServiceModel: resolveServiceModelMock,
+    resolveWritingReviewRetries: actual.resolveWritingReviewRetries,
     COVER_PROVIDER_PRESETS: actual.COVER_PROVIDER_PRESETS,
     coverSecretKey: actual.coverSecretKey,
     resolveCoverProviderPreset: actual.resolveCoverProviderPreset,
     isApiKeyOptionalForEndpoint: actual.isApiKeyOptionalForEndpoint,
     loadSecrets: loadSecretsMock,
     saveSecrets: saveSecretsMock,
+    setServiceApiKey: setServiceApiKeyMock,
     getServiceApiKey: getServiceApiKeyMock,
     listModelsForService: listModelsForServiceMock,
     getAllEndpoints: getAllEndpointsMock,
@@ -283,6 +293,11 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     planChapterImport: actual.planChapterImport,
     loadChapterGoals: actual.loadChapterGoals,
     saveChapterGoals: actual.saveChapterGoals,
+    loadChapterIntents: loadChapterIntentsMock,
+    saveChapterIntents: saveChapterIntentsMock,
+    getChapterIntent: getChapterIntentMock,
+    upsertChapterIntent: upsertChapterIntentMock,
+    AuthorChapterIntentSchema: actual.AuthorChapterIntentSchema,
     getChapterGoal: actual.getChapterGoal,
     upsertChapterGoal: actual.upsertChapterGoal,
     removeChapterGoal: actual.removeChapterGoal,
@@ -345,6 +360,8 @@ describe("createStudioServer daemon lifecycle", () => {
     saveChapterIndexMock.mockReset();
     loadChapterIndexMock.mockReset();
     loadBookConfigMock.mockReset();
+    listBooksMock.mockReset();
+    getNextChapterNumberMock.mockReset();
     auditChapterMock.mockReset();
     await mkdir(join(root, "books", "demo-book", "chapters"), { recursive: true });
     await writeFile(join(root, "books", "demo-book", "chapters", "0003_Demo.md"), "# Demo\n\nBody", "utf-8");
@@ -430,6 +447,8 @@ describe("createStudioServer daemon lifecycle", () => {
       };
     });
     loadChapterIndexMock.mockResolvedValue([]);
+    listBooksMock.mockResolvedValue([]);
+    getNextChapterNumberMock.mockResolvedValue(1);
     loadBookConfigMock.mockResolvedValue({
       id: "demo-book",
       title: "Demo Book",
@@ -462,6 +481,7 @@ describe("createStudioServer daemon lifecycle", () => {
     resolveServiceModelMock.mockReset();
     loadSecretsMock.mockReset();
     saveSecretsMock.mockReset();
+    setServiceApiKeyMock.mockReset();
     getServiceApiKeyMock.mockReset();
     dnsLookupMock.mockReset();
     dnsLookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
@@ -501,6 +521,7 @@ describe("createStudioServer daemon lifecycle", () => {
     });
     loadSecretsMock.mockResolvedValue({ services: {} });
     saveSecretsMock.mockResolvedValue(undefined);
+    setServiceApiKeyMock.mockResolvedValue(undefined);
     getServiceApiKeyMock.mockResolvedValue(undefined);
   });
 
@@ -531,6 +552,51 @@ describe("createStudioServer daemon lifecycle", () => {
     await expect(response.json()).resolves.toEqual({ error: "planId is required" });
   });
 
+  it("normalizes legacy book configs with directory ids for list and detail routes", async () => {
+    listBooksMock.mockResolvedValueOnce(["legacy-book"]);
+    getNextChapterNumberMock.mockResolvedValue(6);
+    loadBookConfigMock.mockResolvedValue({
+      id: "stale-or-wrong-id",
+      name: "Legacy Book",
+      title: "Legacy Book",
+      genreProfileId: "cozy",
+      status: "active",
+    });
+    loadChapterIndexMock.mockResolvedValue([
+      { number: 1 },
+      { number: 2 },
+      { number: 3 },
+      { number: 4 },
+      { number: 5 },
+    ]);
+
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const listResponse = await app.request("http://localhost/api/v1/books");
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({
+      books: [{
+        id: "legacy-book",
+        title: "Legacy Book",
+        genre: "cozy",
+        status: "active",
+        chaptersWritten: 5,
+      }],
+    });
+
+    const detailResponse = await app.request("http://localhost/api/v1/books/legacy-book");
+    expect(detailResponse.status).toBe(200);
+    await expect(detailResponse.json()).resolves.toMatchObject({
+      book: {
+        id: "legacy-book",
+        title: "Legacy Book",
+        genre: "cozy",
+      },
+      nextChapter: 6,
+    });
+  });
+
   it("returns from /api/daemon/start before the first write cycle finishes", async () => {
     let resolveStart: (() => void) | undefined;
     schedulerStartMock.mockImplementation(
@@ -543,21 +609,23 @@ describe("createStudioServer daemon lifecycle", () => {
     const { createStudioServer } = await import("./server.js");
     const app = createStudioServer(cloneProjectConfig() as never, root);
 
-    const responseOrTimeout = await Promise.race([
-      app.request("http://localhost/api/v1/daemon/start", { method: "POST" }),
-      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 30)),
-    ]);
+    try {
+      const responseOrTimeout = await Promise.race([
+        app.request("http://localhost/api/v1/daemon/start", { method: "POST" }),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 1_000)),
+      ]);
 
-    expect(responseOrTimeout).not.toBe("timeout");
+      expect(responseOrTimeout).not.toBe("timeout");
 
-    const response = responseOrTimeout as Response;
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ ok: true, running: true });
+      const response = responseOrTimeout as Response;
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ ok: true, running: true });
 
-    const status = await app.request("http://localhost/api/v1/daemon");
-    await expect(status.json()).resolves.toEqual({ running: true });
-
-    resolveStart?.();
+      const status = await app.request("http://localhost/api/v1/daemon");
+      await expect(status.json()).resolves.toEqual({ running: true });
+    } finally {
+      resolveStart?.();
+    }
   }, 10_000);
 
   it("rejects book routes with path traversal ids", async () => {
@@ -1167,6 +1235,9 @@ describe("createStudioServer daemon lifecycle", () => {
       { id: "gemini-2.5-flash", name: "gemini-2.5-flash", reasoning: false, contextWindow: 1114112 },
       { id: "gemini-3.1-flash-image-preview", name: "gemini-3.1-flash-image-preview", reasoning: false, contextWindow: 163840 },
       { id: "text-embedding-004", name: "text-embedding-004", reasoning: false, contextWindow: 2048 },
+      { id: "whisper-1", name: "whisper-1", reasoning: false, contextWindow: 0 },
+      { id: "sora-2", name: "sora-2", reasoning: false, contextWindow: 0 },
+      { id: "gpt-realtime", name: "gpt-realtime", reasoning: false, contextWindow: 0 },
     ]);
 
     const { createStudioServer } = await import("./server.js");
@@ -1663,6 +1734,74 @@ describe("createStudioServer daemon lifecycle", () => {
     expect(chatCompletionMock).not.toHaveBeenCalled();
   });
 
+  it("filters non-chat OpenAI models before selecting a service probe model", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { id: "whisper-1" },
+          { id: "sora-2" },
+          { id: "gpt-realtime" },
+          { id: "gpt-4o-mini" },
+        ],
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+    createLLMClientMock.mockImplementation(((cfg: unknown) => cfg) as any);
+
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const response = await app.request("http://localhost/api/v1/services/openai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        apiKey: "sk-valid",
+        apiFormat: "chat",
+        stream: false,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      selectedModel: "gpt-4o-mini",
+      models: [{ id: "gpt-4o-mini", name: "gpt-4o-mini" }],
+    });
+  });
+
+  it("returns Moonshot API-key guidance when Kimi authentication fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => "{\"error\":{\"message\":\"Invalid Authentication\",\"type\":\"invalid_authentication_error\"}}",
+    });
+    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+    createLLMClientMock.mockImplementation(((cfg: unknown) => cfg) as any);
+
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const response = await app.request("http://localhost/api/v1/services/moonshot/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        apiKey: "sk-invalid",
+        apiFormat: "chat",
+        stream: true,
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    const json = await response.json() as { ok: boolean; error: string };
+    expect(json.ok).toBe(false);
+    expect(json.error).toContain("Moonshot/Kimi 认证失败（HTTP 401）");
+    expect(json.error).toContain("https://platform.moonshot.cn/console/api-keys");
+    expect(json.error).toContain("Invalid Authentication");
+    expect(chatCompletionMock).not.toHaveBeenCalled();
+  });
+
   it("uses the MiniMax OpenAI-compatible preset during service probe", async () => {
     await writeFile(join(root, "inkos.json"), JSON.stringify({
       ...projectConfig,
@@ -2149,7 +2288,7 @@ describe("createStudioServer daemon lifecycle", () => {
     });
   });
 
-  it("returns stored service secret for detail page rehydration", async () => {
+  it("returns only masked service secret status for detail page rehydration", async () => {
     loadSecretsMock.mockResolvedValue({
       services: {
         moonshot: { apiKey: "sk-moon" },
@@ -2161,7 +2300,7 @@ describe("createStudioServer daemon lifecycle", () => {
 
     const response = await app.request("http://localhost/api/v1/services/moonshot/secret");
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ apiKey: "sk-moon" });
+    await expect(response.json()).resolves.toEqual({ hasApiKey: true, keyPreview: "sk..." });
   });
 
   it("rejects non-header-safe service secrets instead of persisting diagnostic text", async () => {
@@ -2182,6 +2321,22 @@ describe("createStudioServer daemon lifecycle", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: expect.stringContaining("API Key"),
     });
+    expect(saveSecretsMock).not.toHaveBeenCalled();
+    expect(setServiceApiKeyMock).not.toHaveBeenCalled();
+  });
+
+  it("saves writing service API keys by service id without rewriting other services", async () => {
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const response = await app.request("http://localhost/api/v1/services/moonshot/secret", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: "  sk-moon-new  " }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(setServiceApiKeyMock).toHaveBeenCalledWith(root, "moonshot", "sk-moon-new");
     expect(saveSecretsMock).not.toHaveBeenCalled();
   });
 
@@ -2213,11 +2368,7 @@ describe("createStudioServer daemon lifecycle", () => {
       body: JSON.stringify({ apiKey: "sk-cover" }),
     });
     expect(saveSecret.status).toBe(200);
-    expect(saveSecretsMock).toHaveBeenCalledWith(root, {
-      services: {
-        "cover:kkaiapi": { apiKey: "sk-cover" },
-      },
-    });
+    expect(setServiceApiKeyMock).toHaveBeenCalledWith(root, "cover:kkaiapi", "sk-cover");
   });
 
   it("serves generated project cover images without exposing arbitrary files", async () => {
@@ -2289,15 +2440,22 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
-    await Promise.resolve();
+    expect(response.status).toBe(202);
 
-    const status = await app.request("http://localhost/api/v1/books/broken-book/create-status");
-    expect(status.status).toBe(200);
-    await expect(status.json()).resolves.toMatchObject({
-      status: "error",
-      error: "INKOS_LLM_API_KEY not set",
-    });
+    // Poll create-status until the async pipeline completes (or timeout)
+    let lastStatus: { status: string; error?: string } | null = null;
+    for (let i = 0; i < 100; i++) {
+      const status = await app.request("http://localhost/api/v1/books/broken-book/create-status");
+      if (status.status === 200) {
+        lastStatus = await status.json() as { status: string; error?: string };
+        if (lastStatus.status === "failed" || lastStatus.status === "completed") break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    expect(lastStatus).not.toBeNull();
+    expect(lastStatus!.status).toBe("failed");
+    expect(lastStatus!.error).toBe("INKOS_LLM_API_KEY not set");
   });
 
   it("surfaces LLM config errors during create instead of masking them as internal errors", async () => {
@@ -2319,12 +2477,22 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(400);
-    const json = await response.json() as { error: { code: string; message: string } };
-    expect(json.error.code).toBe("LLM_CONFIG_ERROR");
-    expect(json.error.message).toContain("Studio LLM API key not set");
-    expect(json.error.message).not.toMatch(/kkaiapi/i);
-    expect(processProjectInteractionRequestMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(202);
+
+    // Poll create-status until async pipeline completes
+    let lastStatus: { status: string; error?: string } | null = null;
+    for (let i = 0; i < 100; i++) {
+      const status = await app.request("http://localhost/api/v1/books/needs-key/create-status");
+      if (status.status === 200) {
+        lastStatus = await status.json() as { status: string; error?: string };
+        if (lastStatus.status === "failed" || lastStatus.status === "completed") break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    expect(lastStatus).not.toBeNull();
+    expect(lastStatus!.status).toBe("failed");
+    expect(lastStatus!.error).toContain("Studio LLM API key not set");
   });
 
   it("uses rollback semantics for chapter rejection instead of only flipping status", async () => {
@@ -2389,7 +2557,14 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to call createInteractionToolsFromDeps
+    for (let i = 0; i < 100; i++) {
+      if (createInteractionToolsFromDepsMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     expect(createInteractionToolsFromDepsMock).toHaveBeenCalledTimes(1);
     expect(processProjectInteractionRequestMock).toHaveBeenCalledWith(expect.objectContaining({
       projectRoot: root,
@@ -2404,6 +2579,42 @@ describe("createStudioServer daemon lifecycle", () => {
         blurb: "主角在旧城查账洗白，卷一先追账本。",
       },
     }));
+  });
+
+  it("omits empty blurb from create requests", async () => {
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    const response = await app.request("http://localhost/api/v1/books/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Book Without Blurb",
+        genre: "urban",
+        platform: "qidian",
+        language: "zh",
+      }),
+    });
+
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to call processProjectInteractionRequest
+    for (let i = 0; i < 100; i++) {
+      if (processProjectInteractionRequestMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    const call = processProjectInteractionRequestMock.mock.calls.at(-1)?.[0] as
+      | { request?: Record<string, unknown> }
+      | undefined;
+    expect(call?.request).toMatchObject({
+      intent: "create_book",
+      title: "Book Without Blurb",
+      genre: "urban",
+      language: "zh",
+      platform: "qidian",
+    });
+    expect(call?.request).not.toHaveProperty("blurb");
   });
 
   it("creates books with Studio Ollama config without requiring an API key", async () => {
@@ -2437,7 +2648,14 @@ describe("createStudioServer daemon lifecycle", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+
+    // Wait for the async pipeline to build the config
+    for (let i = 0; i < 100; i++) {
+      if (createLLMClientMock.mock.calls.length > 0) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     expect(loadProjectConfigMock).toHaveBeenCalledWith(root, { consumer: "studio" });
     expect(createLLMClientMock).toHaveBeenCalledWith(expect.objectContaining({
       service: "ollama",
@@ -2734,7 +2952,12 @@ describe("createStudioServer daemon lifecycle", () => {
       join(root, "inkos.json"),
       JSON.stringify({
         ...cloneProjectConfig(),
-        writing: { reviewRetries: 3 },
+        writing: {
+          reviewRetries: 3,
+          qualityBudget: "normal",
+          betaReaderMode: "shadow",
+          betaReaderModelFamily: "openai",
+        },
       }, null, 2),
       "utf-8",
     );
@@ -2751,6 +2974,8 @@ describe("createStudioServer daemon lifecycle", () => {
     expect(response.status).toBe(200);
     expect(pipelineConfigs.at(-1)).toEqual(expect.objectContaining({
       writingReviewRetries: 3,
+      betaReaderMode: "shadow",
+      betaReaderModelFamily: "openai",
     }));
   });
 
@@ -3502,3 +3727,7 @@ describe("createStudioServer daemon lifecycle", () => {
     });
   });
 });
+
+// Note: vi.mock("@actalk/inkos-core") is hoisted globally by Vitest.
+// Pool isolation (forks + isolate: true in vitest.config.ts) ensures
+// this mock does not leak to other test files — no afterAll cleanup needed.

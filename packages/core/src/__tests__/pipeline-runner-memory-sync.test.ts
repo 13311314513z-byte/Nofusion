@@ -136,6 +136,7 @@ describe("PipelineRunner structured-state memory sync", () => {
   it("uses structured runtime state for narrative memory during writeNextChapter even when markdown projections drift after persistence", async () => {
     vi.doMock("../state/memory-db.js", () => ({
       MemoryDB: FakeMemoryDB,
+      tryCreateMemoryDB: (bookDir: string) => new FakeMemoryDB(bookDir),
     }));
 
     const { PipelineRunner } = await import("../pipeline/runner.js");

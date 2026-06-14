@@ -13,7 +13,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   extractDocumentFromText,
@@ -264,7 +264,7 @@ export function assembleFoundationContext(sources: ReadonlyArray<FoundationSourc
   return parts.join("\n");
 }
 
-interface FoundationSourceIndexEntry {
+export interface FoundationSourceIndexEntry {
   readonly sourceId: string;
   readonly sourceName: string;
   readonly fileType: DocumentFileType;
@@ -273,6 +273,106 @@ interface FoundationSourceIndexEntry {
   readonly charCount: number;
   readonly importedAt: string;
   readonly mode: "create" | "supplement" | "rebuild";
+}
+
+/** Atomically read and validate the source index for a book. */
+async function readSourceIndex(
+  bookDir: string,
+): Promise<{ sources: FoundationSourceIndexEntry[] }> {
+  const indexPath = join(bookDir, "story", "sources", "index.json");
+  const raw = await readFile(indexPath, "utf-8");
+  if (!raw.trim()) {
+    throw new Error(`Source index is empty at ${indexPath}`);
+  }
+  const parsed = JSON.parse(raw) as { sources?: unknown };
+  if (!Array.isArray(parsed.sources)) {
+    throw new Error(`Source index is malformed at ${indexPath}: "sources" is not an array`);
+  }
+  return { sources: parsed.sources as FoundationSourceIndexEntry[] };
+}
+
+/**
+ * List all foundation sources for a book.
+ * Returns empty array if no index exists (not an error).
+ * Throws if index exists but is corrupted, so callers can surface diagnostics.
+ */
+export async function listFoundationSources(
+  bookDir: string,
+): Promise<ReadonlyArray<FoundationSourceIndexEntry & { sourceFileExists: boolean }>> {
+  const indexPath = join(bookDir, "story", "sources", "index.json");
+  try {
+    await stat(indexPath);
+  } catch {
+    return [];
+  }
+
+  const { sources } = await readSourceIndex(bookDir);
+  const sourcesDir = join(bookDir, "story", "sources");
+  return await Promise.all(
+    sources.map(async (entry) => ({
+      ...entry,
+      sourceFileExists: await stat(join(sourcesDir, `${entry.sourceId}.md`))
+        .then(() => true)
+        .catch(() => false),
+    })),
+  );
+}
+
+/**
+ * Archive a single foundation source:
+ * 1. Remove the entry from index.json
+ * 2. Move the source file to story/sources/archive/{sourceId}.md
+ *
+ * Uses atomic rename for index update. If any step fails, the operation is
+ * rolled back. Acquire the book's write lock before calling this.
+ */
+export async function archiveFoundationSource(
+  bookDir: string,
+  sourceId: string,
+): Promise<boolean> {
+  // Validate sourceId is safe
+  if (!/^[a-zA-Z0-9_-]+$/.test(sourceId)) {
+    throw new Error(`Invalid sourceId: ${JSON.stringify(sourceId)}`);
+  }
+
+  const sourcesDir = join(bookDir, "story", "sources");
+  const indexPath = join(sourcesDir, "index.json");
+  const archiveDir = join(sourcesDir, "archive");
+  const sourceFile = join(sourcesDir, `${sourceId}.md`);
+  const archiveFile = join(archiveDir, `${sourceId}.md`);
+
+  // Read current index
+  const { sources } = await readSourceIndex(bookDir);
+  const before = sources.length;
+  const remaining = sources.filter((s) => s.sourceId !== sourceId);
+  if (remaining.length === before) {
+    return false; // sourceId not found
+  }
+
+  // Write new index to temp file
+  const tmpIndex = join(sourcesDir, `.index.tmp.${Date.now().toString(36)}`);
+  await mkdir(archiveDir, { recursive: true });
+  await writeFile(tmpIndex, JSON.stringify({ sources: remaining }, null, 2) + "\n", "utf-8");
+
+  try {
+    // Move source file to archive
+    await mkdir(archiveDir, { recursive: true });
+    try {
+      await rename(sourceFile, archiveFile);
+    } catch {
+      // Source file may not exist — that's okay, still update index
+    }
+
+    // Atomically replace index
+    await rename(tmpIndex, indexPath);
+  } catch (error) {
+    // Rollback: try to restore source file from archive
+    await rename(archiveFile, sourceFile).catch(() => undefined);
+    await rm(tmpIndex).catch(() => undefined);
+    throw error;
+  }
+
+  return true;
 }
 
 export async function persistFoundationSourceBundle(
@@ -290,7 +390,8 @@ export async function persistFoundationSourceBundle(
   try {
     const parsed = JSON.parse(await readFile(indexPath, "utf-8")) as { sources?: FoundationSourceIndexEntry[] };
     existing = Array.isArray(parsed.sources) ? parsed.sources : [];
-  } catch {
+  } catch (e) {
+    console.warn(`[foundation-source] Failed to read source index, starting fresh: ${e instanceof Error ? e.message : String(e)}`);
     existing = [];
   }
 

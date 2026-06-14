@@ -1,4 +1,4 @@
-import type { AuditIssue } from "../agents/continuity.js";
+import { createIssue, type AuditIssue } from "../models/audit-issue.js";
 import type { HookRecord, RuntimeStateDelta } from "../models/runtime-state.js";
 import { classifyHookDisposition, collectStaleHookDebt } from "./hook-governance.js";
 import { describeHookLifecycle, localizeHookPayoffTiming } from "./hook-lifecycle.js";
@@ -180,10 +180,13 @@ function warning(
   description: string,
   suggestion: string,
 ): AuditIssue {
-  return {
+  return createIssue({
+    source: "hook-health",
     severity: "warning",
     category: language === "en" ? "Hook Debt" : "伏笔债务",
     description,
     suggestion,
-  };
+    fixScope: "scene",
+    confidence: 1,
+  });
 }

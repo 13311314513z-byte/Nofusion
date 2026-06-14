@@ -13,6 +13,7 @@ import {
   LLMConfigSchema,
   NotifyChannelSchema,
   InputGovernanceModeSchema,
+  resolveWritingReviewRetries,
 } from "../models/project.js";
 import {
   ChapterIntentSchema,
@@ -381,6 +382,12 @@ describe("ProjectConfigSchema", () => {
       writing: { reviewRetries: 3 },
     });
     expect(overridden.writing.reviewRetries).toBe(3);
+  });
+
+  it("applies writing quality budgets consistently", () => {
+    expect(resolveWritingReviewRetries(4, "economy")).toBe(1);
+    expect(resolveWritingReviewRetries(2, "normal")).toBe(2);
+    expect(resolveWritingReviewRetries(1, "premium")).toBe(3);
   });
 
   it("applies default empty notify array", () => {

@@ -6,12 +6,18 @@
  */
 
 import { analyzeChapterCadence } from "../utils/chapter-cadence.js";
+import {
+  extractWordNgrams,
+  extractCharNgrams,
+  countNgrams,
+  findCrossTextRepeats,
+} from "../utils/ngram-utils.js";
 import type { BookRules } from "../models/book-rules.js";
 import type { GenreProfile } from "../models/genre-profile.js";
 
 export interface PostWriteViolation {
   readonly rule: string;
-  readonly severity: "error" | "warning";
+  readonly severity: "error" | "warning" | "info";
   readonly description: string;
   readonly suggestion: string;
 }
@@ -309,51 +315,41 @@ export function detectCrossChapterRepetition(
   const isEnglish = language === "en";
 
   if (isEnglish) {
-    // Extract 3-word phrases from current chapter
-    const words = currentContent.toLowerCase().replace(/[^\w\s']/g, "").split(/\s+/).filter(w => w.length > 2);
-    const phraseCounts = new Map<string, number>();
-    for (let i = 0; i < words.length - 2; i++) {
-      const phrase = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
-      phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
-    }
-    // Check which repeated phrases (2+ in current) also appear in recent chapters
+    const ngrams = extractWordNgrams(currentContent, 3, 2);
+    const phraseCounts = countNgrams(ngrams);
     const recentLower = recentChaptersContent.toLowerCase();
-    const crossRepeats: string[] = [];
-    for (const [phrase, count] of phraseCounts) {
-      if (count >= 2 && recentLower.includes(phrase)) {
-        crossRepeats.push(`"${phrase}" (×${count})`);
-      }
-    }
+    const crossRepeats = findCrossTextRepeats(phraseCounts, recentLower, 2);
+
     if (crossRepeats.length >= 3) {
+      const display = crossRepeats
+        .slice(0, 5)
+        .map((r) => `"${r.phrase}" (×${r.count})`)
+        .join(", ");
       violations.push({
         rule: "Cross-chapter repetition",
         severity: "warning",
-        description: `${crossRepeats.length} repeated phrases also found in recent chapters: ${crossRepeats.slice(0, 5).join(", ")}`,
+        description: `${crossRepeats.length} repeated phrases also found in recent chapters: ${display}`,
         suggestion: "Vary action verbs and descriptive phrases to avoid cross-chapter repetition",
       });
     }
   } else {
-    // Chinese: 6-char ngrams
-    const chars = currentContent.replace(/[\s\n\r]/g, "");
-    const phraseCounts = new Map<string, number>();
-    for (let i = 0; i < chars.length - 5; i++) {
-      const phrase = chars.slice(i, i + 6);
-      if (/^[\u4e00-\u9fff]{6}$/.test(phrase)) {
-        phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
-      }
-    }
+    const ngrams = extractCharNgrams(currentContent, 6, {
+      removeWhitespace: true,
+      filterPattern: /^[\u4e00-\u9fff]{6}$/,
+    });
+    const phraseCounts = countNgrams(ngrams);
     const recentClean = recentChaptersContent.replace(/[\s\n\r]/g, "");
-    const crossRepeats: string[] = [];
-    for (const [phrase, count] of phraseCounts) {
-      if (count >= 2 && recentClean.includes(phrase)) {
-        crossRepeats.push(`"${phrase}"(×${count})`);
-      }
-    }
+    const crossRepeats = findCrossTextRepeats(phraseCounts, recentClean, 2);
+
     if (crossRepeats.length >= 3) {
+      const display = crossRepeats
+        .slice(0, 5)
+        .map((r) => `"${r.phrase}"(×${r.count})`)
+        .join("、");
       violations.push({
         rule: "跨章重复",
         severity: "warning",
-        description: `${crossRepeats.length}个重复短语在近期章节中也出现过：${crossRepeats.slice(0, 5).join("、")}`,
+        description: `${crossRepeats.length}个重复短语在近期章节中也出现过：${display}`,
         suggestion: "变换动作描写和场景用语，避免跨章节机械重复",
       });
     }
@@ -870,4 +866,90 @@ function extractChineseTitleTerms(text: string): string[] {
 
 function capitalize(word: string): string {
   return word.length === 0 ? word : `${word[0]!.toUpperCase()}${word.slice(1)}`;
+}
+
+/**
+ * Validate that the author's key moments and core narrative appear in the content.
+ *
+ * Uses simple keyword matching: extracts meaningful terms from the author's intent
+ * (key moment, core narrative, reader takeaway) and checks if they appear in the
+ * generated chapter. This is a zero-LLM-cost heuristic — not perfect, but catches
+ * obvious misses like "the key moment character doesn't appear at all".
+ */
+export function validateAuthorIntentInContent(
+  content: string,
+  keyMoment: string,
+  coreNarrative: string,
+  readerTakeaway: string,
+): ReadonlyArray<PostWriteViolation> {
+  const violations: PostWriteViolation[] = [];
+
+  const contentLower = content.toLowerCase();
+
+  // Extract meaningful terms (Chinese characters 3+ long, or English words 4+ long)
+  function extractKeyTerms(text: string): string[] {
+    const terms: string[] = [];
+    // Extract consecutive CJK runs, then split on function words
+    const regex = /[\u4e00-\u9fff]+/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const segment = match[0];
+      const parts = segment.split(/[的了是在有和里与及或把被从到时]/);
+      for (const part of parts) {
+        if (part.length >= 2) terms.push(part);
+      }
+    }
+    // Also add individual 2-char bigrams that don't contain function words
+    const cjkOnly = text.replace(/[^\u4e00-\u9fff]/g, "");
+    for (let i = 0; i < cjkOnly.length - 1; i++) {
+      const bigram = cjkOnly.slice(i, i + 2);
+      if (!/[的了是在有和里与及或把被从到时]/.test(bigram)) {
+        terms.push(bigram);
+      }
+    }
+    // English: words 4+ chars
+    const engWords = text.match(/[A-Za-z]{4,}/g);
+    if (engWords) {
+      for (const w of engWords) {
+        terms.push(w.toLowerCase());
+      }
+    }
+    return [...new Set(terms)];
+  }
+
+  // ── Check key moment ──────────────────────────────────────
+  if (keyMoment) {
+    const terms = extractKeyTerms(keyMoment);
+    const matched = terms.filter((t) => contentLower.includes(t));
+    // Use 1/4 threshold to tolerate varied phrasing
+    if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+      violations.push({
+        rule: "关键画面缺失",
+        severity: "info", // Downgraded from "warning" to "info" — heuristic check, not a reliable gate
+        description: `作者设定的关键画面"${keyMoment.slice(0, 40)}${keyMoment.length > 40 ? "…" : ""}"未在正文中找到足够的关键词匹配（启发式检查，可能有误报）`,
+        suggestion: "请人工确认该场景是否被遗漏。此检查为 advisory，不阻塞管线。",
+      });
+    }
+  }
+
+  // ── Check core narrative ──────────────────────────────────
+  if (coreNarrative && coreNarrative.length > 4) {
+    const terms = extractKeyTerms(coreNarrative);
+    const matched = terms.filter((t) => contentLower.includes(t));
+    if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+      violations.push({
+        rule: "核心叙述偏离",
+        severity: "info", // Downgraded from "warning" — same rationale as above
+        description: `作者设定的核心"${coreNarrative.slice(0, 40)}${coreNarrative.length > 40 ? "…" : ""}"的关键词在正文中出现较少（启发式检查，可能有误报）`,
+        suggestion: "请人工确认本章是否偏离了作者设定的核心方向。此检查为 advisory，不阻塞管线。",
+      });
+    }
+  }
+
+  // readerTakeaway is intentionally NOT checked via keywords —
+  // emotional effect is a reader response, not a textual fact.
+  // Checking it with keyword heuristics would produce false positives
+  // and encourage mechanical insertion of emotion words.
+
+  return violations;
 }

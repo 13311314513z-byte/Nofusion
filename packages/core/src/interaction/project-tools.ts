@@ -150,7 +150,7 @@ export function buildChapterFileLookup(files: ReadonlyArray<string>): ReadonlyMa
 }
 
 async function exportBookToPath(state: StateLike, bookId: string, options: {
-  readonly format?: "txt" | "md" | "epub";
+  readonly format?: "txt" | "md" | "epub" | "html";
   readonly approvedOnly?: boolean;
   readonly outputPath?: string;
 }) {

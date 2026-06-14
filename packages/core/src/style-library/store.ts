@@ -70,8 +70,16 @@ function authorSourcesDir(projectRoot: string, authorId: string): string {
   return join(authorDir(projectRoot, authorId), "sources");
 }
 
+function authorDiagnosticsDir(projectRoot: string, authorId: string): string {
+  return join(authorDir(projectRoot, authorId), "diagnostics");
+}
+
 function sourcePath(projectRoot: string, authorId: string, sourceId: string): string {
   return join(authorSourcesDir(projectRoot, authorId), `${assertSafeStyleId(sourceId, "sourceId")}.json`);
+}
+
+function diagnosticsPath(projectRoot: string, authorId: string, diagnosticsId: string): string {
+  return join(authorDiagnosticsDir(projectRoot, authorId), `${assertSafeStyleId(diagnosticsId, "diagnosticsId")}.json`);
 }
 
 function indexPath(projectRoot: string): string {
@@ -215,6 +223,10 @@ export async function createAuthorProfile(
         punctuationRhythm: { commaRatio: 0, periodRatio: 0, questionRatio: 0, exclamationRatio: 0, ellipsisRatio: 0, semicolonRatio: 0 },
         aiTellRisk: 0,
         sensoryBreakdown: { visual: 0, auditory: 0, tactile: 0, olfactory: 0, gustatory: 0 },
+        sentenceTypeDistribution: { declarative: 0, interrogative: 0, exclamatory: 0, imperative: 0 },
+        paragraphRhythm: { shortParaRate: 0, mediumParaRate: 0, longParaRate: 0, lengthHistogram: [] },
+        rhetoricBreakdown: { metaphorRate: 0, parallelismRate: 0, personificationRate: 0, hyperboleRate: 0, rhetoricalQuestionRate: 0, repetitionRate: 0 },
+        dialogueFeatures: { avgDialogueLength: 0, dialogueFrequency: 0, dialogueTagRatio: {} },
       },
       sourceName: input.name,
       analyzedAt: new Date().toISOString(),
@@ -286,6 +298,10 @@ export async function addStyleSource(
           punctuationRhythm: { commaRatio: 0, periodRatio: 0, questionRatio: 0, exclamationRatio: 0, ellipsisRatio: 0, semicolonRatio: 0 },
           aiTellRisk: 0,
           sensoryBreakdown: { visual: 0, auditory: 0, tactile: 0, olfactory: 0, gustatory: 0 },
+          sentenceTypeDistribution: { declarative: 0, interrogative: 0, exclamatory: 0, imperative: 0 },
+          paragraphRhythm: { shortParaRate: 0, mediumParaRate: 0, longParaRate: 0, lengthHistogram: [] },
+          rhetoricBreakdown: { metaphorRate: 0, parallelismRate: 0, personificationRate: 0, hyperboleRate: 0, rhetoricalQuestionRate: 0, repetitionRate: 0 },
+          dialogueFeatures: { avgDialogueLength: 0, dialogueFrequency: 0, dialogueTagRatio: {} },
         },
         sourceName: fileName,
         analyzedAt: new Date().toISOString(),
@@ -385,4 +401,79 @@ export async function deleteStyleSource(
     await saveAuthorProfile(projectRoot, updated);
   }
   await rebuildIndex(projectRoot);
+}
+
+export interface AuthorDiagnosticsEntry {
+  readonly id: string;
+  readonly authorId: string;
+  readonly createdAt: string;
+  readonly sampleAdequacy: string;
+  readonly sourceHash: string;
+  readonly heuristicRiskScore: number;
+}
+
+export async function saveAuthorDiagnostics(
+  projectRoot: string,
+  authorId: string,
+  diagnosticsId: string,
+  data: unknown,
+): Promise<AuthorDiagnosticsEntry> {
+  const safeAuthorId = assertSafeStyleId(authorId, "authorId");
+  const safeDiagnosticsId = assertSafeStyleId(diagnosticsId, "diagnosticsId");
+  const author = await loadAuthorProfile(projectRoot, safeAuthorId);
+  if (!author) throw new Error(`Author not found: ${authorId}`);
+
+  const entry: AuthorDiagnosticsEntry = {
+    id: safeDiagnosticsId,
+    authorId: safeAuthorId,
+    createdAt: new Date().toISOString(),
+    sampleAdequacy: (data as Record<string, unknown>)?.sampleAdequacy as string ?? "unknown",
+    sourceHash: (data as Record<string, unknown>)?.sourceHash as string ?? "",
+    heuristicRiskScore: (data as Record<string, unknown>)?.aiStyleTags ? ((data as Record<string, unknown>).aiStyleTags as Record<string, unknown>).heuristicRiskScore as number ?? 0 : 0,
+  };
+
+  await ensureDir(authorDiagnosticsDir(projectRoot, safeAuthorId));
+  await writeJson(diagnosticsPath(projectRoot, safeAuthorId, safeDiagnosticsId), data);
+  return entry;
+}
+
+export async function listAuthorDiagnostics(
+  projectRoot: string,
+  authorId: string,
+): Promise<ReadonlyArray<AuthorDiagnosticsEntry>> {
+  const safeAuthorId = assertSafeStyleId(authorId, "authorId");
+  const dir = authorDiagnosticsDir(projectRoot, safeAuthorId);
+  const entries: AuthorDiagnosticsEntry[] = [];
+  try {
+    const files = await readdir(dir);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      const data = await readJsonSafe<Record<string, unknown>>(join(dir, file));
+      if (!data) continue;
+      const id = file.replace(/\.json$/, "");
+      const aiStyleTags = data.aiStyleTags as Record<string, unknown> | undefined;
+      entries.push({
+        id,
+        authorId: safeAuthorId,
+        createdAt: (data.createdAt as string) ?? new Date().toISOString(),
+        sampleAdequacy: (data.sampleAdequacy as string) ?? "unknown",
+        sourceHash: (data.sourceHash as string) ?? "",
+        heuristicRiskScore: (aiStyleTags?.heuristicRiskScore as number) ?? 0,
+      });
+    }
+  } catch {
+    // no diagnostics yet
+  }
+  entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return entries;
+}
+
+export async function getAuthorDiagnostics(
+  projectRoot: string,
+  authorId: string,
+  diagnosticsId: string,
+): Promise<unknown | null> {
+  const safeAuthorId = assertSafeStyleId(authorId, "authorId");
+  const safeDiagnosticsId = assertSafeStyleId(diagnosticsId, "diagnosticsId");
+  return readJsonSafe<unknown>(diagnosticsPath(projectRoot, safeAuthorId, safeDiagnosticsId));
 }

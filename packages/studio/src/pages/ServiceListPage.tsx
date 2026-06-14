@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Plus, Search, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, GROUP_SHORT_LABELS } from "../constants/service-groups";
 import { fetchJson } from "../hooks/use-api";
 import { useI18n } from "../hooks/use-i18n";
@@ -100,16 +100,23 @@ function CoverConfigCard() {
     return () => { cancelled = true; };
   }, []);
 
+  const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [keyPreview, setKeyPreview] = useState("");
+  const [keyDirty, setKeyDirty] = useState(false);
+
   useEffect(() => {
     if (!service) return;
     let cancelled = false;
-    void fetchJson<{ apiKey?: string }>(`/cover/secret/${encodeURIComponent(service)}`)
+    void fetchJson<{ hasApiKey: boolean; keyPreview: string }>(`/cover/secret/${encodeURIComponent(service)}`)
       .then((payload) => {
         if (cancelled) return;
-        setApiKey(payload.apiKey ?? "");
+        setHasStoredKey(payload.hasApiKey);
+        setKeyPreview(payload.keyPreview);
+        setApiKey("");
+        setKeyDirty(false);
       })
       .catch(() => {
-        if (!cancelled) setApiKey("");
+        if (!cancelled) { setHasStoredKey(false); setKeyPreview(""); }
       });
     return () => { cancelled = true; };
   }, [service]);
@@ -128,16 +135,20 @@ function CoverConfigCard() {
     setStatus("saving");
     setMessage("");
     try {
-      await fetchJson(`/cover/secret/${encodeURIComponent(provider.service)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: apiKey.trim() }),
-      });
+      // Only send API key if user has modified it
+      if (keyDirty) {
+        await fetchJson(`/cover/secret/${encodeURIComponent(provider.service)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiKey: apiKey.trim() }),
+        });
+      }
       await fetchJson("/cover/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ service: provider.service, model }),
       });
+      setKeyDirty(false);
       setStatus("saved");
       setMessage("封面配置已保存");
     } catch (error) {
@@ -197,8 +208,8 @@ function CoverConfigCard() {
           <input
             type={showKey ? "text" : "password"}
             value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="sk-..."
+            onChange={(event) => { setApiKey(event.target.value); setKeyDirty(true); }}
+            placeholder={hasStoredKey ? `已有密钥 ${keyPreview}，输入新值替换` : "sk-..."}
             className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 pr-10 text-sm font-mono"
           />
           <button
@@ -209,6 +220,9 @@ function CoverConfigCard() {
             {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         </div>
+        {hasStoredKey && !keyDirty && (
+          <p className="text-xs text-muted-foreground">已有密钥，留空不会覆盖</p>
+        )}
       </label>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -240,6 +254,11 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
   const services = useServiceStore((s) => s.services);
   const loading = useServiceStore((s) => s.servicesLoading);
   const fetchServices = useServiceStore((s) => s.fetchServices);
+  const refreshServices = useServiceStore((s) => s.refreshServices);
+  const fetchBankModels = useServiceStore((s) => s.fetchBankModels);
+  const fetchCustomModels = useServiceStore((s) => s.fetchCustomModels);
+  const modelsByService = useServiceStore((s) => s.modelsByService);
+  const bankModelsLoading = useServiceStore((s) => s.bankModelsLoading);
 
   useEffect(() => { void fetchServices(); }, [fetchServices]);
 
@@ -325,12 +344,25 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
 
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl">服务商管理</h1>
-        <button
-          onClick={nav.toAudit}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors"
-        >
-          {t("nav.audit")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              await refreshServices();
+              await Promise.all([fetchBankModels(), fetchCustomModels()]);
+            }}
+            disabled={bankModelsLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50"
+          >
+            {bankModelsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={14} />}
+            {bankModelsLoading ? "检测中…" : "刷新模型列表"}
+          </button>
+          <button
+            onClick={nav.toAudit}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors"
+          >
+            {t("nav.audit")}
+          </button>
+        </div>
       </div>
 
       <CoverConfigCard />

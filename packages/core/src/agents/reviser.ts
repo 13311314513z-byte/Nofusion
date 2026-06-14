@@ -20,6 +20,8 @@ import {
   renderNarrativeSelectedContext,
   sanitizeNarrativeEvidenceBlock,
 } from "../utils/narrative-control.js";
+import { selectReviseModeFromFixScope } from "../utils/patch-boundary.js";
+import { IssueNormalizer } from "./issue-normalizer.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -58,7 +60,10 @@ function buildTieredIssueList(
   const medium: string[] = [];
 
   for (const issue of issues) {
-    const line = `- ${issue.category}: ${issue.description}`;
+    const location = issue.location
+      ? ` [P${issue.location.startParagraph}-P${issue.location.endParagraph}]`
+      : "";
+    const line = `- ${issue.category}${location}: ${issue.description}`;
     if (issue.severity === "critical") {
       critical.push(line);
     } else if (issue.severity === "warning") {
@@ -117,7 +122,7 @@ export class ReviserAgent extends BaseAgent {
     bookDir: string,
     chapterContent: string,
     chapterNumber: number,
-    issues: ReadonlyArray<AuditIssue>,
+    rawIssues: ReadonlyArray<AuditIssue>,
     mode: ReviseMode = DEFAULT_REVISE_MODE,
     genre?: string,
     options?: {
@@ -129,6 +134,10 @@ export class ReviserAgent extends BaseAgent {
       lengthSpec?: LengthSpec;
     },
   ): Promise<ReviseOutput> {
+    const hasCompleteExplicitScopes = rawIssues
+      .filter((issue) => issue.severity !== "info")
+      .every((issue) => issue.fixScope !== undefined);
+    const issues = new IssueNormalizer().normalize(rawIssues).issues;
     const [currentState, ledger, hooks, styleGuideRaw, volumeOutline, storyBible, characterMatrix, chapterSummaries, parentCanon, fanficCanon] = await Promise.all([
       // Phase 5 consolidation: derive initial state from roles + seed hooks
       // when current_state.md is still the architect seed placeholder.
@@ -213,7 +222,9 @@ export class ReviserAgent extends BaseAgent {
         })
       : characterMatrix;
 
-    const autoOutputMode = mode === "auto" ? resolveAutoOutputMode(issues) : "allow-full";
+    const autoOutputMode = mode === "auto"
+      ? resolveAutoOutputMode(issues, hasCompleteExplicitScopes)
+      : "allow-full";
     const systemPrompt = mode === "auto"
       ? this.buildAutoSystemPrompt({ langPrefix, gp, protagonistBlock, numericalRule, lengthGuardrail, resolvedLanguage, lengthSpec: options?.lengthSpec, autoOutputMode })
       : this.buildLegacySystemPrompt({ langPrefix, gp, protagonistBlock, numericalRule, lengthGuardrail, mode, resolvedLanguage });
@@ -660,11 +671,31 @@ const STRUCTURAL_PATTERNS: ReadonlyArray<RegExp> = [
   /Canon Event|正典|Mainline Canon/i,
 ];
 
-function resolveAutoOutputMode(issues: ReadonlyArray<AuditIssue>): AutoOutputMode {
+function resolveAutoOutputMode(
+  issues: ReadonlyArray<AuditIssue>,
+  useExplicitScopes = true,
+): AutoOutputMode {
   if (issues.length === 0) {
     return "allow-full";
   }
 
+  const blocking = issues.filter((issue) => issue.severity !== "info");
+  if (blocking.length > 0 && useExplicitScopes) {
+    const withFixScope = blocking.filter(
+      (issue): issue is typeof issue & {
+        fixScope: "word" | "sentence" | "paragraph" | "scene" | "chapter";
+      } => issue.fixScope !== undefined,
+    );
+    if (withFixScope.length > 0) {
+      const fixScopes = withFixScope.map((i) => i.fixScope);
+      const modeFromScope = selectReviseModeFromFixScope(fixScopes);
+      // Map spot-fix → patch-only for the reviser's AutoOutputMode type
+      if (modeFromScope === "spot-fix") return "patch-only";
+      return modeFromScope;
+    }
+  }
+
+  // Fallback: pattern-based heuristic for issues without explicit fixScope.
   const isStructural = (issue: AuditIssue): boolean => {
     const text = `${issue.category} ${issue.description}`;
     return STRUCTURAL_PATTERNS.some((pattern) => pattern.test(text));
@@ -674,9 +705,6 @@ function resolveAutoOutputMode(issues: ReadonlyArray<AuditIssue>): AutoOutputMod
     return LOCAL_ONLY_PATTERNS.some((pattern) => pattern.test(text));
   };
 
-  // Count blocking (critical + warning) structural vs local issues. Info-level
-  // findings are reviewer hints for the Polisher — they do not drive routing.
-  const blocking = issues.filter((issue) => issue.severity !== "info");
   if (blocking.length === 0) {
     return "patch-only"; // only hints / info — at most local polish
   }

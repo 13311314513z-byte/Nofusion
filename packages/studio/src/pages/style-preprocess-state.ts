@@ -84,37 +84,14 @@ export interface RemovalStats {
 }
 
 // ---------------------------------------------------------------------------
-// Types — inspection
+// Types — inspection (re-exported from shared contracts for convenience)
 // ---------------------------------------------------------------------------
 
-export type InspectionCode =
-  | "explicit-think-block"
-  | "similar-paragraphs"
-  | "repeated-phrase"
-  | "mixed-language"
-  | "encoded-data"
-  | "asr-marker"
-  | "translation-pair"
-  | "quote-block"
-  | "rp-marker"
-  | "high-whitespace"
-  | "possible-garbled-text";
-
-export interface InspectionFinding {
-  readonly code: InspectionCode;
-  readonly severity: "info" | "warning";
-  readonly count: number;
-  readonly lineNumbers?: readonly number[];
-  readonly samples: readonly string[];
-  readonly messageKey: string;
-}
-
-export interface InspectionResult {
-  readonly charCount: number;
-  readonly lineCount: number;
-  readonly paragraphCount: number;
-  readonly findings: readonly InspectionFinding[];
-}
+export type {
+  InspectionCode,
+  InspectionFinding,
+  InspectionResult,
+} from "../shared/contracts.js";
 
 // ---------------------------------------------------------------------------
 // Presets

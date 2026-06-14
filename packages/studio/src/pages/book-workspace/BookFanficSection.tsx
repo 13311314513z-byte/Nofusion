@@ -165,7 +165,7 @@ export function BookFanficSection({ bookId, nav, theme, t }: BookFanficSectionPr
               onClick={() => setActionError(null)}
               className="text-xs font-bold hover:underline"
             >
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
         )}

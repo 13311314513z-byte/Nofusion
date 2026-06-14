@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { StateManager, writeExportArtifact } from "@actalk/inkos-core";
 import { join } from "node:path";
-import { findProjectRoot, resolveBookId, log, logError } from "../utils.js";
+import { findProjectRoot, resolveBookId, log, logError, formatJsonOutput } from "../utils.js";
 
 export const exportCommand = new Command("export")
   .description("Export book chapters to a single file")
@@ -17,26 +17,26 @@ export const exportCommand = new Command("export")
       const state = new StateManager(root);
 
       const result = await writeExportArtifact(state, bookId, {
-        format: opts.format as "txt" | "md" | "epub",
+        format: opts.format as "txt" | "md" | "epub" | "html",
         approvedOnly: Boolean(opts.approvedOnly),
         outputPath: opts.output ?? join(root, `${bookId}_export.${opts.format}`),
       });
 
       if (opts.json) {
-        log(JSON.stringify({
+        log(formatJsonOutput({
           bookId,
           chaptersExported: result.chaptersExported,
           totalWords: result.totalWords,
           format: result.format,
           outputPath: result.outputPath,
-        }, null, 2));
+        }, undefined, true));
       } else {
         log(`Exported ${result.chaptersExported} chapters (${result.totalWords} words)`);
         log(`Output: ${result.outputPath}`);
       }
     } catch (e) {
       if (opts.json) {
-        log(JSON.stringify({ error: String(e) }));
+        log(formatJsonOutput(e instanceof Error ? e : new Error(String(e))));
       } else {
         logError(`Failed to export: ${e}`);
       }

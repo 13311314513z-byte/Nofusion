@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadSecrets, saveSecrets, getServiceApiKey } from "../llm/secrets.js";
+import { loadSecrets, saveSecrets, setServiceApiKey, getServiceApiKey } from "../llm/secrets.js";
 import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -54,6 +54,54 @@ describe("secrets", () => {
       const secrets = await loadSecrets(root);
       expect(secrets.services.new.apiKey).toBe("new-key");
       expect(secrets.services.old).toBeUndefined();
+    });
+  });
+
+  describe("setServiceApiKey", () => {
+    it("updates one service key without removing other services", async () => {
+      await saveSecrets(root, {
+        services: {
+          deepseek: { apiKey: "sk-deep" },
+          moonshot: { apiKey: "sk-moon-old" },
+        },
+      });
+
+      await setServiceApiKey(root, "moonshot", " sk-moon-new ");
+
+      const secrets = await loadSecrets(root);
+      expect(secrets.services).toEqual({
+        deepseek: { apiKey: "sk-deep" },
+        moonshot: { apiKey: "sk-moon-new" },
+      });
+    });
+
+    it("serializes concurrent service-key updates for the same project", async () => {
+      await Promise.all([
+        setServiceApiKey(root, "deepseek", "sk-deep"),
+        setServiceApiKey(root, "moonshot", "sk-moon"),
+      ]);
+
+      const secrets = await loadSecrets(root);
+      expect(secrets.services).toEqual({
+        deepseek: { apiKey: "sk-deep" },
+        moonshot: { apiKey: "sk-moon" },
+      });
+    });
+
+    it("removes only the requested service when the key is blank", async () => {
+      await saveSecrets(root, {
+        services: {
+          deepseek: { apiKey: "sk-deep" },
+          moonshot: { apiKey: "sk-moon" },
+        },
+      });
+
+      await setServiceApiKey(root, "moonshot", "");
+
+      const secrets = await loadSecrets(root);
+      expect(secrets.services).toEqual({
+        deepseek: { apiKey: "sk-deep" },
+      });
     });
   });
 

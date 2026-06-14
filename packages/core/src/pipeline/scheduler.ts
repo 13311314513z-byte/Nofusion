@@ -219,9 +219,14 @@ export class Scheduler {
 
     // Parallel book processing — each book gets its own lock, but
     // processBook also tracks in-flight state to avoid overlapping cycles.
-    await Promise.all(
+    const results = await Promise.allSettled(
       booksToWrite.map((book) => this.processBook(book.id, book.config)),
     );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        this.log?.error(`Book processing failed: ${result.reason}`);
+      }
+    }
   }
 
   /** Process a single book: write chaptersPerCycle chapters with retry + cooldown. */
@@ -233,29 +238,29 @@ export class Scheduler {
     this.bookInFlight.add(bookId);
     try {
       for (let i = 0; i < this.config.chaptersPerCycle; i++) {
-      if (!this.running) return;
-      if (this.isDailyCapReached()) return;
-      if (this.pausedBooks.has(bookId)) return;
+        if (!this.running) break;
+        if (this.isDailyCapReached()) break;
+        if (this.pausedBooks.has(bookId)) break;
 
-      // Cooldown between chapters (skip for the first one)
-      if (i > 0 && this.config.cooldownAfterChapterMs > 0) {
-        await this.sleep(this.config.cooldownAfterChapterMs);
-      }
+        // Cooldown between chapters (skip for the first one)
+        if (i > 0 && this.config.cooldownAfterChapterMs > 0) {
+          await this.sleep(this.config.cooldownAfterChapterMs);
+        }
 
-      const success = await this.writeOneChapter(bookId, bookConfig);
-      if (!success) {
-        // Immediate retry with delay (if within retry limit)
-        const failures = this.consecutiveFailures.get(bookId) ?? 0;
-        if (failures <= this.gates.maxAuditRetries && this.config.retryDelayMs > 0) {
-          this.log?.warn(`${bookId} retrying in ${this.config.retryDelayMs}ms`);
-          await this.sleep(this.config.retryDelayMs);
-          const retrySuccess = await this.writeOneChapter(bookId, bookConfig);
-          if (!retrySuccess) break; // Stop this book's cycle on second failure
-        } else {
-          break; // Stop this book's cycle
+        const success = await this.writeOneChapter(bookId, bookConfig);
+        if (!success) {
+          // Immediate retry with delay (if within retry limit)
+          const failures = this.consecutiveFailures.get(bookId) ?? 0;
+          if (failures <= this.gates.maxAuditRetries && this.config.retryDelayMs > 0) {
+            this.log?.warn(`${bookId} retrying in ${this.config.retryDelayMs}ms`);
+            await this.sleep(this.config.retryDelayMs);
+            const retrySuccess = await this.writeOneChapter(bookId, bookConfig);
+            if (!retrySuccess) break; // Stop this book's cycle on second failure
+          } else {
+            break; // Stop this book's cycle
+          }
         }
       }
-    }
     } finally {
       this.bookInFlight.delete(bookId);
     }
@@ -263,6 +268,7 @@ export class Scheduler {
 
   /** Write one chapter for a book. Returns true if approved. */
   private async writeOneChapter(bookId: string, bookConfig: BookConfig): Promise<boolean> {
+    let chapterNumber = 0;
     try {
       // Compute temperature override: base 0.7 + failures * step
       const failures = this.consecutiveFailures.get(bookId) ?? 0;
@@ -280,6 +286,7 @@ export class Scheduler {
         return false;
       }
 
+      chapterNumber = await this.state.getNextChapterNumber(bookId);
       const result = await this.pipeline.writeNextChapter(bookId, undefined, tempOverride);
 
       if (result.status === "ready-for-review") {
@@ -302,7 +309,7 @@ export class Scheduler {
       return false;
     } catch (e) {
       this.config.onError?.(bookId, e as Error);
-      await this.handleAuditFailure(bookId, 0);
+      await this.handleAuditFailure(bookId, chapterNumber);
       return false;
     }
   }

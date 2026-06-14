@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { findProjectRoot, log, logError, GLOBAL_ENV_PATH } from "../utils.js";
+import { findProjectRoot, log, logError, formatJsonOutput, GLOBAL_ENV_PATH } from "../utils.js";
 import { fetchWithProxy } from "@actalk/inkos-core";
 import {
   ensureNodeRuntimePinFiles,
@@ -94,7 +94,10 @@ async function fetchDoctorModels(
 export const doctorCommand = new Command("doctor")
   .description("Check environment and project health")
   .option("--repair-node-runtime", "Write .nvmrc and .node-version pinned to Node 22 for this project")
-  .action(async (opts: { repairNodeRuntime?: boolean }) => {
+  .option("--skip-connectivity", "Skip API connectivity tests (faster, avoids timeout on downed endpoints)")
+  .option("--connectivity-timeout <ms>", "Per-probe timeout in ms", "3000")
+  .option("--json", "Output JSON")
+  .action(async (opts: { repairNodeRuntime?: boolean; skipConnectivity?: boolean; connectivityTimeout?: string; json?: boolean }) => {
     const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
     const root = findProjectRoot();
 
@@ -280,7 +283,24 @@ export const doctorCommand = new Command("doctor")
           detail: `provider=${llmConfig.provider} model=${llmConfig.model} stream=${llmConfig.stream ?? true} baseUrl=${llmConfig.baseUrl}`,
         });
 
-        log("\n  [..] Testing API connectivity...");
+        if (!opts.skipConnectivity) {
+          if (!opts.json) log("\n  [..] Testing API connectivity...");
+        } else {
+          if (!opts.json) log("\n  [..] Skipping API connectivity (--skip-connectivity)");
+          checks.push({
+            name: "API Connectivity",
+            ok: false,
+            detail: "Skipped via --skip-connectivity",
+          });
+        }
+
+        if (opts.skipConnectivity) {
+          if (opts.json) {
+            log(formatJsonOutput({ checks }));
+            return;
+          }
+          if (!opts.json) return;
+        }
 
         let connected = false;
         let detectedDetail = "";
@@ -300,8 +320,20 @@ export const doctorCommand = new Command("doctor")
           ? buildDoctorProbePlans(llmConfig.apiFormat, llmConfig.stream)
           : [{ apiFormat: (llmConfig.apiFormat ?? "chat") as "chat" | "responses", stream: llmConfig.stream ?? true }];
 
+        const probeTimeout = Math.max(2000, parseInt(opts.connectivityTimeout ?? "3000", 10) || 3000);
+        // Allow up to 2 probe attempts within the total budget; leave 1s headroom for the 5s test timeout
+        const totalBudget = Math.min(probeTimeout * 2, 4500);
+        const startTime = Date.now();
+
+        // Track abort controllers so we can cancel in-flight probes when budget is exceeded
+        const probeControllers = new Set<AbortController>();
+
         for (const model of modelCandidates) {
+          if (connected || Date.now() - startTime > totalBudget) break;
           for (const plan of plans) {
+            if (connected || Date.now() - startTime > totalBudget) break;
+            // 只有剩余预算足够完成一次完整 probe 时才启动，避免 dangling fetch 拖过测试/用户预期
+            if (Date.now() - startTime + probeTimeout > totalBudget) break;
             try {
               const client = createLLMClient({
                 ...llmConfig,
@@ -309,9 +341,24 @@ export const doctorCommand = new Command("doctor")
                 apiFormat: plan.apiFormat,
                 stream: plan.stream,
               });
-              const response = await chatCompletion(client, model, [
+              const controller = new AbortController();
+              probeControllers.add(controller);
+              const probePromise = chatCompletion(client, model, [
                 { role: "user", content: "Say OK" },
-              ], { maxTokens: 16 });
+              ], { maxTokens: 16, signal: controller.signal });
+              let probeTimer: NodeJS.Timeout | undefined;
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                probeTimer = setTimeout(() => {
+                  controller.abort();
+                  reject(new Error(`Probe timed out after ${probeTimeout}ms`));
+                }, probeTimeout);
+              });
+              const response = await Promise.race([probePromise, timeoutPromise]);
+              clearTimeout(probeTimer);
+              // Prevent the abandoned probe Promise from surfacing as unhandled rejection
+              probePromise.catch(() => {});
+              // Cancel all pending probes since we got a success
+              for (const c of probeControllers) c.abort();
 
               connected = true;
               detectedDetail = `OK (model: ${model}, apiFormat=${plan.apiFormat}, stream=${plan.stream}, tokens: ${response.usage.totalTokens})`;
@@ -324,6 +371,9 @@ export const doctorCommand = new Command("doctor")
             break;
           }
         }
+
+        // Cancel any lingering probes after the budget is exhausted
+        for (const c of probeControllers) c.abort();
 
         checks.push({
           name: "API Connectivity",
@@ -376,6 +426,11 @@ export const doctorCommand = new Command("doctor")
     }
 
     // Output
+    if (opts.json) {
+      log(formatJsonOutput({ checks }));
+      return;
+    }
+
     log("\nInkOS Doctor\n");
     for (const check of checks) {
       const icon = check.ok ? "[OK]" : "[!!]";

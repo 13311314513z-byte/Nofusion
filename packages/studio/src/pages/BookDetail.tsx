@@ -100,7 +100,7 @@ interface RolesData {
 
 type ReviseMode = "spot-fix" | "polish" | "rewrite" | "rework" | "anti-detect";
 type ExportFormat = "txt" | "md" | "epub";
-type BookStatus = "active" | "paused" | "outlining" | "completed" | "dropped";
+type BookStatus = "incubating" | "active" | "paused" | "outlining" | "completed" | "dropped";
 
 interface Nav {
   toDashboard: () => void;
@@ -161,9 +161,15 @@ export function BookDetail({
   const [revisingChapters, setRevisingChapters] = useState<ReadonlyArray<number>>([]);
   const [syncingChapters, setSyncingChapters] = useState<ReadonlyArray<number>>([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [pendingChapterActions, setPendingChapterActions] = useState<ReadonlyArray<number>>([]);
   const [settingsWordCount, setSettingsWordCount] = useState<number | null>(null);
   const [settingsTargetChapters, setSettingsTargetChapters] = useState<number | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<BookStatus | null>(null);
+  const [settingsVolumeCount, setSettingsVolumeCount] = useState<number | null>(null);
+  const [settingsCurrentVolume, setSettingsCurrentVolume] = useState<number | null>(null);
+  const [settingsKeywords, setSettingsKeywords] = useState<string | null>(null);
+  const [settingsTargetAudience, setSettingsTargetAudience] = useState<string | null>(null);
+  const [settingsSerializationStatus, setSettingsSerializationStatus] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("txt");
   const [exportApprovedOnly, setExportApprovedOnly] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
@@ -384,6 +390,11 @@ export function BookDetail({
       if (settingsWordCount !== null) body.chapterWordCount = settingsWordCount;
       if (settingsTargetChapters !== null) body.targetChapters = settingsTargetChapters;
       if (settingsStatus !== null) body.status = settingsStatus;
+      if (settingsVolumeCount !== null) body.volumeCount = settingsVolumeCount;
+      if (settingsCurrentVolume !== null) body.currentVolume = settingsCurrentVolume;
+      if (settingsKeywords !== null) body.keywords = settingsKeywords.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+      if (settingsTargetAudience !== null) body.targetAudience = settingsTargetAudience;
+      if (settingsSerializationStatus !== null) body.serializationStatus = settingsSerializationStatus;
       await fetchJson(`/books/${bookId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -564,6 +575,11 @@ export function BookDetail({
   const currentWordCount = settingsWordCount ?? book.chapterWordCount;
   const currentTargetChapters = settingsTargetChapters ?? book.targetChapters ?? 0;
   const currentStatus = settingsStatus ?? (book.status as BookStatus);
+  const currentVolumeCount = settingsVolumeCount ?? book.volumeCount ?? null;
+  const currentCurrentVolume = settingsCurrentVolume ?? book.currentVolume ?? null;
+  const currentKeywords = settingsKeywords ?? book.keywords?.join(", ") ?? "";
+  const currentTargetAudience = settingsTargetAudience ?? book.targetAudience ?? "";
+  const currentSerializationStatus = settingsSerializationStatus ?? book.serializationStatus ?? "";
   const roles = rolesData?.roles ?? [];
   const majorRoleCount = roles.filter((role) => role.roleTier === "major").length;
   const minorRoleCount = roles.filter((role) => role.roleTier === "minor").length;
@@ -772,11 +788,64 @@ export function BookDetail({
               onChange={(e) => setSettingsStatus(e.target.value as BookStatus)}
               className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50"
             >
+              <option value="incubating">{t("book.statusIncubating")}</option>
               <option value="active">{t("book.statusActive")}</option>
               <option value="paused">{t("book.statusPaused")}</option>
               <option value="outlining">{t("book.statusOutlining")}</option>
               <option value="completed">{t("book.statusCompleted")}</option>
               <option value="dropped">{t("book.statusDropped")}</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.volumeCount")}</label>
+            <input
+              type="number"
+              min={1}
+              value={currentVolumeCount ?? ""}
+              onChange={(e) => setSettingsVolumeCount(e.target.value ? Number(e.target.value) : null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.currentVolume")}</label>
+            <input
+              type="number"
+              min={1}
+              value={currentCurrentVolume ?? ""}
+              onChange={(e) => setSettingsCurrentVolume(e.target.value ? Number(e.target.value) : null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.keywords")}</label>
+            <input
+              value={currentKeywords}
+              onChange={(e) => setSettingsKeywords(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-40"
+              placeholder="悬疑, 商战"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.targetAudience")}</label>
+            <input
+              value={currentTargetAudience}
+              onChange={(e) => setSettingsTargetAudience(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-36"
+              placeholder="悬疑推理爱好者"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("book.serializationStatus")}</label>
+            <select
+              value={currentSerializationStatus}
+              onChange={(e) => setSettingsSerializationStatus(e.target.value || null)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50"
+            >
+              <option value="">{t("common.notSet")}</option>
+              <option value="draft">{t("book.statusDraft")}</option>
+              <option value="serializing">{t("book.serializing")}</option>
+              <option value="completed">{t("book.statusCompleted")}</option>
+              <option value="hiatus">{t("book.hiatus")}</option>
             </select>
           </div>
           <button
@@ -1028,20 +1097,28 @@ export function BookDetail({
                         <>
                           <button
                             onClick={async () => {
+                              if (pendingChapterActions.includes(ch.number)) return;
+                              setPendingChapterActions((prev) => [...prev, ch.number]);
                               try { await postApi(`/books/${bookId}/chapters/${ch.number}/approve`); refetch(); }
                               catch (e) { alert(e instanceof Error ? e.message : "Approve failed"); }
+                              finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                             }}
-                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                            disabled={pendingChapterActions.includes(ch.number)}
+                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm disabled:opacity-30"
                             title={t("book.approve")}
                           >
                             <Check size={14} />
                           </button>
                           <button
                             onClick={async () => {
+                              if (pendingChapterActions.includes(ch.number)) return;
+                              setPendingChapterActions((prev) => [...prev, ch.number]);
                               try { await postApi(`/books/${bookId}/chapters/${ch.number}/reject`); refetch(); }
                               catch (e) { alert(e instanceof Error ? e.message : "Reject failed"); }
+                              finally { setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number)); }
                             }}
-                            className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
+                            disabled={pendingChapterActions.includes(ch.number)}
+                            className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm disabled:opacity-30"
                             title={t("book.reject")}
                           >
                             <X size={14} />
@@ -1050,15 +1127,20 @@ export function BookDetail({
                       )}
                       <button
                         onClick={async () => {
+                          if (pendingChapterActions.includes(ch.number)) return;
+                          setPendingChapterActions((prev) => [...prev, ch.number]);
                           try {
                             const auditResult = await fetchJson<{ passed?: boolean; issues?: unknown[] }>(`/books/${bookId}/audit/${ch.number}`, { method: "POST" });
                             alert(auditResult.passed ? "Audit passed" : `Audit failed: ${auditResult.issues?.length ?? 0} issues`);
                             refetch();
                           } catch (e) {
                             alert(e instanceof Error ? e.message : "Audit failed");
+                          } finally {
+                            setPendingChapterActions((prev) => prev.filter((n) => n !== ch.number));
                           }
                         }}
-                        className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm"
+                        disabled={pendingChapterActions.includes(ch.number)}
+                        className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shadow-sm disabled:opacity-50"
                         title={t("book.audit")}
                       >
                         <ShieldCheck size={14} />

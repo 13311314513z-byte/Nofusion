@@ -11,7 +11,9 @@ export type BookSection =
   | "export"
   | "goals"
   | "fanfic"
-  | "runtime";
+  | "runtime"
+  | "sources"
+  | "settings";
 
 export const BOOK_SECTIONS: BookSection[] = [
   "overview",
@@ -27,6 +29,8 @@ export const BOOK_SECTIONS: BookSection[] = [
   "export",
   "fanfic",
   "runtime",
+  "sources",
+  "settings",
 ];
 
 export function isBookSection(value: string): value is BookSection {

@@ -1,14 +1,18 @@
-import { readFile, writeFile, mkdir, readdir, rm, stat, unlink, open } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, rm, stat, unlink, open, rename } from "node:fs/promises";
 import { join } from "node:path";
 import type { BookConfig } from "../models/book.js";
 import type { ChapterMeta } from "../models/chapter.js";
 import { bootstrapStructuredStateFromMarkdown, resolveDurableStoryProgress } from "./state-bootstrap.js";
 
 export class StateManager {
+  private readonly projectRoot: string;
+
   /** Books actively being written by this process — used for same-process stale lock detection. */
   private readonly activeWrites = new Set<string>();
 
-  constructor(private readonly projectRoot: string) {}
+  constructor(projectRoot: string) {
+    this.projectRoot = projectRoot;
+  }
 
   private static defaultAuthorIntent(language: "zh" | "en"): string {
     return language === "zh"
@@ -27,34 +31,22 @@ export class StateManager {
     await this.ensureControlDocumentsAt(this.bookDir(bookId), language, authorIntent);
   }
 
-  async ensureControlDocumentsAt(
-    bookDir: string,
-    language: "zh" | "en",
-    authorIntent?: string,
-  ): Promise<void> {
+  async ensureControlDocumentsAt(bookDir: string, language: "zh" | "en", authorIntent?: string): Promise<void> {
     const storyDir = join(bookDir, "story");
     const runtimeDir = join(storyDir, "runtime");
     const outlineDir = join(storyDir, "outline");
     const rolesMajorDir = join(storyDir, "roles", "主要角色");
     const rolesMinorDir = join(storyDir, "roles", "次要角色");
-
     await mkdir(storyDir, { recursive: true });
     await mkdir(runtimeDir, { recursive: true });
     await mkdir(outlineDir, { recursive: true });
     await mkdir(rolesMajorDir, { recursive: true });
     await mkdir(rolesMinorDir, { recursive: true });
-
     await this.writeIfMissing(
       join(storyDir, "author_intent.md"),
-      authorIntent?.trim()
-        ? authorIntent.trimEnd() + "\n"
-        : StateManager.defaultAuthorIntent(language),
+      authorIntent?.trim() ? authorIntent.trimEnd() + "\n" : StateManager.defaultAuthorIntent(language),
     );
-
-    await this.writeIfMissing(
-      join(storyDir, "current_focus.md"),
-      StateManager.defaultCurrentFocus(language),
-    );
+    await this.writeIfMissing(join(storyDir, "current_focus.md"), StateManager.defaultCurrentFocus(language));
 
     // Ensure style_guide includes writing methodology even without reference text
     const styleGuidePath = join(storyDir, "style_guide.md");
@@ -70,20 +62,14 @@ export class StateManager {
     }
   }
 
-  async loadControlDocuments(bookId: string): Promise<{
-    authorIntent: string;
-    currentFocus: string;
-    runtimeDir: string;
-  }> {
+  async loadControlDocuments(bookId: string): Promise<{ authorIntent: string; currentFocus: string; runtimeDir: string }> {
     await this.ensureControlDocuments(bookId);
-
     const storyDir = join(this.bookDir(bookId), "story");
     const runtimeDir = join(storyDir, "runtime");
     const [authorIntent, currentFocus] = await Promise.all([
       readFile(join(storyDir, "author_intent.md"), "utf-8"),
       readFile(join(storyDir, "current_focus.md"), "utf-8"),
     ]);
-
     return { authorIntent, currentFocus, runtimeDir };
   }
 
@@ -106,41 +92,70 @@ export class StateManager {
     }
     await mkdir(this.bookDir(bookId), { recursive: true });
     const lockPath = join(this.bookDir(bookId), ".write.lock");
+    const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const tmpLockPath = join(this.bookDir(bookId), `.write.lock.${nonce}`);
+    const lockContent = `pid:${process.pid} ts:${Date.now()} nonce:${nonce}`;
     try {
-      const handle = await open(lockPath, "wx");
+      const handle = await open(tmpLockPath, "wx");
       try {
-        await handle.writeFile(`pid:${process.pid} ts:${Date.now()}`, "utf-8");
+        await handle.writeFile(lockContent, "utf-8");
       } catch (error) {
         await handle.close().catch(() => undefined);
-        await unlink(lockPath).catch(() => undefined);
+        await unlink(tmpLockPath).catch(() => undefined);
         throw error;
       }
       await handle.close();
     } catch (e) {
-      const code = (e as NodeJS.ErrnoException | undefined)?.code;
-      if (code === "EEXIST") {
-        const lockData = await readFile(lockPath, "utf-8").catch(() => "pid:unknown ts:unknown");
+      await unlink(tmpLockPath).catch(() => undefined);
+      throw e;
+    }
+
+    try {
+      const lockHandle = await open(lockPath, "wx");
+      await lockHandle.close();
+      try {
+        await rename(tmpLockPath, lockPath);
+      } catch (renameErr) {
+        await unlink(lockPath).catch(() => undefined);
+        await unlink(tmpLockPath).catch(() => undefined);
+        throw renameErr;
+      }
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException)?.code;
+      if (code === "EEXIST" || code === "EPERM") {
+        const lockData = await readFile(lockPath, "utf-8").catch(() => "pid:unknown ts:unknown nonce:unknown");
         const lockPid = this.extractLockPid(lockData);
         const isStale =
           (lockPid !== undefined && !this.isProcessAlive(lockPid)) ||
           (lockPid === process.pid && !this.activeWrites.has(bookId));
         if (isStale) {
+          // Re-read lock to verify (TOCTOU check)
+          const currentLockData = await readFile(lockPath, "utf-8").catch(() => null);
+          if (currentLockData !== lockData) {
+            // Lock was changed by another process since we read it — clean up temp and retry
+            await unlink(tmpLockPath).catch(() => undefined);
+            return this.acquireBookLock(bookId);
+          }
           try {
             await unlink(lockPath);
           } catch (unlinkErr) {
+            await unlink(tmpLockPath).catch(() => undefined);
             console.error(`[lock] Failed to remove stale lock for "${bookId}": ${unlinkErr}`);
             throw new Error(
               `Could not remove stale lock file at ${lockPath}. Check file permissions or disk space. ` +
-              `Lock data: ${lockData}`,
+                `Lock data: ${lockData}`,
             );
           }
+          await unlink(tmpLockPath).catch(() => undefined);
           return this.acquireBookLock(bookId);
         }
+        await unlink(tmpLockPath).catch(() => undefined);
         throw new Error(
           `Book "${bookId}" is locked by another process (${lockData}). ` +
             `If this is stale, delete ${lockPath}`,
         );
       }
+      await unlink(tmpLockPath).catch(() => undefined);
       throw e;
     }
     this.activeWrites.add(bookId);
@@ -153,7 +168,9 @@ export class StateManager {
         const msg = unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr);
         // Use console.warn as fallback when logger is not available
         try {
-          console.warn(`[lock] Failed to remove lock file ${lockPath}: ${msg}. Manual cleanup may be required if the owning process exits.`);
+          console.warn(
+            `[lock] Failed to remove lock file ${lockPath}: ${msg}. Manual cleanup may be required if the owning process exits.`,
+          );
         } catch {
           console.warn(`[lock] Failed to remove lock file ${lockPath}: ${msg}`);
         }
@@ -173,10 +190,11 @@ export class StateManager {
       process.kill(pid, 0);
       return true;
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code === "ESRCH") {
-        return false;
-      }
+      const code = (error as NodeJS.ErrnoException)?.code;
+      // ESRCH: 进程确知不存在，安全返回 false。
+      // EACCES: 进程存在但当前进程无权限探测（常见于 Windows 或跨用户场景），
+      // 不能据此判定进程已死——保守视为存活，避免误删仍存活进程持有的锁。
+      if (code === "ESRCH") return false;
       return true;
     }
   }
@@ -196,7 +214,7 @@ export class StateManager {
   async loadProjectConfig(): Promise<Record<string, unknown>> {
     const configPath = join(this.projectRoot, "inkos.json");
     const raw = await readFile(configPath, "utf-8");
-    return JSON.parse(raw);
+    return JSON.parse(raw) as Record<string, unknown>;
   }
 
   async saveProjectConfig(config: Record<string, unknown>): Promise<void> {
@@ -219,11 +237,7 @@ export class StateManager {
 
   async saveBookConfigAt(bookDir: string, config: BookConfig): Promise<void> {
     await mkdir(bookDir, { recursive: true });
-    await writeFile(
-      join(bookDir, "book.json"),
-      JSON.stringify(config, null, 2),
-      "utf-8",
-    );
+    await writeFile(join(bookDir, "book.json"), JSON.stringify(config, null, 2), "utf-8");
   }
 
   async ensureRuntimeState(bookId: string, fallbackChapter = 0): Promise<void> {
@@ -272,7 +286,6 @@ export class StateManager {
   async getPersistedChapterCount(bookId: string): Promise<number> {
     const chaptersDir = join(this.bookDir(bookId), "chapters");
     const chapterNumbers = new Set<number>();
-
     try {
       const files = await readdir(chaptersDir);
       for (const file of files) {
@@ -283,7 +296,6 @@ export class StateManager {
     } catch {
       return 0;
     }
-
     return chapterNumbers.size;
   }
 
@@ -291,30 +303,38 @@ export class StateManager {
     const indexPath = join(this.bookDir(bookId), "chapters", "index.json");
     try {
       const raw = await readFile(indexPath, "utf-8");
-      return JSON.parse(raw);
+      return JSON.parse(raw) as ReadonlyArray<ChapterMeta>;
     } catch {
       return [];
     }
   }
 
-  async saveChapterIndex(
-    bookId: string,
-    index: ReadonlyArray<ChapterMeta>,
-  ): Promise<void> {
+  /**
+   * Strict variant of loadChapterIndex — throws on read/parse errors instead
+   * of silently returning []. Used by Analytics and Health endpoints where
+   * silent degradation would mask data corruption.
+   */
+  async loadChapterIndexStrict(bookId: string): Promise<ReadonlyArray<ChapterMeta>> {
+    const indexPath = join(this.bookDir(bookId), "chapters", "index.json");
+    const raw = await readFile(indexPath, "utf-8");
+    if (!raw.trim()) {
+      throw new Error(`Chapter index is empty for book "${bookId}"`);
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Chapter index is not an array for book "${bookId}"`);
+    }
+    return parsed as ReadonlyArray<ChapterMeta>;
+  }
+
+  async saveChapterIndex(bookId: string, index: ReadonlyArray<ChapterMeta>): Promise<void> {
     await this.saveChapterIndexAt(this.bookDir(bookId), index);
   }
 
-  async saveChapterIndexAt(
-    bookDir: string,
-    index: ReadonlyArray<ChapterMeta>,
-  ): Promise<void> {
+  async saveChapterIndexAt(bookDir: string, index: ReadonlyArray<ChapterMeta>): Promise<void> {
     const chaptersDir = join(bookDir, "chapters");
     await mkdir(chaptersDir, { recursive: true });
-    await writeFile(
-      join(chaptersDir, "index.json"),
-      JSON.stringify(index, null, 2),
-      "utf-8",
-    );
+    await writeFile(join(chaptersDir, "index.json"), JSON.stringify(index, null, 2), "utf-8");
   }
 
   async snapshotState(bookId: string, chapterNumber: number): Promise<void> {
@@ -325,10 +345,14 @@ export class StateManager {
     const storyDir = join(bookDir, "story");
     const snapshotDir = join(storyDir, "snapshots", String(chapterNumber));
     await mkdir(snapshotDir, { recursive: true });
-
     const files = [
-      "current_state.md", "particle_ledger.md", "pending_hooks.md",
-      "chapter_summaries.md", "subplot_board.md", "emotional_arcs.md", "character_matrix.md",
+      "current_state.md",
+      "particle_ledger.md",
+      "pending_hooks.md",
+      "chapter_summaries.md",
+      "subplot_board.md",
+      "emotional_arcs.md",
+      "character_matrix.md",
     ];
     await Promise.all(
       files.map(async (f) => {
@@ -340,7 +364,6 @@ export class StateManager {
         }
       }),
     );
-
     const stateDir = join(bookDir, "story", "state");
     const snapshotStateDir = join(snapshotDir, "state");
     try {
@@ -369,20 +392,12 @@ export class StateManager {
       join(bookDir, "story", "pending_hooks.md"),
       join(bookDir, "chapters", "index.json"),
     ];
-
-    const eitherOr: Array<ReadonlyArray<string>> = [
+    const eitherOr = [
       // story_frame (new) OR story_bible (legacy)
-      [
-        join(bookDir, "story", "outline", "story_frame.md"),
-        join(bookDir, "story", "story_bible.md"),
-      ],
+      [join(bookDir, "story", "outline", "story_frame.md"), join(bookDir, "story", "story_bible.md")],
       // volume_map (new) OR volume_outline (legacy)
-      [
-        join(bookDir, "story", "outline", "volume_map.md"),
-        join(bookDir, "story", "volume_outline.md"),
-      ],
+      [join(bookDir, "story", "outline", "volume_map.md"), join(bookDir, "story", "volume_outline.md")],
     ];
-
     for (const requiredPath of requiredSingle) {
       try {
         await stat(requiredPath);
@@ -390,7 +405,6 @@ export class StateManager {
         return false;
       }
     }
-
     for (const alternatives of eitherOr) {
       let found = false;
       for (const candidate of alternatives) {
@@ -404,17 +418,20 @@ export class StateManager {
       }
       if (!found) return false;
     }
-
     return true;
   }
 
   async restoreState(bookId: string, chapterNumber: number): Promise<boolean> {
     const storyDir = join(this.bookDir(bookId), "story");
     const snapshotDir = join(storyDir, "snapshots", String(chapterNumber));
-
     const files = [
-      "current_state.md", "particle_ledger.md", "pending_hooks.md",
-      "chapter_summaries.md", "subplot_board.md", "emotional_arcs.md", "character_matrix.md",
+      "current_state.md",
+      "particle_ledger.md",
+      "pending_hooks.md",
+      "chapter_summaries.md",
+      "subplot_board.md",
+      "emotional_arcs.md",
+      "character_matrix.md",
     ];
     try {
       // current_state.md and pending_hooks.md are required;
@@ -422,14 +439,12 @@ export class StateManager {
       // the rest are optional (may not exist in older snapshots)
       const requiredFiles = ["current_state.md", "pending_hooks.md"];
       const optionalFiles = files.filter((f) => !requiredFiles.includes(f));
-
       await Promise.all(
         requiredFiles.map(async (f) => {
           const content = await readFile(join(snapshotDir, f), "utf-8");
           await writeFile(join(storyDir, f), content, "utf-8");
         }),
       );
-
       await Promise.all(
         optionalFiles.map(async (f) => {
           const targetPath = join(storyDir, f);
@@ -441,7 +456,6 @@ export class StateManager {
           }
         }),
       );
-
       const stateDir = this.stateDir(bookId);
       let restoredStructuredState = false;
       try {
@@ -463,7 +477,6 @@ export class StateManager {
       if (!restoredStructuredState) {
         await rm(stateDir, { recursive: true, force: true });
       }
-
       return true;
     } catch {
       return false;
@@ -477,22 +490,16 @@ export class StateManager {
    *
    * Returns the list of chapter numbers that were discarded.
    */
-  async rollbackToChapter(
-    bookId: string,
-    targetChapter: number,
-  ): Promise<ReadonlyArray<number>> {
+  async rollbackToChapter(bookId: string, targetChapter: number): Promise<ReadonlyArray<number>> {
     const restored = await this.restoreState(bookId, targetChapter);
     if (!restored) {
       throw new Error(`Cannot restore snapshot for chapter ${targetChapter} in "${bookId}"`);
     }
-
     const bookDir = this.bookDir(bookId);
     const chaptersDir = join(bookDir, "chapters");
     const index = await this.loadChapterIndex(bookId);
-
     const kept: ChapterMeta[] = [];
     const discarded: number[] = [];
-
     for (const entry of index) {
       if (entry.number <= targetChapter) {
         kept.push(entry);
@@ -500,7 +507,6 @@ export class StateManager {
         discarded.push(entry.number);
       }
     }
-
     // Delete chapter markdown files for discarded chapters
     try {
       const files = await readdir(chaptersDir);
@@ -509,13 +515,14 @@ export class StateManager {
         if (!match) continue;
         const num = parseInt(match[1]!, 10);
         if (num > targetChapter) {
-          await unlink(join(chaptersDir, file)).catch(() => {});
+          await unlink(join(chaptersDir, file)).catch(() => {
+            /* ignore */
+          });
         }
       }
     } catch {
       // chapters directory missing
     }
-
     // Delete snapshots for discarded chapters
     const snapshotsDir = join(bookDir, "story", "snapshots");
     try {
@@ -529,7 +536,6 @@ export class StateManager {
     } catch {
       // snapshots directory missing
     }
-
     // Delete runtime artifacts for discarded chapters
     const runtimeDir = join(bookDir, "story", "runtime");
     try {
@@ -539,13 +545,14 @@ export class StateManager {
         if (!match) continue;
         const num = parseInt(match[1]!, 10);
         if (num > targetChapter) {
-          await unlink(join(runtimeDir, file)).catch(() => {});
+          await unlink(join(runtimeDir, file)).catch(() => {
+            /* ignore */
+          });
         }
       }
     } catch {
       // runtime directory missing
     }
-
     // Also check story/drafts/ for discarded chapter files
     const draftsDir = join(bookDir, "story", "drafts");
     try {
@@ -555,13 +562,14 @@ export class StateManager {
         if (!match) continue;
         const num = parseInt(match[1]!, 10);
         if (num > targetChapter) {
-          await unlink(join(draftsDir, file)).catch(() => {});
+          await unlink(join(draftsDir, file)).catch(() => {
+            /* ignore */
+          });
         }
       }
     } catch {
       // drafts directory missing
     }
-
     // Drop any persisted sqlite acceleration index so discarded chapters
     // cannot leak back into retrieval after the markdown/state rollback.
     await Promise.all([
@@ -569,7 +577,6 @@ export class StateManager {
       rm(join(bookDir, "story", "memory.db-shm"), { force: true }),
       rm(join(bookDir, "story", "memory.db-wal"), { force: true }),
     ]);
-
     await this.saveChapterIndex(bookId, kept);
     return discarded;
   }

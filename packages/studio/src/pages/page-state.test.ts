@@ -12,7 +12,7 @@ import {
   pickValidValue,
   resolveDraftInstruction,
   waitForBookReady,
-} from "./BookCreate";
+} from "./book-create-utils";
 
 describe("pickValidValue", () => {
   it("keeps the current value when it is still available", () => {
@@ -50,6 +50,11 @@ describe("book create form", () => {
       targetChapters: "200",
       chapterWordCount: "3000",
       brief: "",
+      targetAudience: "",
+      keywords: "",
+      serializationStatus: "",
+      volumeCount: "",
+      currentVolume: "",
     });
   });
 
@@ -75,6 +80,11 @@ describe("book create form", () => {
       targetChapters: "120",
       chapterWordCount: "2600",
       brief: " 主角查账洗白，旧案回潮。 ",
+      volumeCount: "",
+      currentVolume: "",
+      keywords: "",
+      targetAudience: "",
+      serializationStatus: "",
     }, "zh")).toEqual({
       title: "夜港账本",
       genre: "都市悬疑",
@@ -141,7 +151,7 @@ describe("waitForBookReady", () => {
       fetchBook: async () => {
         throw new Error("Book not found");
       },
-      fetchStatus: async () => ({ status: "error", error: "INKOS_LLM_API_KEY not set" }),
+      fetchStatus: async () => ({ status: "failed", error: "INKOS_LLM_API_KEY not set" }),
       delayMs: 0,
       waitImpl: async () => undefined,
     })).rejects.toThrow("INKOS_LLM_API_KEY not set");

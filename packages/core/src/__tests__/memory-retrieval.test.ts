@@ -284,6 +284,7 @@ describe("retrieveMemorySelection", () => {
           throw new Error("sqlite unavailable");
         }
       },
+      tryCreateMemoryDB: () => null,
     }));
     const { retrieveMemorySelection: retrieveFallback } = await import("../utils/memory-retrieval.js");
 
@@ -353,6 +354,7 @@ describe("retrieveMemorySelection", () => {
           throw new Error("sqlite unavailable");
         }
       },
+      tryCreateMemoryDB: () => null,
     }));
     const { retrieveMemorySelection: retrieveFallback } = await import("../utils/memory-retrieval.js");
 

@@ -251,7 +251,7 @@ export async function runAgentLoop(
 | plan_chapter | 先生成 chapter intent，确认本章目标/冲突/优先级 |
 | compose_chapter | 再生成 runtime context/rule stack，确认实际输入 |
 | write_draft | 写【下一章】草稿（只能续写最新章之后，不能补历史章） |
-| audit_chapter | 审计章节（32维度，按题材条件启用，含AI痕迹+敏感词检测） |
+| audit_chapter | 审计章节（按题材条件启用，含 AI 痕迹与结构一致性检测） |
 | revise_chapter | 修订章节文字质量（不能补空章/改章号，五种模式） |
 | update_author_intent | 更新书级长期意图 author_intent.md |
 | update_current_focus | 更新当前关注点 current_focus.md |
@@ -480,7 +480,8 @@ export async function executeAgentTool(
         bookIds.map(async (id) => {
           try {
             return await pipeline.getBookStatus(id);
-          } catch {
+          } catch (e) {
+            console.warn(`[agent] Failed to get book status for ${id}: ${e instanceof Error ? e.message : String(e)}`);
             return { bookId: id, error: "failed to load" };
           }
         }),

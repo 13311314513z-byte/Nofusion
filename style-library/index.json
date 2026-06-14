@@ -1,3 +1,25 @@
 {
-  "authors": []
+  "authors": [
+    {
+      "id": "9999",
+      "name": "学习卡测试风格",
+      "language": "zh",
+      "tags": [
+        "学习卡"
+      ],
+      "sourceCount": 2,
+      "updatedAt": "2026-06-08T17:26:24.772Z"
+    },
+    {
+      "id": "test-author-belt",
+      "name": "测试作者腰带",
+      "language": "zh",
+      "tags": [
+        "测试",
+        "历史"
+      ],
+      "sourceCount": 1,
+      "updatedAt": "2026-06-08T14:53:40.297Z"
+    }
+  ]
 }
