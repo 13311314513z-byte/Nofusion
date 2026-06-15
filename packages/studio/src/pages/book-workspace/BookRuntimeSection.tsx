@@ -46,6 +46,7 @@ const TYPE_ORDER = [
   "plan",
   "context",
   "trace",
+  "rule-stack",
   "memo",
   "delta",
   "unknown",
@@ -400,6 +401,8 @@ export function BookRuntimeSection({
                     <ContextTracePanel content={fileContent} />
                   ) : selectedType === "trace" || selectedFile?.endsWith(".trace.json") ? (
                     <TraceFlowChart content={fileContent} />
+                  ) : selectedType === "rule-stack" || selectedFile?.endsWith(".rule-stack.yaml") || selectedFile?.endsWith(".rule-stack.yml") ? (
+                    <RuleStackView content={fileContent} />
                   ) : (
                     <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
                       {fileContent}
@@ -582,4 +585,57 @@ function TraceFlowChart({ content }: { content: string }) {
   } catch {
     return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
   }
+}
+
+/** Render rule-stack.yaml as structured rule cards with category/scope tags. */
+function RuleStackView({ content }: { content: string }) {
+  const rules: Array<{ key: string; value: string }> = [];
+  const docs = content.split(/^---$/m).filter(d => d.trim());
+  for (const doc of docs) {
+    const lines = doc.trim().split("\n");
+    const ruleKey = lines[0]?.replace(/^#\s*/, "").replace(/:\s*$/, "").trim() ?? "";
+    const val = lines.slice(1).join("\n").trim();
+    if (ruleKey) rules.push({ key: ruleKey, value: val });
+  }
+  if (rules.length === 0) {
+    let ck = ""; let cv = "";
+    for (const line of content.split("\n")) {
+      const m = line.match(/^([\w_-]+)\s*:\s*(.*)/);
+      if (m && !line.startsWith(" ")) { if (ck) rules.push({ key: ck, value: cv.trim() }); ck = m[1]; cv = m[2]; }
+      else if (ck) cv += "\n" + line;
+    }
+    if (ck) rules.push({ key: ck, value: cv.trim() });
+  }
+  const categorize = (k: string): { cat: string; sc: string } => {
+    if (/character|voice/i.test(k)) return { cat: "角色", sc: "per-char" };
+    if (/scene|location/i.test(k)) return { cat: "场景", sc: "per-scene" };
+    if (/plot|narrative/i.test(k)) return { cat: "剧情", sc: "global" };
+    if (/style|prose/i.test(k)) return { cat: "文风", sc: "global" };
+    if (/world|setting/i.test(k)) return { cat: "世界观", sc: "global" };
+    if (/hook|foreshadow/i.test(k)) return { cat: "伏笔", sc: "global" };
+    return { cat: "其他", sc: "global" };
+  };
+  if (rules.length === 0) return <p className="text-sm text-muted-foreground p-4">规则栈为空</p>;
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground uppercase tracking-wider">规则栈 ({rules.length} 条规则)</div>
+      <div className="grid gap-3">
+        {rules.map((rule, i) => {
+          const { cat, sc } = categorize(rule.key);
+          return (
+            <div key={i} className="border border-border/30 rounded-lg p-4 bg-card/40">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-violet-600 dark:text-violet-400 font-mono">{rule.key}</h4>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400">{cat}</span>
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-secondary/20 text-muted-foreground">{sc}</span>
+                </div>
+              </div>
+              <pre className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">{rule.value.slice(0, 1000)}{rule.value.length > 1000 ? "…" : ""}</pre>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

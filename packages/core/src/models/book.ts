@@ -70,6 +70,25 @@ export const BookConfigSchema = z.object({
   keywords: z.array(z.string()).optional(),
   targetAudience: z.string().optional(),
   serializationStatus: z.enum(["draft", "serializing", "completed", "hiatus"]).optional(),
+  // ── Extended fields (P1-1) ──────────────────────────────
+  /** Reference to the style profile (authorId) applied to this book. */
+  styleProfileId: z.string().optional(),
+  /** Whether to auto-apply style adjustments on each chapter. */
+  autoStyleAdjust: z.boolean().optional(),
+  /** Default narrative control mode for Writer prompts. */
+  narrativeMode: z.enum(["strict", "guided", "loose"]).optional(),
+  /** Per-agent model overrides (agent name → model string). */
+  pipelineModels: z.record(z.string(), z.string()).optional(),
+  /** The book's creative vision / soul description. */
+  bookSoul: z.string().optional(),
+  /** Target total word count (for completion tracking). */
+  targetWordCount: z.number().int().positive().optional(),
+  /** Whether to auto-approve chapters that pass audit. */
+  autoApprove: z.boolean().optional(),
+  /** Allow concurrent chapter generation. */
+  concurrentGeneration: z.boolean().optional(),
+  /** Maximum concurrent chapters. */
+  maxConcurrency: z.number().int().min(1).max(4).optional(),
 });
 
 export type BookConfig = z.infer<typeof BookConfigSchema>;

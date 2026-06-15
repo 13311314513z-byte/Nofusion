@@ -20,6 +20,9 @@ import { BookFanficSection } from "./BookFanficSection";
 import { BookRuntimeSection } from "./BookRuntimeSection";
 import { BookSourceSection } from "./BookSourceSection";
 import { BookIntentsSection } from "./BookIntentsSection";
+import { BookEventChainSection } from "./BookEventChainSection";
+import { BookSceneTemplatesSection } from "./BookSceneTemplatesSection";
+import { BookVoiceProfilesSection } from "./BookVoiceProfilesSection";
 
 interface NavLike {
   readonly toDashboard: () => void;
@@ -119,6 +122,12 @@ function SectionRenderer({
       return <BookRuntimeSection {...commonProps} />;
     case "sources":
       return <BookSourceSection {...commonProps} />;
+    case "event-chain":
+      return <BookEventChainSection {...commonProps} />;
+    case "scene-templates":
+      return <BookSceneTemplatesSection {...commonProps} />;
+    case "voice-profiles":
+      return <BookVoiceProfilesSection {...commonProps} />;
     case "settings":
       return null; // handled by handleSectionChange redirect
     default:
