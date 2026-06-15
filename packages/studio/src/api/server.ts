@@ -2588,6 +2588,41 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     readonly notes: string;
   }
 
+  /** Sync Studio HookRecord[] to Core's story/state/hooks.json so the
+   *  Planner/Writer pipeline reads the same data the user sees in the UI.
+   *  pending_hooks.md stays as a human-readable rendering artifact. */
+  async function syncHooksToJSON(bookDir: string, hooks: HookRecord[]): Promise<void> {
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const stateDir = join(bookDir, "story", "state");
+    await mkdir(stateDir, { recursive: true });
+    const hooksPath = join(stateDir, "hooks.json");
+
+    // Convert Studio HookRecord → Core HookRecord (Zod-validated shape)
+    const coreHooks = hooks.map((h) => ({
+      hookId: h.hookId,
+      startChapter: h.startChapter || 0,
+      type: h.type || "",
+      status: h.status || "open",
+      lastAdvancedChapter: h.lastAdvancedChapter || 0,
+      expectedPayoff: h.expectedPayoff || "",
+      payoffTiming: h.payoffTiming || undefined,
+      notes: h.notes || "",
+      dependsOn: h.dependsOn
+        ? h.dependsOn.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      paysOffInArc: h.paysOffInArc || undefined,
+      coreHook: /是|true|yes|1/i.test(h.coreHook) ? true : undefined,
+      halfLifeChapters: parseInt(h.halfLife, 10) || undefined,
+    }));
+
+    await writeFile(
+      hooksPath,
+      JSON.stringify({ hooks: coreHooks, updatedAt: new Date().toISOString() }, null, 2),
+      "utf-8",
+    );
+  }
+
   function normalizeHookHeader(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, "").replace(/[_-]/g, "");
   }
@@ -2652,6 +2687,36 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     const bookDir = state.bookDir(id);
+
+    // Prefer Core's authoritative hooks.json; fall back to pending_hooks.md
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const hooksJsonPath = join(bookDir, "story", "state", "hooks.json");
+      const raw = await readFile(hooksJsonPath, "utf-8");
+      const parsed = JSON.parse(raw) as { hooks?: Array<Record<string, unknown>> };
+      if (parsed.hooks?.length) {
+        // Convert Core HookRecord back to Studio HookRecord for UI compatibility
+        const hooks: HookRecord[] = parsed.hooks.map((h: Record<string, unknown>) => ({
+          hookId: String(h.hookId ?? ""),
+          startChapter: Number(h.startChapter) || 0,
+          type: String(h.type ?? ""),
+          status: String(h.status ?? "open"),
+          lastAdvancedChapter: Number(h.lastAdvancedChapter) || 0,
+          expectedPayoff: String(h.expectedPayoff ?? ""),
+          payoffTiming: String(h.payoffTiming ?? ""),
+          dependsOn: Array.isArray(h.dependsOn) ? (h.dependsOn as string[]).join(", ") : String(h.dependsOn ?? ""),
+          paysOffInArc: String(h.paysOffInArc ?? ""),
+          coreHook: h.coreHook === true ? "是" : "",
+          halfLife: String(h.halfLifeChapters ?? ""),
+          notes: String(h.notes ?? ""),
+        }));
+        return c.json({ hooks });
+      }
+    } catch {
+      // hooks.json not found or unreadable — fall back to pending_hooks.md
+    }
+
     const filePath = resolve(bookDir, "story", "pending_hooks.md");
     try {
       const content = await readFile(filePath, "utf-8");
@@ -2716,6 +2781,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       });
       const { writeFile } = await import("node:fs/promises");
       await writeFile(filePath, serializeHooksToMarkdown(hooks), "utf-8");
+      await syncHooksToJSON(bookDir, hooks);
       return c.json({ ok: true, hookId });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -2738,6 +2804,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       hooks[idx] = { ...hooks[idx], ...body, hookId };
       const { writeFile } = await import("node:fs/promises");
       await writeFile(filePath, serializeHooksToMarkdown(hooks), "utf-8");
+      await syncHooksToJSON(bookDir, hooks);
       return c.json({ ok: true, hookId });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -2758,6 +2825,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       if (filtered.length === hooks.length) return c.json({ error: "Hook not found" }, 404);
       const { writeFile } = await import("node:fs/promises");
       await writeFile(filePath, serializeHooksToMarkdown(filtered), "utf-8");
+      await syncHooksToJSON(bookDir, filtered);
       return c.json({ ok: true, hookId });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
@@ -2830,6 +2898,69 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Actions ---
+
+  /** Preview what context the Planner will use before actually writing. */
+  app.get("/api/v1/books/:id/write-preview", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+
+    const bookDir = state.bookDir(id);
+
+    try {
+      const [chapterGoalsIndex, chapterIntentsIndex] = await Promise.all([
+        loadChapterGoals(bookDir).catch(() => ({ goals: [] as ReadonlyArray<ChapterGoalCard> })),
+        loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> })),
+      ]);
+
+      const chapterGoal = getChapterGoal(chapterGoalsIndex.goals, chapterNumber);
+      const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, chapterNumber);
+
+      // Check hooks state for overdue hooks
+      let activeHooksCount = 0;
+      let overdueHookIds: string[] = [];
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const hooksJsonPath = join(bookDir, "story", "state", "hooks.json");
+        const raw = await readFile(hooksJsonPath, "utf-8");
+        const parsed = JSON.parse(raw) as { hooks?: Array<{ hookId: string; status: string; halfLifeChapters?: number; lastAdvancedChapter: number }> };
+        const hooks = parsed.hooks ?? [];
+        activeHooksCount = hooks.filter((h) => h.status !== "resolved").length;
+        overdueHookIds = hooks
+          .filter((h) => h.status !== "resolved" && h.halfLifeChapters && (chapterNumber - h.lastAdvancedChapter) > h.halfLifeChapters)
+          .map((h) => h.hookId);
+      } catch {
+        // hooks.json not found — skip hook stats
+      }
+
+      const contextSummary = {
+        hasGoal: !!chapterGoal,
+        goalMainConflict: chapterGoal?.mainConflict ?? null,
+        hasIntent: !!(chapterIntent?.coreNarrative),
+        intentCoreNarrative: chapterIntent?.coreNarrative ?? null,
+        activeHooksCount,
+        overdueHooksCount: overdueHookIds.length,
+        overdueHookIds,
+        hasPovCharacter: !!chapterGoal?.povCharacter,
+        povCharacter: chapterGoal?.povCharacter ?? null,
+        hasOpeningFrame: !!(chapterIntent as Record<string, unknown> | null)?.["openingFrame"],
+        hasClosingFrame: !!(chapterIntent as Record<string, unknown> | null)?.["closingFrame"],
+      };
+
+      const warnings: string[] = [];
+      if (!chapterGoal) warnings.push("未设定本章目标——建议先在「目标」面板填写");
+      if (!chapterIntent?.coreNarrative) warnings.push("未完成创作访谈——建议先回答核心三问");
+      if (overdueHookIds.length > 0) warnings.push(`${overdueHookIds.length} 条伏笔已逾期：${overdueHookIds.join("、")}`);
+
+      return c.json({ chapterNumber, contextSummary, warnings });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
 
   app.post("/api/v1/books/:id/write-next", async (c) => {
     const id = c.req.param("id");
@@ -6634,6 +6765,342 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = state.bookDir(id);
       const suggestions = await generateSuggestions(bookDir, chapterNumber);
       return c.json({ suggestions });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Chapter Intent Interview (rule-based + quantitative triggers) ---
+
+  app.get("/api/v1/books/:id/interview", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+
+      // Load existing intent to skip already-answered questions
+      const intentsIdx = await loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> }));
+      const existingIntent = getChapterIntent(intentsIdx.intents, chapterNumber);
+
+      // Load goals
+      const goalsIdx = await loadChapterGoals(bookDir).catch(() => ({ goals: [] as ReadonlyArray<ChapterGoalCard> }));
+      const chapterGoal = getChapterGoal(goalsIdx.goals, chapterNumber);
+
+      // Build interview questions
+      const questions: Array<{ id: string; question: string; context: string; level: number; prefill?: string }> = [];
+
+      // Level 1: Core (always ask if unanswered)
+      if (!existingIntent?.coreNarrative) {
+        questions.push({
+          id: "core_narrative",
+          question: "用一句话说清：这一章在讲什么？",
+          context: chapterGoal?.mainConflict
+            ? `已设定核心矛盾：「${chapterGoal.mainConflict}」`
+            : "还没有设定章节目标",
+          level: 1,
+        });
+      }
+      if (!existingIntent?.readerTakeaway) {
+        questions.push({
+          id: "reader_takeaway",
+          question: "读者读完这一章后，你最希望他们感受到什么？",
+          context: "思考读者的情感体验——紧张、释然、好奇、愤怒、温暖？",
+          level: 1,
+        });
+      }
+      if (!existingIntent?.keyMoment) {
+        questions.push({
+          id: "key_moment",
+          question: "这一章最重要的一个画面或瞬间是什么？",
+          context: "如果这一章只能让读者记住一个画面，那是什么？",
+          level: 1,
+        });
+      }
+
+      // Level 2: Scene planning
+      if (!existingIntent?.scenes || existingIntent.scenes.length === 0) {
+        questions.push({
+          id: "scene_count",
+          question: "这一章大概有几个场景？主要的场景切换是什么？",
+          context: chapterGoal?.location
+            ? `目标地点为「${chapterGoal.location}」`
+            : "可以用地点切换来划分场景",
+          level: 2,
+          prefill: chapterGoal?.location ?? undefined,
+        });
+      }
+
+      // Level 3: Character states
+      questions.push({
+        id: "character_emotion",
+        question: "这一章出场的角色中，谁的情绪变化最大？从什么变为什么？",
+        context: "角色的情绪变化是推动故事的情感引擎",
+        level: 3,
+      });
+
+      // Level 4: Constraints
+      questions.push({
+        id: "must_avoid",
+        question: "这一章绝对不能出现什么？",
+        context: "比如：主角不能示弱、秘密不能暴露、某角色不能出场",
+        level: 4,
+      });
+
+      // Quantitative creative triggers
+      const triggers: Array<{ type: string; message: string; severity: "info" | "warning" | "critical" }> = [];
+
+      // Trigger: overdue hooks
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const hooksPath = join(bookDir, "story", "state", "hooks.json");
+        const raw = await readFile(hooksPath, "utf-8");
+        const hooks = (JSON.parse(raw) as { hooks?: Array<{ hookId: string; status: string; halfLifeChapters?: number; lastAdvancedChapter: number }> }).hooks ?? [];
+        const overdue = hooks.filter((h) =>
+          h.status !== "resolved" && h.halfLifeChapters &&
+          (chapterNumber - h.lastAdvancedChapter) > h.halfLifeChapters
+        );
+        if (overdue.length > 0) {
+          triggers.push({
+            type: "hooks_overdue",
+            message: `${overdue.length} 条伏笔已逾期：${overdue.map((h) => h.hookId).join("、")}`,
+            severity: overdue.length >= 3 ? "critical" : "warning",
+          });
+        }
+        const activeCount = hooks.filter((h) => h.status !== "resolved").length;
+        if (activeCount === 0) {
+          triggers.push({
+            type: "hooks_empty",
+            message: "尚无活跃伏笔——建议在本章埋下至少一条新伏笔",
+            severity: "info",
+          });
+        }
+      } catch { /* hooks.json not found */ }
+
+      // Trigger: chapter goal status
+      if (!chapterGoal) {
+        triggers.push({
+          type: "goal_missing",
+          message: "未设定本章目标——建议先在「目标」面板填写核心矛盾和必达事件",
+          severity: "warning",
+        });
+      }
+
+      // Trigger: first chapter guidance
+      if (chapterNumber === 1) {
+        triggers.push({
+          type: "first_chapter",
+          message: "这是第一章——建议在此章建立世界观基调、引入主角、埋下至少一条伏笔",
+          severity: "info",
+        });
+      }
+
+      // Trigger: chapter interval — check for consecutive same-type chapters
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+        const summariesPath = join(bookDir, "story", "chapter_summaries.md");
+        const raw = await readFile(summariesPath, "utf-8");
+        // Count how many consecutive "过渡" or "transition" chapters precede this one
+        const lines = raw.split("\n");
+        let consecutiveTransition = 0;
+        for (const line of lines.reverse()) {
+          if (line.includes("过渡") || line.includes("transition")) consecutiveTransition++;
+          else break;
+        }
+        if (consecutiveTransition >= 3) {
+          triggers.push({
+            type: "rhythm_monotony",
+            message: `连续 ${consecutiveTransition} 章为过渡型——建议本章安排「高潮」或「转折」打破节奏单调`,
+            severity: "warning",
+          });
+        }
+      } catch { /* no summaries yet */ }
+
+      return c.json({ chapterNumber, questions, triggers });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Event Chain ---
+
+  app.get("/api/v1/books/:id/event-chain", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+      const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
+      const latest = await readLatestArtifact(artifactDir, "event-chain");
+      if (!latest) {
+        return c.json({ chain: null, message: "No event chain generated yet. Use POST to extract." });
+      }
+      const chain = JSON.parse(latest.content);
+      return c.json({ chain });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/books/:id/event-chain/extract", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile, readdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { saveArtifactAutoVersion } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+
+      // Gather sources from story/sources/
+      const sourcesDir = join(bookDir, "story", "sources");
+      const sourceFiles: Array<{ path: string; content: string; frontmatter: Record<string, unknown> }> = [];
+      try {
+        const files = await readdir(sourcesDir);
+        for (const file of files) {
+          if (!file.endsWith(".md")) continue;
+          const raw = await readFile(join(sourcesDir, file), "utf-8");
+          const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+          const frontmatter: Record<string, unknown> = {};
+          if (fmMatch) {
+            for (const line of fmMatch[1].split("\n")) {
+              const [k, ...v] = line.split(":");
+              if (k && v.length > 0) frontmatter[k.trim()] = v.join(":").trim();
+            }
+          }
+          const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
+          sourceFiles.push({ path: file, content: body, frontmatter });
+        }
+      } catch { /* no sources dir — return empty */ }
+
+      // Build a basic event chain from frontmatter only (no LLM agent in API server)
+      const events: Array<Record<string, unknown>> = [];
+      let idx = 0;
+      for (const src of sourceFiles) {
+        const sourceType = src.frontmatter["type"] as string | undefined;
+        if (!sourceType) continue;
+        const linkedChars = (src.frontmatter["linkedCharacters"] as string ?? "").split(",").map(s => s.trim()).filter(Boolean);
+        events.push({
+          eventId: `evt-${String(idx).padStart(3, "0")}`,
+          chapterNumber,
+          sceneIndex: idx,
+          location: (src.frontmatter["location"] as string) ?? "待定",
+          timeOfDay: (src.frontmatter["timeOfDay"] as string) ?? "待定",
+          atmosphere: (src.frontmatter["atmosphere"] as string) ?? "中性",
+          participants: linkedChars.map((name, pi) => ({
+            characterId: name, role: pi === 0 ? "protagonist" : "ally",
+            initialEmotion: "平静", goalInScene: `参与${src.path}`,
+          })),
+          actions: [{
+            actorId: linkedChars[0] ?? "narrator", type: "physical",
+            description: `事件: ${src.path}`, intent: "推进叙事", outcome: "事件展开",
+          }],
+          sourceFiles: [src.path],
+          confidence: 0.3,
+        });
+        idx++;
+      }
+
+      const chain = { bookId: id, chapterNumber, events, generatedAt: new Date().toISOString(), sourceFiles: [], confidence: events.length > 0 ? 0.3 : 0 };
+      const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
+      await saveArtifactAutoVersion(artifactDir, "event-chain", JSON.stringify(chain, null, 2));
+
+      return c.json({ chain });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Scene Templates ---
+
+  app.get("/api/v1/books/:id/scene-templates", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const path = join(bookDir, "story", "sources", "scene_templates.json");
+      const raw = await readFile(path, "utf-8").catch(() => '{"templates":[]}');
+      return c.json(JSON.parse(raw));
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.put("/api/v1/books/:id/scene-templates", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const body = await c.req.json();
+      const dir = join(bookDir, "story", "sources");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "scene_templates.json"), JSON.stringify(body, null, 2), "utf-8");
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Voice Profiles ---
+
+  app.get("/api/v1/books/:id/voice-profiles", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const path = join(bookDir, "story", "voice_profiles", "index.json");
+      const raw = await readFile(path, "utf-8").catch(() => '{"profiles":[]}');
+      return c.json(JSON.parse(raw));
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  app.post("/api/v1/books/:id/voice-profiles/analyze", async (c) => {
+    const id = c.req.param("id");
+    const characterId = c.req.query("character");
+    await assertBookExists(state, id);
+    if (!characterId) {
+      return c.json({ error: "Missing character parameter" }, 400);
+    }
+    try {
+      // Lightweight analysis without LLM agent instantiation
+      const profile = {
+        characterId,
+        characterName: characterId,
+        avgSentenceLength: 0,
+        sentenceComplexity: "moderate" as const,
+        prefersShortSentences: false,
+        usesRhetoricalQuestions: false,
+        signaturePhrases: [] as string[],
+        vocabularyLevel: "standard" as const,
+        dialogueStyle: "casual" as const,
+        interruptionTendency: 0.3,
+        usesDialect: false,
+        dialectNotes: "",
+        analyzedFromChapters: [] as number[],
+        confidence: 0.3,
+        updatedAt: new Date().toISOString(),
+      };
+      return c.json({ profile });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }

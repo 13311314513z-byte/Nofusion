@@ -5,6 +5,10 @@ import type { BookRules } from "../models/book-rules.js";
 import { buildWriterSystemPrompt, type FanficContext } from "./writer-prompts.js";
 import { buildSettlerSystemPrompt, buildSettlerUserPrompt } from "./settler-prompts.js";
 import { buildObserverSystemPrompt, buildObserverUserPrompt } from "./observer-prompts.js";
+import {
+  buildEndpointLockSection,
+} from "../utils/intent-injection.js";
+import type { OpeningFrame, ClosingFrame, PathConstraints } from "../models/chapter-intent.schema.js";
 import { parseSettlerDeltaOutput } from "./settler-delta-parser.js";
 import { parseSettlementOutput } from "./settler-parser.js";
 import { readGenreProfile, readBookRules } from "./rules-reader.js";
@@ -85,6 +89,10 @@ export interface WriteChapterInput {
   readonly lengthSpec?: LengthSpec;
   readonly wordCountOverride?: number;
   readonly temperatureOverride?: number;
+  // ── Endpoint Lock (from AuthorChapterIntent) ──
+  readonly openingFrame?: OpeningFrame;
+  readonly closingFrame?: ClosingFrame;
+  readonly pathConstraints?: PathConstraints;
 }
 
 export interface SettleChapterStateInput {
@@ -240,6 +248,9 @@ export class WriterAgent extends BaseAgent {
           language: book.language ?? genreProfile.language,
           varianceBrief: englishVarianceBrief?.text,
           selectedEvidenceBlock: this.joinGovernedEvidenceBlocks(governedMemoryBlocks),
+          openingFrame: input.openingFrame,
+          closingFrame: input.closingFrame,
+          pathConstraints: input.pathConstraints,
         })
       : (() => {
           // Smart context filtering: inject only relevant parts of truth files
@@ -975,6 +986,9 @@ ${lengthRequirementBlock}
     readonly language?: "zh" | "en";
     readonly varianceBrief?: string;
     readonly selectedEvidenceBlock?: string;
+    readonly openingFrame?: OpeningFrame;
+    readonly closingFrame?: ClosingFrame;
+    readonly pathConstraints?: PathConstraints;
   }): string {
     const language = params.language ?? "zh";
     const contextSections = renderNarrativeSelectedContext(
@@ -996,6 +1010,13 @@ ${lengthRequirementBlock}
     const chapterContextBlock = this.buildChapterContextBlock(params.externalContext, language);
     const briefNarrative = renderMemoAsNarrativeBlock(params.chapterMemo, params.chapterIntentData, language);
 
+    // ── Endpoint Lock section ──
+    const endpointLockBlock = buildEndpointLockSection(
+      params.openingFrame,
+      params.closingFrame,
+      params.pathConstraints,
+    );
+
     if (params.language === "en") {
       return `Write chapter ${params.chapterNumber}.
 
@@ -1013,6 +1034,7 @@ ${selectedEvidenceBlock}
 - Diagnostic: ${diagnosticLines}
 
 ${varianceBlock}
+${endpointLockBlock ? `\n${endpointLockBlock}\n` : ""}
 ${lengthRequirementBlock}
 - Output PRE_WRITE_CHECK first, then the chapter
 - Output only PRE_WRITE_CHECK, CHAPTER_TITLE, and CHAPTER_CONTENT blocks`;
@@ -1034,6 +1056,7 @@ ${selectedEvidenceBlock}
 - 诊断规则：${diagnosticLines}
 
 ${varianceBlock}
+${endpointLockBlock ? `\n${endpointLockBlock}\n` : ""}
 ${lengthRequirementBlock}
 - 先输出写作自检表，再写正文
 - 只需输出 PRE_WRITE_CHECK、CHAPTER_TITLE、CHAPTER_CONTENT 三个区块`;

@@ -10,6 +10,7 @@ export type BookSection =
   | "audit"
   | "export"
   | "goals"
+  | "intents"
   | "fanfic"
   | "runtime"
   | "sources"
@@ -25,6 +26,7 @@ export const BOOK_SECTIONS: BookSection[] = [
   "truth",
   "summaries",
   "goals",
+  "intents",
   "audit",
   "export",
   "fanfic",

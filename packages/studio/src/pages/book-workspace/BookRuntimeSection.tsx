@@ -141,6 +141,7 @@ export function BookRuntimeSection({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [loadingFile, setLoadingFile] = useState(false);
+  const selectedType = selectedFile ? detectFileType(selectedFile.split("/").pop() ?? selectedFile) : null;
   const [expandedChapters, setExpandedChapters] = useState<Set<number | null>>(
     () => new Set()
   );
@@ -393,9 +394,13 @@ export function BookRuntimeSection({
                     <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
                   </div>
                 ) : fileContent !== null ? (
-                  <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
-                    {fileContent}
-                  </pre>
+                  selectedType === "plan" || selectedFile?.endsWith(".plan.md") ? (
+                    <PlanCardView content={fileContent} />
+                  ) : (
+                    <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
+                      {fileContent}
+                    </pre>
+                  )
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
                     {t("runtime.selectFile")}
@@ -406,6 +411,86 @@ export function BookRuntimeSection({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Parse YAML frontmatter from plan.md content and render as structured cards. */
+function PlanCardView({ content }: { content: string }) {
+  // Extract YAML frontmatter between --- markers
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  const yamlText = fmMatch?.[1] ?? "";
+  const body = fmMatch ? content.slice(fmMatch[0].length).trim() : content;
+
+  // Simple YAML parser for key: value pairs
+  const fields: Record<string, string> = {};
+  for (const line of yamlText.split("\n")) {
+    const m = line.match(/^(\w[\w_-]*)\s*:\s*(.+)$/);
+    if (m) fields[m[1]] = m[2].trim();
+  }
+
+  // Extract 7 memo sections from body (## Section Name)
+  const sections = body.split(/^## /m).filter(Boolean);
+  const memoBlocks: Array<{ title: string; text: string }> = [];
+  for (const sec of sections) {
+    const nl = sec.indexOf("\n");
+    const title = nl > 0 ? sec.slice(0, nl).trim() : sec.trim();
+    const text = nl > 0 ? sec.slice(nl + 1).trim() : "";
+    if (title) memoBlocks.push({ title, text });
+  }
+
+  const hasYaml = Object.keys(fields).length > 0;
+  const hasSections = memoBlocks.length > 0;
+
+  if (!hasYaml && !hasSections) {
+    return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* YAML frontmatter cards */}
+      {hasYaml && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {Object.entries(fields).map(([key, value]) => (
+            <div key={key} className="border border-border/30 rounded-lg p-3 bg-secondary/5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                {key.replace(/([A-Z])/g, " $1").trim()}
+              </div>
+              <div className="text-sm font-medium text-foreground line-clamp-2">
+                {String(value).slice(0, 100)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Memo section cards */}
+      {hasSections && (
+        <div className="space-y-3">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider">
+            Planner Memo ({memoBlocks.length} sections)
+          </div>
+          {memoBlocks.map((block, i) => (
+            <div key={i} className="border border-border/30 rounded-lg p-4 bg-secondary/5">
+              <h4 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-2">
+                {i + 1}. {block.title}
+              </h4>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                {block.text.slice(0, 800)}
+                {block.text.length > 800 && "…"}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Raw YAML & body toggle */}
+      <details className="text-xs text-muted-foreground">
+        <summary className="cursor-pointer">查看原始文本</summary>
+        <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed max-h-64 overflow-y-auto border border-border/30 rounded p-3 bg-secondary/5">
+          {content.slice(0, 5000)}
+        </pre>
+      </details>
     </div>
   );
 }

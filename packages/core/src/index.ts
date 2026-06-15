@@ -96,6 +96,20 @@ export {
 } from "./utils/proxy-fetch.js";
 export { assertSafeBookId, deriveBookIdFromTitle, isSafeBookId } from "./utils/book-id.js";
 export { safeChildPath } from "./utils/path-safety.js";
+export {
+  runtimeDir,
+  chapterArtifactDir,
+  readArtifactIndex,
+  writeArtifactIndex,
+  getLatestVersion,
+  saveArtifact,
+  readArtifact,
+  readLatestArtifact,
+  saveArtifactAutoVersion,
+  resolveArtifactPath,
+  listArtifactVersions,
+  type ArtifactIndex,
+} from "./utils/chapter-artifacts.js";
 export { ResourceRegistry, globalRegistry, type Resource } from "./utils/resource-registry.js";
 export {
   computePreferenceMetrics,
@@ -466,7 +480,7 @@ export {
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { exportDocument, type ExportFormat, type ExportResult } from "./utils/document-writer.js";
 export { analyzeDetectionInsights } from "./agents/detection-insights.js";
-export { validatePostWrite, detectParagraphLengthDrift, detectParagraphShapeWarnings, detectDuplicateTitle, type PostWriteViolation } from "./agents/post-write-validator.js";
+export { validatePostWrite, validateEndpointLock, validateAuthorIntentInContent, detectParagraphLengthDrift, detectParagraphShapeWarnings, detectDuplicateTitle, type PostWriteViolation } from "./agents/post-write-validator.js";
 export { ChapterAnalyzerAgent, type AnalyzeChapterInput, type AnalyzeChapterOutput } from "./agents/chapter-analyzer.js";
 export { parseWriterOutput, parseCreativeOutput, type ParsedWriterOutput, type CreativeOutput } from "./agents/writer-parser.js";
 export { buildSettlerSystemPrompt, buildSettlerUserPrompt } from "./agents/settler-prompts.js";
@@ -525,14 +539,72 @@ export {
   AuthorChapterIntentSchema,
   AuthorScenePlanSchema,
   AuthorCharacterStateSchema,
+  OpeningFrameSchema,
+  ClosingFrameSchema,
+  PathConstraintsSchema,
   ChapterIntentsIndexSchema,
   migrateLegacyIntent,
   migrateIntentsIndex,
 } from "./models/chapter-intent.schema.js";
 export {
+  type OpeningFrame,
+  type ClosingFrame,
+  type PathConstraints,
+} from "./models/chapter-intent.schema.js";
+export {
+  EventNodeSchema,
+  EventChainSchema,
+  EventParticipantSchema,
+  EventActionSchema,
+  RelationshipDeltaSchema,
+  DecisionPointSchema,
+  NarrativeControlBlockSchema,
+  InferenceReasoningEntrySchema,
+  type EventNode,
+  type EventChain,
+  type EventParticipant,
+  type EventAction,
+  type RelationshipDelta,
+  type DecisionPoint,
+  type NarrativeControlBlock,
+  type InferenceReasoningEntry,
+} from "./models/event-chain.js";
+export {
+  SceneTemplateSchema,
+  SceneTemplateIndexSchema,
+  type SceneTemplate,
+  type SceneTemplateIndex,
+} from "./models/scene-template.js";
+export {
+  VoiceProfileSchema,
+  VoiceProfileIndexSchema,
+  type VoiceProfile,
+  type VoiceProfileIndex,
+} from "./models/voice-profile.js";
+export {
+  VoiceProfileAnalyzer,
+  type AnalyzeVoiceInput,
+} from "./agents/voice-profile-analyzer.js";
+export {
+  EventChainExtractor,
+  type ExtractorInput,
+  type ExtractorOutput,
+  type ExtractorSource,
+} from "./agents/event-chain-extractor.js";
+export {
+  EventChainInferenceEngine,
+  type InferenceInput,
+  type InferenceOutput,
+} from "./agents/event-chain-inference.js";
+export {
+  renderEventChainAsNarrativeControl,
+  renderEventNodeCompact,
+} from "./utils/narrative-control.js";
+export {
   buildAuthorIntentBlock,
   buildAuthorCommitmentChecklist,
   buildWriterIntentBrief,
+  buildEndpointLockSection,
 } from "./utils/intent-injection.js";
 export {
   generateSuggestions,
@@ -578,6 +650,20 @@ export { detectChapter, detectAndRewrite, loadDetectionHistory, type DetectChapt
 export { StateManager } from "./state/manager.js";
 export { bootstrapStructuredStateFromMarkdown } from "./state/state-bootstrap.js";
 export { renderCurrentStateProjection, renderHooksProjection, renderChapterSummariesProjection } from "./state/state-projections.js";
+// New unified markdown renderer/parser (M1)
+export {
+  renderHooksToMarkdown,
+  renderHookSnapshot,
+  renderSummariesToMarkdown,
+  renderSummarySnapshot,
+  renderCurrentStateToMarkdown,
+  renderChapterIntentToMarkdown,
+  renderChapterGoalToMarkdown,
+} from "./utils/markdown-renderer.js";
+export {
+  parseChapterIntentFromMarkdown,
+  parseChapterGoalFromMarkdown,
+} from "./utils/markdown-parser.js";
 export { applyRuntimeStateDelta, type RuntimeStateSnapshot } from "./state/state-reducer.js";
 export { validateRuntimeState, type RuntimeStateValidationIssue } from "./state/state-validator.js";
 

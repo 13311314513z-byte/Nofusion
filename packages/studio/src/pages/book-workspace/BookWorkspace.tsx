@@ -3,6 +3,7 @@ import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
 import { useApi } from "../../hooks/use-api";
 import type { BookSection } from "./book-workspace-types";
+import { BookContextProvider } from "../../hooks/use-book-context";
 import { BookWorkspaceNav } from "./BookWorkspaceNav";
 import { BookOverviewSection } from "./BookOverviewSection";
 import { BookChatSection } from "./BookChatSection";
@@ -18,6 +19,7 @@ import { BookExportSection } from "./BookExportSection";
 import { BookFanficSection } from "./BookFanficSection";
 import { BookRuntimeSection } from "./BookRuntimeSection";
 import { BookSourceSection } from "./BookSourceSection";
+import { BookIntentsSection } from "./BookIntentsSection";
 
 interface NavLike {
   readonly toDashboard: () => void;
@@ -51,6 +53,7 @@ export function BookWorkspace({ bookId, section, nav, theme, t, sse }: BookWorks
   };
 
   return (
+    <BookContextProvider bookId={bookId}>
     <div className="flex h-full w-full min-w-0">
       <BookWorkspaceNav
         bookId={bookId}
@@ -65,6 +68,7 @@ export function BookWorkspace({ bookId, section, nav, theme, t, sse }: BookWorks
         <SectionRenderer bookId={bookId} section={section} nav={nav} theme={theme} t={t} sse={sse} />
       </main>
     </div>
+    </BookContextProvider>
   );
 }
 
@@ -103,6 +107,8 @@ function SectionRenderer({
       return <BookSummariesSection {...commonProps} />;
     case "goals":
       return <BookGoalsSection {...commonProps} />;
+    case "intents":
+      return <BookIntentsSection {...commonProps} />;
     case "audit":
       return <BookAuditSection {...commonProps} />;
     case "export":

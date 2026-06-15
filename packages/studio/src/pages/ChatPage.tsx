@@ -27,6 +27,7 @@ import {
   Check,
 } from "lucide-react";
 import { Shimmer } from "../components/ai-elements/shimmer";
+import { ChatContextBar } from "../components/chat/ChatContextBar";
 import {
   Message,
   MessageContent,
@@ -288,6 +289,20 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
 
   return (
     <div className="flex flex-col h-full flex-1 min-w-0">
+      {/* Context bar — shown in book mode */}
+      {mode === "book" && activeBookId && (
+        <ChatContextBar
+          bookId={activeBookId}
+          chapterNumber={1}
+          onNavigateToSection={(section) => {
+            // nav may have toBookSection from BookWorkspace wrapper
+            const navAny = nav as unknown as Record<string, unknown>;
+            if (typeof navAny.toBookSection === "function") {
+              (navAny.toBookSection as (bookId: string, section: string) => void)(activeBookId, section);
+            }
+          }}
+        />
+      )}
       {/* Message scroll area */}
       <div
         ref={scrollRef}

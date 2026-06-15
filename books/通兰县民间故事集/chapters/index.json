@@ -1,0 +1,74 @@
+[
+  {
+    "number": 1,
+    "title": "送药",
+    "status": "ready-for-review",
+    "wordCount": 6135,
+    "createdAt": "2026-06-01T15:39:05.632Z",
+    "updatedAt": "2026-06-01T15:39:05.632Z",
+    "auditIssues": [
+      "[warning] 伏笔容量超限：当前17条活跃伏笔（来自第0章），本章新增2条（七号门、师傅烧纸条），共19条，超出容量上限12条。且未回收任何旧钩子，可能导致伏笔堆积。",
+      "[warning] 当前有 21 个活跃伏笔，已经高于建议上限 12 个。",
+      "[warning] 本章新开了 4 个伏笔，但没有回收任何旧债。",
+      "[warning] 连续出现5个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "target": 5000,
+      "softMin": 4319,
+      "softMax": 5681,
+      "hardMin": 3637,
+      "hardMax": 6363,
+      "countingMode": "zh_chars",
+      "writerCount": 6135,
+      "postWriterNormalizeCount": 6135,
+      "postReviseCount": 0,
+      "finalCount": 6135,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 52083,
+      "completionTokens": 19919,
+      "totalTokens": 72002
+    }
+  },
+  {
+    "number": 2,
+    "title": "缺口",
+    "status": "audit-failed",
+    "wordCount": 5337,
+    "createdAt": "2026-06-01T16:20:58.792Z",
+    "updatedAt": "2026-06-01T16:20:58.792Z",
+    "auditIssues": [
+      "[info] 成稿中，王先生从门缝里看陈守拙时，目光'在腰侧停了一下，不是扫过，是停住。那目光落在棉袄下面的硬物上，像是隔着布料确认了什么'。陈守拙仅凭这一眼就推断对方知道腰牌存在，并说'一个人如果不是知道那东西就在那里，不会那样看'。这一判断对角色观察力要求极高，虽主角设定有'用触摸理解世界'的细腻，但书中未建立他善于通过视线落点推断他人认知的先例，略超前于当前人设的直观感知能力。",
+      "[info] 全文约2500字，出现1次'像是'（'像是有人站在门后'），密度在边界附近。虽未超过每3000字1次的warning线，但'像是'属于AI标记词（含在'仿佛/不禁/宛如/竟然/忽然/猛地'同类监测群），轻微接近阈值，建议后续控制。",
+      "[critical] memo 在 advance/resolve 里声明要处理 character-门外人身份，但正文没有对应的落地动作",
+      "[critical] memo 在 advance/resolve 里声明要处理 mystery-腰牌来历，但正文没有对应的落地动作",
+      "[warning] 章节标题\"探路\"已自动调整为\"缺口\"。",
+      "[warning] 当前有 22 个活跃伏笔，已经高于建议上限 12 个。",
+      "[warning] 这些伏笔已经进入回收/推进压力，但本章没有真正处理：H003（近期，可回收）、H005（近期，可回收）、H010（立即，可回收），另有 2 条。",
+      "[warning] 连续出现4个不足35字的短段，容易形成短句堆砌。"
+    ],
+    "lengthWarnings": [],
+    "lengthTelemetry": {
+      "target": 5000,
+      "softMin": 4319,
+      "softMax": 5681,
+      "hardMin": 3637,
+      "hardMax": 6363,
+      "countingMode": "zh_chars",
+      "writerCount": 5440,
+      "postWriterNormalizeCount": 5337,
+      "postReviseCount": 5337,
+      "finalCount": 5337,
+      "normalizeApplied": false,
+      "lengthWarning": false
+    },
+    "tokenUsage": {
+      "promptTokens": 110301,
+      "completionTokens": 22913,
+      "totalTokens": 133214
+    }
+  }
+]

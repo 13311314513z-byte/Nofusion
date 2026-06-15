@@ -14,6 +14,7 @@ import {
 } from "../utils/ngram-utils.js";
 import type { BookRules } from "../models/book-rules.js";
 import type { GenreProfile } from "../models/genre-profile.js";
+import type { OpeningFrame, ClosingFrame, PathConstraints } from "../models/chapter-intent.schema.js";
 
 export interface PostWriteViolation {
   readonly rule: string;
@@ -950,6 +951,153 @@ export function validateAuthorIntentInContent(
   // emotional effect is a reader response, not a textual fact.
   // Checking it with keyword heuristics would produce false positives
   // and encourage mechanical insertion of emotion words.
+
+  return violations;
+}
+
+// ─── Endpoint Lock validation ───────────────────────────────────────
+
+/**
+ * Validate that the generated chapter's opening and closing match the
+ * author-specified Endpoint Lock constraints.
+ *
+ * This is a zero-LLM-cost heuristic check using keyword matching and
+ * structural analysis. It catches obvious violations like:
+ * - The chapter starts with a different scene than specified
+ * - The chapter ends after the specified closing scene
+ * - Forbidden opening patterns are used
+ * - Required resolution items are missing
+ * - The specified first/last line is absent
+ */
+export function validateEndpointLock(
+  content: string,
+  openingFrame?: OpeningFrame,
+  closingFrame?: ClosingFrame,
+  _pathConstraints?: PathConstraints,
+): ReadonlyArray<PostWriteViolation> {
+  const violations: PostWriteViolation[] = [];
+  if (!openingFrame && !closingFrame) return violations;
+
+  const contentLower = content.toLowerCase();
+  const paragraphs = content.split(/\n\n+/);
+  const firstParagraphs = paragraphs.slice(0, 3).join("\n");
+  const lastParagraphs = paragraphs.slice(-3).join("\n");
+
+  // ── Helper: extract key CJK terms from a text ──────────────
+  function extractCJKTerms(text: string, minLen = 2): string[] {
+    const terms: string[] = [];
+    const cjkOnly = text.replace(/[^\u4e00-\u9fff]/g, "");
+    for (let i = 0; i <= cjkOnly.length - minLen; i++) {
+      const ngram = cjkOnly.slice(i, i + minLen);
+      if (!/[的了是在有和里与及或把被从到时]/.test(ngram)) {
+        terms.push(ngram);
+      }
+    }
+    return [...new Set(terms)];
+  }
+
+  // ── Opening frame checks ───────────────────────────────────
+  if (openingFrame) {
+    const sceneTerms = extractCJKTerms(openingFrame.scene);
+
+    // Check first line constraint (strongest)
+    if (openingFrame.firstLine) {
+      const firstLineClean = openingFrame.firstLine.replace(/[“”""「」『』]/g, "");
+      const textStart = content.replace(/[“”""「」『』]/g, "").slice(0, firstLineClean.length * 2);
+      if (!textStart.includes(firstLineClean)) {
+        violations.push({
+          rule: "开头首句偏差",
+          severity: "error",
+          description: `作者指定的第一句话「${openingFrame.firstLine.slice(0, 40)}」未在章节开头出现`,
+          suggestion: "请将章节开头改为作者指定的第一句话，或更新端点锁定设置",
+        });
+      }
+    }
+
+    // Check scene presence in first paragraphs (heuristic)
+    if (sceneTerms.length > 0) {
+      const matched = sceneTerms.filter(t => firstParagraphs.includes(t));
+      if (matched.length < Math.max(1, Math.floor(sceneTerms.length / 3))) {
+        violations.push({
+          rule: "开头场景偏差",
+          severity: "warning",
+          description: `作者指定的开头场景"${openingFrame.scene.slice(0, 40)}"的关键词在章节开头出现较少`,
+          suggestion: "请确认章节开头是否按指定场景展开。此为启发式检查，可能有误报。",
+        });
+      }
+    }
+
+    // Check forbidden openings
+    for (const forbidden of openingFrame.forbiddenOpenings ?? []) {
+      if (firstParagraphs.includes(forbidden)) {
+        violations.push({
+          rule: "禁用开头方式",
+          severity: "error",
+          description: `章节开头使用了被禁止的方式："${forbidden}"`,
+          suggestion: `请避免以"${forbidden}"的方式开头，并修改开头段落`,
+        });
+      }
+    }
+  }
+
+  // ── Closing frame checks ───────────────────────────────────
+  if (closingFrame) {
+    // Check last line constraint
+    if (closingFrame.lastLine) {
+      const lastLineClean = closingFrame.lastLine.replace(/[“”""「」『』]/g, "");
+      const textEnd = content.replace(/[“”""「」『』]/g, "").slice(-lastLineClean.length * 2);
+      if (!textEnd.includes(lastLineClean)) {
+        violations.push({
+          rule: "结尾末句偏差",
+          severity: "error",
+          description: `作者指定的最后一句话「${closingFrame.lastLine.slice(0, 40)}」未在章节结尾出现`,
+          suggestion: "请将章节结尾改为作者指定的最后一句话，或更新端点锁定设置",
+        });
+      }
+    }
+
+    // Check mustResolve items
+    for (const must of closingFrame.mustResolve ?? []) {
+      const terms = extractCJKTerms(must);
+      const matched = terms.filter(t => contentLower.includes(t));
+      if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+        violations.push({
+          rule: "未解决项",
+          severity: "warning",
+          description: `必须在结尾前解决的「${must.slice(0, 40)}」未在正文中找到足够的关键词匹配`,
+          suggestion: `请确认「${must.slice(0, 30)}」是否已在本章中得到解决`,
+        });
+      }
+    }
+
+    // Check mustSetup items (presence check only — can't validate quality)
+    for (const setup of closingFrame.mustSetup ?? []) {
+      const terms = extractCJKTerms(setup);
+      const matched = terms.filter(t => contentLower.includes(t));
+      if (terms.length > 0 && matched.length < Math.max(1, Math.floor(terms.length / 4))) {
+        violations.push({
+          rule: "未铺垫项",
+          severity: "info",
+          description: `建议在结尾前铺垫的「${setup.slice(0, 40)}」未在正文中找到足够的关键词匹配`,
+          suggestion: `请确认「${setup.slice(0, 30)}」是否已在本章中得到充分铺垫`,
+        });
+      }
+    }
+
+    // Check scene presence in last paragraphs
+    const sceneTerms = extractCJKTerms(closingFrame.scene);
+    if (sceneTerms.length > 0) {
+      const matched = sceneTerms.filter(t => lastParagraphs.includes(t));
+      if (matched.length < Math.max(1, Math.floor(sceneTerms.length / 3))) {
+        violations.push({
+          rule: "结尾场景偏差",
+          severity: "warning",
+          description: `作者指定的结尾场景"${closingFrame.scene.slice(0, 40)}"的关键词在章节结尾出现较少`,
+          suggestion: "请确认章节结尾是否收敛到指定场景。此为启发式检查，可能有误报。",
+        });
+      }
+    }
+  }
 
   return violations;
 }

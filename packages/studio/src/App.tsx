@@ -30,6 +30,7 @@ import { useSessionEvents } from "./hooks/use-session-events";
 import { useTheme } from "./hooks/use-theme";
 import { useI18n } from "./hooks/use-i18n";
 import { postApi, putApi, useApi } from "./hooks/use-api";
+import { ToastProvider } from "./hooks/use-toast";
 import { Sun, Moon } from "lucide-react";
 import { House } from "lucide-react";
 
@@ -123,6 +124,7 @@ export function App() {
   }
 
   return (
+    <ToastProvider>
     <div className="h-screen bg-background text-foreground flex overflow-hidden font-sans">
       {/* Left Sidebar */}
       <Sidebar nav={nav} activePage={activePage} sse={sse} t={t} />
@@ -319,5 +321,6 @@ export function App() {
         </main>
       </div>
     </div>
+    </ToastProvider>
   );
 }

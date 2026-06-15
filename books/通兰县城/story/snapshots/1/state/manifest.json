@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "language": "zh",
+  "lastAppliedChapter": 1,
+  "projectionVersion": 1,
+  "migrationWarnings": [
+    "H001:status normalized from \"埋设\" to \"open\"",
+    "H002:status normalized from \"埋设\" to \"open\"",
+    "H003:status normalized from \"埋设\" to \"open\"",
+    "H004:status normalized from \"埋设\" to \"open\"",
+    "H005:status normalized from \"埋设\" to \"open\"",
+    "H006:status normalized from \"埋设\" to \"open\"",
+    "H007:status normalized from \"埋设\" to \"open\"",
+    "H008:status normalized from \"埋设\" to \"open\"",
+    "H009:status normalized from \"埋设\" to \"open\"",
+    "H010:status normalized from \"埋设\" to \"open\"",
+    "H011:status normalized from \"埋设\" to \"open\"",
+    "H001:lastAdvancedChapter normalized from \"第1章：曹二泥发现里外墙北段墙下有焦痕、炭灰、填土异常，并挖出一条灰布裤子（裤腰有“张”字及数字）\" to 0",
+    "H002:lastAdvancedChapter normalized from \"第1章：保甲长赵德禄警告曹二泥“这墙不准再碰”，并熟练地掩盖了翻动痕迹；赵德禄走向警察署\" to 0",
+    "H003:lastAdvancedChapter normalized from \"新开：赵德禄的紧张与熟练掩盖行为（程序感、踩实、踢碎煤渣）\" to 0",
+    "H004:lastAdvancedChapter normalized from \"新开：赵德禄管理的保甲簿被要求删掉几户人（第0章初始状态）\" to 0",
+    "H005:lastAdvancedChapter normalized from \"新开：墙下灰布裤子指向“东街张姓裁缝”（去年冬天突然关门，自称回山东）\" to 0"
+  ]
+}

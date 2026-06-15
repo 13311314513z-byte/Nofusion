@@ -5,6 +5,7 @@ import type { SSEMessage } from "../../hooks/use-sse";
 import { fetchJson, useApi } from "../../hooks/use-api";
 import { Target, Save, Trash2, Plus, X, TargetIcon, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useBookContext } from "../../hooks/use-book-context";
 // Import shared types from core — these are the single source of truth.
 import type {
   AuthorChapterIntent,
@@ -100,6 +101,7 @@ function GoalField({
 
 export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
   const { data: bookData } = useApi<BookData>(`/books/${bookId}`);
+  const { notify } = useBookContext();
   const [goals, setGoals] = useState<Record<number, ChapterGoalCard>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -189,6 +191,7 @@ export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
       );
       if (result.ok && result.goal) {
         setGoals((prev) => ({ ...prev, [result.goal.chapterNumber]: result.goal }));
+        notify({ type: "goal-updated", chapterNumber: result.goal.chapterNumber });
       }
       setActionError(null);
       setEditingChapter(null);
@@ -219,6 +222,7 @@ export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
       );
       if (result.ok && result.intent) {
         setIntents((prev) => ({ ...prev, [result.intent.chapterNumber]: result.intent }));
+        notify({ type: "intent-updated", chapterNumber: result.intent.chapterNumber });
         setIntentDraft(null);
         setInterviewExpanded(false);
       }
