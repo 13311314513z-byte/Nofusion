@@ -396,6 +396,10 @@ export function BookRuntimeSection({
                 ) : fileContent !== null ? (
                   selectedType === "plan" || selectedFile?.endsWith(".plan.md") ? (
                     <PlanCardView content={fileContent} />
+                  ) : selectedType === "context" || selectedFile?.endsWith(".context.json") ? (
+                    <ContextTracePanel content={fileContent} />
+                  ) : selectedType === "trace" || selectedFile?.endsWith(".trace.json") ? (
+                    <TraceFlowChart content={fileContent} />
                   ) : (
                     <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
                       {fileContent}
@@ -493,4 +497,89 @@ function PlanCardView({ content }: { content: string }) {
       </details>
     </div>
   );
+}
+
+/** Render Composer context.json selectedContext as traceable source table. */
+function ContextTracePanel({ content }: { content: string }) {
+  try {
+    const data = JSON.parse(content) as {
+      selectedContext?: Array<{ source: string; reason: string; excerpt?: string }>;
+    };
+    const items = data.selectedContext ?? [];
+    if (items.length === 0) {
+      return <p className="text-sm text-muted-foreground p-4">上下文溯源为空</p>;
+    }
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+          上下文溯源 ({items.length} 条来源)
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/30 text-left text-xs text-muted-foreground">
+              <th className="py-2 pr-2">来源</th>
+              <th className="py-2 pr-2">引入原因</th>
+              <th className="py-2">内容片段</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i} className="border-b border-border/10 hover:bg-secondary/10">
+                <td className="py-2 pr-2 font-medium whitespace-nowrap">{item.source}</td>
+                <td className="py-2 pr-2 text-muted-foreground text-xs">{item.reason}</td>
+                <td className="py-2 text-xs text-muted-foreground max-w-xs truncate">
+                  {item.excerpt?.slice(0, 80) ?? "—"}{item.excerpt && item.excerpt.length > 80 ? "…" : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  } catch {
+    return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
+  }
+}
+
+/** Render chapter trace.json as Agent pipeline flow. */
+function TraceFlowChart({ content }: { content: string }) {
+  try {
+    const trace = JSON.parse(content) as Record<string, unknown>;
+    const agents = Object.keys(trace).filter(k => !k.startsWith("_") && typeof trace[k] === "object");
+    const stageOrder = ["planner", "composer", "writer", "observer", "settler", "auditor", "reviser"];
+
+    return (
+      <div className="space-y-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+          Agent 管线溯源 ({agents.length} 阶段)
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {stageOrder.filter(s => agents.includes(s)).map((stage, i, arr) => (
+            <div key={stage} className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-lg bg-secondary/10 border border-border/30 text-sm font-medium">
+                {stage}
+              </div>
+              {i < arr.length - 1 && (
+                <span className="text-muted-foreground text-xs">→</span>
+              )}
+            </div>
+          ))}
+          {/* Extra agents not in stage order */}
+          {agents.filter(a => !stageOrder.includes(a)).map(stage => (
+            <div key={stage} className="px-3 py-1.5 rounded-lg bg-amber-100/20 border border-amber-500/20 text-sm">
+              +{stage}
+            </div>
+          ))}
+        </div>
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">原始 JSON</summary>
+          <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed max-h-48 overflow-y-auto border border-border/30 rounded p-2 bg-secondary/5">
+            {JSON.stringify(trace, null, 2).slice(0, 3000)}
+          </pre>
+        </details>
+      </div>
+    );
+  } catch {
+    return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
+  }
 }
