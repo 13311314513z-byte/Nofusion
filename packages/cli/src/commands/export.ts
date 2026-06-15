@@ -6,9 +6,10 @@ import { findProjectRoot, resolveBookId, log, logError, formatJsonOutput } from 
 export const exportCommand = new Command("export")
   .description("Export book chapters to a single file")
   .argument("[book-id]", "Book ID (auto-detected if only one book)")
-  .option("--format <format>", "Output format (txt, md, epub)", "txt")
+  .option("--format <format>", "Output format (txt, md, epub, event-chain)", "txt")
   .option("--output <path>", "Output file path")
   .option("--approved-only", "Only export approved chapters")
+  .option("--chapter <n>", "Export event-chain for specific chapter (only with --format event-chain)")
   .option("--json", "Output JSON metadata")
   .action(async (bookIdArg: string | undefined, opts) => {
     try {

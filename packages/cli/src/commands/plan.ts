@@ -12,6 +12,7 @@ planCommand
   .option("--context <text>", "Chapter steering guidance")
   .option("--context-file <path>", "Read guidance from file")
   .option("--json", "Output JSON")
+  .option("--alternatives <n>", "Generate N plan variants for comparison (1-3)", "1")
   .option("-q, --quiet", "Suppress console output")
   .action(async (bookIdArg: string | undefined, opts) => {
     try {

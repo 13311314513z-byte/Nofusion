@@ -69,6 +69,7 @@ export function createInteractCommand(hooks: InteractCommandHooks = {}): Command
     .argument("[message...]", "Natural-language message")
     .option("--message <text>", "Explicit natural-language message")
     .option("--book <bookId>", "Bind a specific active book for this interaction")
+    .option("--interview", "Trigger Interviewer mode: generate chapter-intent questions instead of free chat")
     .option("--json", "Emit structured JSON for external agents")
     .action(async (messageArgs: ReadonlyArray<string>, opts) => {
       const input = await readInteractionInput(messageArgs, opts.message, hooks.readInput);

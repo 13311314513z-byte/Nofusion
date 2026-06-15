@@ -160,6 +160,26 @@ export {
   type EnhancedTrace,
 } from "./models/enhanced-trace.js";
 export {
+  BookSoulSchema,
+  DEFAULT_BOOK_SOUL,
+  type BookSoul,
+} from "./models/book-soul.js";
+export {
+  ReaderContractSchema,
+  SatisfactionTypeSchema,
+  DEFAULT_READER_CONTRACT,
+  type ReaderContract,
+  type SatisfactionType,
+} from "./models/reader-contract.js";
+export {
+  CreativeTensionSchema,
+  CreativeTensionMapSchema,
+  findAttentionTensions,
+  tensionOverdueIndex,
+  type CreativeTension,
+  type CreativeTensionMap,
+} from "./models/creative-tension.js";
+export {
   computePreferenceMetrics,
   type PairedPreference,
   type PairedPreferenceQuestion,
