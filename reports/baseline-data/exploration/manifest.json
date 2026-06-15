@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-06-14T12:00:00.000Z",
+  "type": "exploration",
+  "totalTasks": 15,
+  "tasks": [
+    { "id": 1, "bookId": "药", "bookName": "药", "chapterNumber": 1, "function": "opening", "description": "药 第1章 (opening)" },
+    { "id": 2, "bookId": "通兰民间故事集", "bookName": "通兰民间故事集", "chapterNumber": 1, "function": "opening", "description": "通兰民间故事集 第1章 (opening)" },
+    { "id": 3, "bookId": "test-book-0609", "bookName": "test-book-0609", "chapterNumber": 1, "function": "transition", "description": "test-book-0609 第1章 (transition)" },
+    { "id": 4, "bookId": "药", "bookName": "药", "chapterNumber": 2, "function": "transition", "description": "药 第2章 (transition)" },
+    { "id": 5, "bookId": "通兰民间故事集", "bookName": "通兰民间故事集", "chapterNumber": 2, "function": "conflict", "description": "通兰民间故事集 第2章 (conflict)" },
+    { "id": 6, "bookId": "test-book-0609", "bookName": "test-book-0609", "chapterNumber": 2, "function": "conflict", "description": "test-book-0609 第2章 (conflict)" },
+    { "id": 7, "bookId": "药", "bookName": "药", "chapterNumber": 3, "function": "climax", "description": "药 第3章 (climax)" },
+    { "id": 8, "bookId": "通兰民间故事集", "bookName": "通兰民间故事集", "chapterNumber": 3, "function": "climax", "description": "通兰民间故事集 第3章 (climax)" },
+    { "id": 9, "bookId": "test-book-0609", "bookName": "test-book-0609", "chapterNumber": 3, "function": "resolution", "description": "test-book-0609 第3章 (resolution)" },
+    { "id": 10, "bookId": "药", "bookName": "药", "chapterNumber": 4, "function": "resolution", "description": "药 第4章 (resolution)" },
+    { "id": 11, "bookId": "通兰民间故事集", "bookName": "通兰民间故事集", "chapterNumber": 4, "function": "opening", "description": "通兰民间故事集 第4章 (opening)" },
+    { "id": 12, "bookId": "test-book-0609", "bookName": "test-book-0609", "chapterNumber": 4, "function": "conflict", "description": "test-book-0609 第4章 (conflict)" },
+    { "id": 13, "bookId": "药", "bookName": "药", "chapterNumber": 5, "function": "climax", "description": "药 第5章 (climax)" },
+    { "id": 14, "bookId": "通兰民间故事集", "bookName": "通兰民间故事集", "chapterNumber": 5, "function": "transition", "description": "通兰民间故事集 第5章 (transition)" },
+    { "id": 15, "bookId": "test-book-0609", "bookName": "test-book-0609", "chapterNumber": 5, "function": "resolution", "description": "test-book-0609 第5章 (resolution)" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-06-14T12:00:00.000Z",
+  "type": "holdout",
+  "totalTasks": 12,
+  "description": "保留集：从未参与 prompt 调整，仅用于最终验收",
+  "tasks": [
+    { "id": "H01", "bookId": "药", "chapterNumber": 21, "function": "opening" },
+    { "id": "H02", "bookId": "通兰民间故事集", "chapterNumber": 21, "function": "transition" },
+    { "id": "H03", "bookId": "test-book-0609", "chapterNumber": 21, "function": "conflict" },
+    { "id": "H04", "bookId": "药", "chapterNumber": 22, "function": "climax" },
+    { "id": "H05", "bookId": "通兰民间故事集", "chapterNumber": 22, "function": "resolution" },
+    { "id": "H06", "bookId": "test-book-0609", "chapterNumber": 22, "function": "opening" },
+    { "id": "H07", "bookId": "药", "chapterNumber": 23, "function": "transition" },
+    { "id": "H08", "bookId": "通兰民间故事集", "chapterNumber": 23, "function": "conflict" },
+    { "id": "H09", "bookId": "test-book-0609", "chapterNumber": 23, "function": "climax" },
+    { "id": "H10", "bookId": "药", "chapterNumber": 24, "function": "resolution" },
+    { "id": "H11", "bookId": "通兰民间故事集", "chapterNumber": 24, "function": "opening" },
+    { "id": "H12", "bookId": "test-book-0609", "chapterNumber": 24, "function": "transition" }
+  ]
+}

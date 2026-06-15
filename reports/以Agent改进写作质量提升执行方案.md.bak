@@ -1,0 +1,1903 @@
+# 以 Agent 改进写作质量提升执行方案
+
+> **衍生自**：`写作质量提升管线Agent建议.md`
+> **定位**：可参照的执行文档，将分析转化为分步实施动作
+> **总工作估算**：P0(3d) → Phase 0(3d) → Phase 0.5(5d) → Phase 1(10d) → Phase 1.5(4d) → Phase 2(11d) → Phase 3(6.5d) → Phase 3.5(5d) → Phase 4(24d)
+> **串行合计**：~71.5d（含测试与集成），含 Gate Review 约 80d
+
+---
+
+## 目录
+
+- [前置设计原则与文档对照](#前置设计原则与文档对照)
+- [P0：ProactiveEngine 主动提问引擎](#p0proactiveengine-主动提问引擎)
+- [Phase 0：建立质量基线](#phase-0建立质量基线)
+- [Phase 0.5：Prompt 级假设验证](#phase-05prompt-级假设验证)
+- [Phase 1：最小可行改进（MVP）](#phase-1最小可行改进mvp)
+- [Phase 1.5：审校基础设施增强](#phase-15审校基础设施增强)
+- [Phase 2：场景工艺改造](#phase-2场景工艺改造)
+- [Phase 3：角色与声音深度](#phase-3角色与声音深度)
+- [Phase 3.5：模型认知与记忆系统](#phase-35模型认知与记忆系统)
+- [Phase 4：叙事架构改造](#phase-4叙事架构改造)
+- [附录 A：文件变更总表](#附录-a文件变更总表)
+- [附录 B：质量门禁检查清单](#附录-b质量门禁检查清单)
+- [附录 C：风险和应对](#附录-c风险和应对)
+- [附录 D：成本跟踪模板](#附录-d成本跟踪模板)
+- [附录 E：最低成本替代路径](#附录-e最低成本替代路径)
+
+---
+
+# 前置设计原则与文档对照
+
+## 与其他文档的对照关系
+
+| 执行方案 Phase | 对应分析文档章节 | 核心内容 |
+|:--------------:|:----------------:|----------|
+| P0 | 三.3.4 写作前深度访谈（部分）、十七 | ProactiveEngine 主动提问引擎 |
+| Phase 0 | 十六.Phase 0 | 建立质量基线 |
+| Phase 0.5 | 十六.Phase 0.5 | 4 个 prompt 实验验证假设 |
+| Phase 1 | 四~六（基础）、十二.组件8/13/3 | Character Voice + Beta Reader + Genre Pact |
+| Phase 1.5 | 九（部分）、十二.组件16/17/19 | PostWriteValidator 增强 + Reviser 改造 + Issue Arbiter |
+| Phase 2 | 四（场景化）、七、八 | Scene Craft + Emotional Beat Map + 场景 Writer + 节奏控制 |
+| Phase 3 | 六（角色深度）、四（角色声音） | Character Authenticity + Observer 扩展 + Style Evolution |
+| Phase 3.5 | 十二.组件20/21 | ModelBehaviorProfile + 五层记忆系统 |
+| Phase 4 | 三（Planner 改造）、九、十 | StoryIntent + Director + Arc Planner + Planner 4层 + Prompt Compiler |
+| 附录 E | 十二.4 | 纯新增不修改 Agent 的最低成本路径 |
+
+## 实施设计原则（衍生自分析文档十四、十五）
+
+### 原则一：蓝图即约束，而非指令
+
+来自分析文档 十四.2。所有注入 Writer prompt 的蓝图字段必须遵循：
+
+- ✅ **好的约束**："本章结尾的情绪应该是'决心'而非'安心'"（给了方向，留了创作自由）
+- ❌ **坏的指令**："第 3 段句长必须是 8-12 字"（精确到段落，扼杀创造力）
+- **判断标准**：删掉这个字段后，LLM 是否会产出显著更差的文本？
+
+### 原则二：评估组件必须可节流
+
+来自分析文档 十四.3。所有新增的 LLM 评估调用必须通过 `qualityBudget` 配置控制：
+
+| 配置 | 说明 |
+|------|------|
+| `economy` | 仅首章 + 高潮章 + 每 10 章抽样 → +0.3 LLM calls/章 |
+| `normal` | 每章运行 Beta Reader, 抽样 Story Value → +1.5 LLM calls/章 |
+| `premium` | 每章全部评估 → +3 LLM calls/章 |
+
+### 原则三：反馈回路优先于前馈控制
+
+来自分析文档 十四.4。在投入事前蓝图设计之前，先用事后效果评估验证：
+
+```
+Writer → Beta Reader → 反馈给 Director
+```
+
+事前控制是猜测"什么能让读者喜欢"，事后反馈是测量"读者是否真的喜欢"。
+
+### 原则四：工程约束不可忽视
+
+来自分析文档 十五。实施中必须时刻关注以下约束：
+
+| 约束 | 含义 | 实施指引 |
+|------|------|----------|
+| 上下文窗口 | 各 Agent 独立拼接上下文，文件越多固定成本越高 | 每个 Agent 保留 10% 窗口作为输出空间 |
+| 长输出截断 | 3000+ 字可能在中间丢失上下文 | 场景级生成天然降低单次输出长度 |
+| 指令遵循不稳定 | LLM 可能忽略深层 prompt 中的约束 | 硬规则控制在 7±2 条，JSON Schema 输出 |
+| 单次生成质量上限 | 增加 prompt 长度不一定带来更好输出 | 差异候选 + 局部重写 + 模型路由 |
+
+---
+
+# P0：ProactiveEngine 主动提问引擎
+
+**工作量**：3d（框架 1d + 检测器 1d + 集成 1d） | **前置条件**：无 | **类型**：先行验证
+
+## 目标
+
+在不动现有 Agent 管线的前提下，让系统在 `write next` 之前主动检测作者未回答的关键问题，并在 CLI/Studio 中暂停询问。
+
+## 执行步骤
+
+### Step 1：核心数据结构（Day 1，0.5d）
+
+**新建** `packages/core/src/proactive/types.ts`
+
+```typescript
+export type Urgency = "urgent" | "normal" | "info";
+export type SignalType = "question" | "suggestion" | "alert" | "reminder";
+export type ProactiveStage = "pre-write" | "post-write" | "inter-chapter"
+  | "on-resume" | "periodic";
+
+export interface ProactiveAction {
+  readonly label: string;
+  readonly action: string;
+}
+
+export interface ProactiveSignal {
+  readonly id: string;
+  readonly type: SignalType;
+  readonly urgency: Urgency;
+  readonly source: string;
+  readonly title: string;
+  readonly message: string;
+  readonly context: string;
+  readonly actions: ReadonlyArray<ProactiveAction>;
+  readonly relatedChapter?: number;
+  readonly createdAt: number;
+}
+
+export interface ProactiveInput {
+  readonly bookDir: string;
+  readonly bookId: string;
+  readonly chapterNumber: number;
+  readonly stage: ProactiveStage;
+}
+```
+
+**完成标准**：
+- [ ] 类型定义无 TypeScript 错误
+- [ ] 可以通过 `import` 在其他模块中引用
+
+### Step 2：调度中心（Day 1，0.5d）
+
+**新建** `packages/core/src/proactive/engine.ts`
+
+```typescript
+type Detector = (input: ProactiveInput) => Promise<ReadonlyArray<ProactiveSignal>>;
+const DETECTORS: Detector[] = [];
+
+export function registerDetector(detector: Detector): void {
+  DETECTORS.push(detector);
+}
+
+export async function runProactiveChecks(
+  input: ProactiveInput,
+  dismissedIds?: ReadonlySet<string>,
+): Promise<ReadonlyArray<ProactiveSignal>> {
+  const results = await Promise.allSettled(DETECTORS.map((d) => d(input)));
+  const signals: ProactiveSignal[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") signals.push(...r.value);
+  }
+  const filtered = dismissedIds?.size
+    ? signals.filter((s) => !dismissedIds.has(s.id))
+    : signals;
+  const priority = { urgent: 0, normal: 1, info: 2 };
+  filtered.sort((a, b) => priority[a.urgency] - priority[b.urgency]);
+  return filtered;
+}
+```
+
+**完成标准**：
+- [ ] 空检测器列表时返回 `[]`
+- [ ] 检测器抛出异常不影响其他检测器
+- [ ] `dismissedIds` 正确过滤
+- [ ] 返回值按 urgency 排序
+
+### Step 3：入口文件（Day 1，0.25d）
+
+**新建** `packages/core/src/proactive/index.ts`
+
+```typescript
+export { runProactiveChecks, registerDetector } from "./engine.js";
+export type { ProactiveSignal, ProactiveInput, ProactiveAction, Urgency } from "./types.js";
+
+// P0 注册
+import { checkMissingIntent } from "./detectors/intent-gap-detector.js";
+registerDetector(checkMissingIntent);
+```
+
+### Step 4：intent-gap-detector（Day 2，1d）
+
+**新建** `packages/core/src/proactive/detectors/intent-gap-detector.ts`
+
+实现逻辑：
+```
+1. 输入: ProactiveInput
+2. 如果 stage !== "pre-write" → 返回 []
+3. 读取 books/<bookId>/story/chapter_intents.json
+4. 查找当前章的 intent（通过 chapterNumber）
+5. 检查 coreNarrative / readerTakeaway / keyMoment 是否为空
+6. 如果缺 ≥2 个 → urgent；缺 1 个 → normal；不缺 → []
+7. 返回 ProactiveSignal
+```
+
+**测试场景**（`packages/core/src/__tests__/proactive-engine.test.ts`）：
+
+| # | 场景 | 输入 | 预期 |
+|:-:|------|------|------|
+| 1 | 全部问题已回答 | 完整 intent | `signals.length === 0` |
+| 2 | 全部未回答 | 空 intent | `urgency === "urgent"`，`actions.length === 2` |
+| 3 | 仅缺 coreNarrative | 缺 1 字段 | `urgency === "normal"`，包含"核心叙述" |
+| 4 | 缺 2 字段 | 缺 2 字段 | `urgency === "urgent"` |
+| 5 | 非 pre-write 阶段 | stage=post-write | `signals.length === 0` |
+| 6 | 不存在 chapter_intents.json | 文件不存在 | 不抛错，返回 `[]` |
+| 7 | 已 dismiss 的 id 被过滤 | dismissedIds 包含信号 id | 过滤后不含该 id |
+
+### Step 5：PipelineRunner 集成（Day 3，0.5d）
+
+**修改** `packages/core/src/pipeline/runner.ts`
+
+改动点：
+1. 在 `writeNextChapter()` 的 `planChapter` 调用之前插入：
+
+```typescript
+const preSignals = await runProactiveChecks({
+  bookDir, bookId,
+  chapterNumber: nextChapter,
+  stage: "pre-write",
+});
+
+const urgentSignals = preSignals.filter((s) => s.urgency === "urgent");
+if (urgentSignals.length > 0) {
+  this._pendingSignals = urgentSignals;
+  return { interrupt: "proactive", signals: urgentSignals };
+}
+```
+
+2. 新增类型导出：
+
+```typescript
+export interface ProactiveInterruptResult {
+  readonly interrupt: "proactive";
+  readonly signals: ReadonlyArray<ProactiveSignal>;
+}
+export type WriteNextResult = ChapterPipelineResult | ProactiveInterruptResult;
+```
+
+**风险控制**：
+- 不抛出异常（避免资源清理遗漏）
+- 通过 `WriteNextResult` 联合类型让调用方类型守卫
+
+### Step 6：CLI 交互适配（Day 3，0.5d）
+
+**修改** `packages/cli/src/commands/write.ts`
+
+改动点：
+1. 在 `write next` action handler 中新增 `--skip-questions` 选项
+
+```typescript
+.option("--skip-questions", "跳过写作前提问", false)
+```
+
+2. 在处理 `writeNextChapter` 返回值时检查 `interrupt`：
+
+```typescript
+if ("interrupt" in result && result.interrupt === "proactive") {
+  // 展示信号
+  for (const signal of result.signals) {
+    // 使用 console.log 或 localization 函数输出
+  }
+  // 询问用户
+  const answer = await promptUser("请选择 [1-2]: ", ["1", "2"]);
+  if (answer === "1") {
+    console.log("请通过 inkos intent edit <bookId> <chapter> 回答问题后重试");
+    return;
+  }
+  // answer === "2": 继续写
+  result = await pipeline.writeNextChapter(bookId, wordCount);
+}
+```
+
+**交互流程**：
+
+```
+$ inkos write next
+
+── 写作前检查 ──
+⚠ 第 24 章还有 2 个问题未回答：
+  1. 核心叙述（这一章在讲什么）
+  2. 关键画面/时刻（本章最重要的一个场景）
+
+操作：
+  [1] 去回答问题
+  [2] 跳过，直接写作
+
+请选择 [1-2]:
+```
+
+### Step 7：Studio API 端点（Day 3，0.5d）
+
+**修改** `packages/studio/src/api/server.ts`
+
+```typescript
+app.get("/api/v1/books/:id/proactive-signals", async (c) => {
+  const bookDir = state.bookDir(c.req.param("id"));
+  const chapter = parseInt(c.req.query("chapter") || "0")
+    || await state.getNextChapterNumber(c.req.param("id"));
+  const signals = await runProactiveChecks({
+    bookDir, bookId: c.req.param("id"),
+    chapterNumber: chapter, stage: "pre-write",
+  });
+  return c.json({ signals, total: signals.length });
+});
+```
+
+### Step 8：Core 模块导出（Day 3，0.25d）
+
+**修改** `packages/core/src/index.ts`
+
+```typescript
+export {
+  runProactiveChecks,
+  type ProactiveSignal,
+  type ProactiveInput,
+} from "./proactive/index.js";
+```
+
+## P0 完成标准
+
+- [ ] `inkos write next` 在检测到未答问题时可弹出交互式提问
+- [ ] `inkos write next --skip-questions` 可跳过提问
+- [ ] Studio 前端可通过 `/api/v1/books/:id/proactive-signals` 获取信号
+- [ ] 全部 7 个测试场景通过
+- [ ] TypeScript 编译无错误（core + cli + studio）
+- [ ] 不影响现有管线——回答全部问题时行为不变
+- [ ] 不修改 `PlannerAgent` / `WriterAgent` / `ContinuityAuditor` 核心代码
+
+---
+
+# Phase 0：建立质量基线
+
+**工作量**：2-3d | **前置条件**：无 | **类型**：数据采集，不动代码
+
+## 目标
+
+建立当前产出的客观质量基线，为后续所有 Phase 提供"比什么"的参照系。
+
+## 执行步骤
+
+### Step 1：生成测试样本（0.5d）
+
+```
+1. 用当前管线在 3 个题材下各生成 5 章：
+   - 玄幻（xuanhuan）：现有通兰县城章节
+   - 都市（urban）：新建测试书
+   - 悬疑（mystery）：新建测试书
+2. 每章保存为独立文件，标注生成参数（model、temperature、prompt 版本）
+3. 记录 token 消耗
+```
+
+### Step 2：建立评估工具（1d）
+
+**新建** `packages/core/src/evaluation/human-reader-feedback.ts`
+
+```typescript
+export interface HumanReaderFeedback {
+  readonly chapterId: string;
+  readonly readerId: string;
+  readonly engagement: boolean;         // "你会想读下一章吗？"
+  readonly boredSegments: string[];     // 无聊段落标注
+  readonly characterIssues: string[];   // 角色问题
+  readonly bestMoment: string;          // 最佳段落
+  readonly worstMoment: string;         // 最差段落
+  readonly overallScore: 1-10;
+  readonly freeform: string;            // 开放式反馈
+  readonly timestamp: string;
+}
+```
+
+**新建** `scripts/evaluate-chapter.mjs`
+
+```javascript
+// 读取一章 → 输出格式化文本 → 人工评分 → 记录 CSV
+// 用法: node scripts/evaluate-chapter.mjs <chapter-file> [reader-name]
+```
+
+### Step 3：组织盲测（1d）
+
+```
+1. 邀请 3-5 位读者（含自己）
+2. 用 evaluate-chapter.mjs 工具逐个评分
+3. 汇总数据到基线报告
+```
+
+### Step 4：产出基线报告（0.5d）
+
+**新建** `reports/写作质量基线报告.md`
+
+报告模板：
+
+```markdown
+# 写作质量基线报告
+生成日期: YYYY-MM-DD
+
+## 样本概览
+| 题材 | 章节数 | 平均字数 | 平均 token 消耗 |
+|------|:------:|:--------:|:--------------:|
+
+## 关键指标
+| 指标 | 玄幻 | 都市 | 悬疑 | 总体 |
+|------|:---:|:----:|:----:|:----:|
+| 读者"想读下一章"率 | | | | |
+| 平均总体评分(1-10) | | | | |
+| 无聊段落占比 | | | | |
+| 角色问题报告数/章 | | | | |
+
+## Top 问题
+1. ...
+2. ...
+
+## 决定 Phase 1 优先级
+- 如果"角色问题"最严重 → Phase 1 优先 Character Voice
+- 如果"场景平铺直叙"最严重 → Phase 1 优先 Scene Blueprint 注入
+- 如果"不知道好不好" → Phase 1 优先 Beta Reader
+```
+
+## Phase 0 完成标准
+
+- [ ] 至少 15 章（3 题材 × 5 章）的人工评分数据
+- [ ] 至少 3 位读者的反馈
+- [ ] 基线报告已生成，包含量化指标
+- [ ] 明确 Phase 1 优先级
+
+---
+
+# Phase 0.5：Prompt 级假设验证
+
+**工作量**：3-5d | **前置条件**：Phase 0 完成 | **原则**：不改代码，只改 prompt
+
+## 目标
+
+在投入任何架构改造之前，用 prompt 实验验证四个核心假设。**任何一环失败则暂停对应方向的投入。**
+
+## 验证链
+
+```
+实验 1 → 实验 2 → 实验 3 → 实验 4
+（情绪蓝图） （场景蓝图） （LLM 评分可靠性） （成本估算）
+```
+
+### 实验 1：Emotional Beat Map 注入验证（1d）
+
+**假设**：给 Writer prompt 加入明确的情绪蓝图能提升章节质量。
+
+**方法**：
+1. 从 Phase 0 样本中选 3-5 章（不同情绪类型）
+2. 手工写 Emotional Beat Map（不改代码，只改 prompt）：
+
+```
+开头情绪: 压抑→中段情绪: 焦虑→愤怒→结尾情绪: 决心
+情绪峰值: 55% 处
+```
+
+3. 用增强 prompt 重写
+4. 盲测对比新旧版本
+
+**通过标准**：
+- [ ] 新版平均分提升 ≥ 1 分（Phase 0 评分体系）
+- [ ] token 成本增加 ≤ 50%
+
+**如果失败**：暂停情感工程方向，跳过 Phase 2 的 Emotional Beat Map。
+
+### 实验 2：Scene Blueprint 注入验证（1.5d）
+
+**假设**：LLM 能按场景蓝图写出结构合理的章节。
+
+**方法**：
+1. 选 2 章，手工设计 Scene Blueprint
+2. 让现有 Writer 按 blueprint **一次性生成**（不拆分多次调用）
+3. 检查结构符合度、过渡自然度、Auditor 通过率
+
+**通过标准**：
+- [ ] ≥ 80% 的场景按要求完成
+- [ ] Auditor 通过率不下降
+
+**如果失败**：暂停场景循环拆分方向，Writer 场景化改造不启动。
+
+### 实验 3：LLM 作为 Beta Reader 的可靠性验证（1.5d）
+
+**假设**：LLM 评分与人类评分显著相关（r ≥ 0.7）。
+
+**方法**：
+1. 准备 10 章（好/中/差各 3-4 章）
+2. LLM 按 StoryValueReport 维度评分
+3. 3 位人类盲评
+4. 计算相关系数
+
+**通过标准**：
+- [ ] Pearson/Spearman 相关系数 ≥ 0.7
+- [ ] LLM 能清楚区分"好"与"差"章节
+
+**如果失败**：Beta Reader 和 Story Value Evaluator 不启用，直到找到校准方法。
+
+### 实验 4：成本估算实验（1d）
+
+**假设**：场景化生成的总成本增加 ≤ 3 倍，单章耗时 ≤ 10 分钟。
+
+**方法**：
+1. 选 1 章，模拟场景化流程（prompt 要求按场景写，1 次调用）
+2. 记录输入/输出 token
+3. 模拟全量流程（估算多场景调用 + 评估调用）
+4. 汇总成本
+
+**通过标准**：
+- [ ] 总成本增加 ≤ 3 倍
+- [ ] 单章耗时 ≤ 10 分钟
+
+**如果失败**：先优化 token 策略，场景拆分前必须做成本优化。
+
+## Phase 0.5 完成标准
+
+- [ ] 4 个实验全部执行，结果记录到报告
+- [ ] 每个实验有明确的 pass/fail 判定
+- [ ] 基于实验结果更新 Phase 1-4 的范围
+- [ ] 任何实验失败都有对应的"暂停/转向"决定
+
+---
+
+# Phase 1：最小可行改进（MVP）
+
+**工作量**：7-8d（开发 4d + 测试 3d + 集成 1d） | **前置条件**：Phase 0 完成 | **LLM 成本增加**：+0.5 calls/章
+
+## 目标
+
+在当前管线基础上**做加法**，不改造核心 Agent，选择 3 个最高 ROI 的组件实施。
+
+## 选定的组件优先级
+
+根据 Phase 0 基线数据，从以下 3 个组件中选择（优先级可在 Phase 0 后调整）：
+
+| 优先级 | 组件 | 工作量 | 解决的问题 | 不改动 |
+|:------:|------|:------:|-----------|--------|
+| 1 | **Character Voice Tracker** | 3d | 角色说话千篇一律 | Planner/Writer 核心逻辑 |
+| 2 | **Beta Reader（轻量版）** | 2.5d | 不知道写得好不好 | Writer 核心逻辑 |
+| 3 | **Genre Pact 基础版** | 2.5d | 题材基调跑偏 | Writer/Planner 核心逻辑 |
+
+---
+
+### 组件 A：Character Voice Tracker（3d）
+
+#### 数据模型
+
+**新建** `packages/core/src/models/character-voice.ts`
+
+```typescript
+export interface VoiceProfile {
+  readonly characterId: string;
+  readonly speechPatterns: {
+    readonly avgSentenceLength: number;
+    readonly useOfSlang: boolean;
+    readonly useOfQuestions: boolean;     // 是否常用问句
+    readonly useOfExclamation: boolean;   // 是否常用感叹句
+    readonly catchphrases: string[];       // 口头禅
+    readonly distinctMannerisms: string[]; // 独特语言习惯
+  };
+  readonly narrativeVoice: {
+    readonly internalMonologue: boolean;  // 是否有内心独白
+    readonly sensoryPreference: string;   // 偏重哪种感官描写
+    readonly emotionalExpression: string; // 如何表达情绪
+  };
+  readonly lastUpdated: number;
+}
+```
+
+#### 实现步骤
+
+**Step 1（1d）**：数据模型 + 持久化
+
+```
+新建: packages/core/src/models/character-voice.ts
+  - VoiceProfile 接口定义
+  - loadVoiceProfiles(bookDir)  # 从 story/voices/ 目录读取
+  - saveVoiceProfile(bookDir, profile)  # 写入单个角色文件
+  - getVoiceProfile(bookDir, characterId)
+  - getAllVoiceProfiles(bookDir)
+
+存储方式: books/<bookId>/story/voices/<characterId>.json
+```
+
+**完成标准**：
+- [ ] 数据模型定义完整
+- [ ] CRUD 操作可正常读写
+- [ ] 角色不存在时返回默认配置
+
+**Step 2（1d）**：Observer 输出增强
+
+**修改** `packages/core/src/agents/observer-prompts.ts`
+
+在现有 Observer prompt 中增加角色声音提取指令：
+
+```diff
+  ## 提取类别
+  1. **角色行为**：谁做了什么，对谁，为什么
+  + 2. **角色语言**：说话方式、口头禅、语气变化
+  + 3. **内心活动**：内心独白的内容和风格
+```
+
+**完成标准**：
+- [ ] Observer 输出中包含角色语言模式字段
+- [ ] 输出结构向后兼容（新增字段，不修改现有字段）
+- [ ] 测试验证新增字段被正确填充
+
+**Step 3（1d）**：Writer prompt 注入
+
+**修改** `packages/core/src/agents/writer-prompts.ts`
+
+在 Writer prompt 中增加角色声音段落：
+
+```markdown
+🎭 角色声音指南：
+  ${characterName}: ${voiceProfile}
+```
+
+注入位置：在 system prompt 末尾、user message 之前。
+
+**完成标准**：
+- [ ] 当 voice profile 存在时，Writer prompt 包含角色声音段落
+- [ ] 当 voice profile 不存在时，Writer prompt 不变
+- [ ] 不影响现有测试
+
+---
+
+### 组件 B：Beta Reader 轻量版（2.5d）
+
+#### 实现步骤
+
+**Step 1（1d）**：数据模型 + Agent 框架
+
+**新建** `packages/core/src/agents/beta-reader.ts`
+
+```typescript
+export class BetaReader extends BaseAgent {
+  get name(): string { return "beta-reader"; }
+
+  async read(input: {
+    readonly chapterContent: string;
+    readonly chapterNumber: number;
+    readonly genre?: string;
+  }): Promise<BetaReaderOutput> {
+    const messages = this.buildReaderPrompt(input);
+    const response = await this.chat(messages, {
+      temperature: 0.3,  // 低温度保证一致性
+      maxTokens: 500,
+    });
+    return this.parseResponse(response.content);
+  }
+}
+
+export interface BetaReaderOutput {
+  readonly engagement: number;           // 1-10 读者投入度
+  readonly emotionalResponse: number;    // 1-10 情感共鸣度
+  readonly highlights: string[];         // 亮点
+  readonly weaknesses: string[];         // 弱点
+  readonly wantNextChapter: boolean;     // 是否想读下一章
+}
+```
+
+**Step 2（0.5d）**：Prompt 模板
+
+**新建** `packages/core/src/agents/beta-reader-prompts.ts`
+
+```typescript
+export function buildBetaReaderSystemPrompt(genre?: string): string {
+  return `你是一个 ${genre || "网文"} 读者。阅读以下章节后，请给出反馈。
+
+评分标准：
+- engagement (1-10): 这章吸引人吗？你会想继续读吗？
+- emotionalResponse (1-10): 这章触动了你的情绪吗？
+- highlights: 列出 1-3 个你最喜欢的段落或细节
+- weaknesses: 列出 1-3 个你觉得无聊或有问题的段落
+- wantNextChapter: true/false，你是否会想读下一章
+
+规则：
+- 你是真实读者，不是评论家——给出真实感受
+- 评分要区分度：不要全都给 7-8 分
+- 亮点和弱点要具体到段落或细节
+- 字数限制：总反馈不超过 300 字`;
+}
+```
+
+**Step 3（1d）**：管线集成 + qualityBudget 控制
+
+**修改** `packages/core/src/pipeline/runner.ts`
+
+在 Auditor 之后、Reviser 之前插入：
+
+```typescript
+// 在 runPostWriteChecks 调用之后
+if (this.config.defaultLLMConfig?.qualityBudget !== "economy") {
+  // economy 模式跳过 Beta Reader（仅首章和高潮章除外）
+  if (shouldRunBetaReader(chapterNumber, book, qualityBudget)) {
+    const betaReader = new BetaReader(this.agentCtxFor("beta-reader", bookId));
+    const betaResult = await betaReader.read({
+      chapterContent,
+      chapterNumber,
+      genre: book.genre,
+    });
+    // 记录到 memory-db 供后续趋势分析
+    await db.saveBetaReaderRating(chapterNumber, betaResult);
+  }
+}
+```
+
+**完成标准**：
+- [ ] Beta Reader 可在管线中调用
+- [ ] 输出通过 JSON Schema 校验
+- [ ] qualityBudget 控制正确（economy 跳过/normal 每章/premium 每章）
+- [ ] 不阻塞管线——Beta Reader 失败不影响章节生成
+
+---
+
+### 组件 C：Genre Pact 基础版（2.5d）
+
+#### 实现步骤
+
+**Step 1（1d）**：数据模型 + 内置契约库
+
+**新建** `packages/core/src/genres/genre-pact.ts`
+
+```typescript
+export interface GenrePact {
+  readonly genre: string;
+  readonly promises: Array<{
+    readonly promise: string;
+    readonly importance: "core" | "expected" | "optional";
+    readonly check: (content: string) => boolean;  // 纯规则校验
+  }>;
+}
+```
+
+**新建** `packages/core/genres/pacts/xuanhuan.json`，`urban.json`，`mystery.json`，`romance.json`
+
+每文件包含该题材的 5-8 条可校验规则。示例：
+
+```json
+{
+  "genre": "xuanhuan",
+  "promises": [
+    {
+      "promise": "主角有独特天赋或金手指",
+      "importance": "core",
+      "keywords": ["天赋", "血脉", "丹田", "觉醒", "传承"]
+    },
+    {
+      "promise": "每卷至少一次升级突破",
+      "importance": "core",
+      "keywords": ["突破", "晋级", "升级"]
+    }
+  ]
+}
+```
+
+**Step 2（1d）**：PostWriteValidator 集成纯规则校验
+
+**修改** `packages/core/src/agents/post-write-validator.ts`
+
+在现有校验链中增加 Genre Pact 检查：
+
+```typescript
+export function checkGenrePact(
+  content: string,
+  genre: string,
+  pacts: ReadonlyArray<GenrePact>,
+): ReadonlyArray<string> {
+  const pact = pacts.find((p) => p.genre === genre);
+  if (!pact) return [];
+  
+  const violations: string[] = [];
+  for (const promise of pact.promises) {
+    if (promise.importance === "core") {
+      const found = promise.keywords.some((kw) => content.includes(kw));
+      if (!found) {
+        violations.push(`题材契约未兑现：${promise.promise}`);
+      }
+    }
+  }
+  return violations;
+}
+```
+
+**Step 3（0.5d）**：质量门禁配置
+
+在 `inkos.json` 的 `qualityBudget` 中扩展：
+
+```json
+{
+  "writing": {
+    "genrePactEnforcement": "warning"  // "off" | "warning" | "blocking"
+  }
+}
+```
+
+**完成标准**：
+- [ ] 4 个基础题材的契约 JSON 文件就绪
+- [ ] PostWriteValidator 可执行纯规则校验
+- [ ] 校验结果写入审计报告
+- [ ] `genrePactEnforcement` 配置生效
+
+## Phase 1 完成标准
+
+- [ ] Character Voice Tracker：角色声音数据模型 + Observer 提取 + Writer 注入
+- [ ] Beta Reader：Agent 可调用，输出结构化评分，不阻塞管线
+- [ ] Genre Pact：4 个题材契约库 + PostWriteValidator 校验
+- [ ] 全部组件通过单元测试
+- [ ] TypeScript 编译无错误
+- [ ] 现有 171+ CLI 测试全部通过
+- [ ] 组件可独立关闭，不影响现有管线
+
+---
+
+# Phase 1.5：审校基础设施增强
+
+**工作量**：4d（开发 2d + 测试 1.5d + 集成 0.5d） | **前置条件**：Phase 1 完成 | **LLM 成本增加**：+0 LLM calls/章
+
+## 目标
+
+增强现有的审校基础设施，使其能够承载 Phase 2-4 产生的新检验维度。全部为纯规则、零 LLM 成本组件。
+
+## 子组件 A：PostWriteValidator 全面增强（1.5d）
+
+**修改** `packages/core/src/agents/post-write-validator.ts`
+
+在已有 Genre Pact 校验（Phase 1）基础上增加以下校验维度：
+
+### Step 1：风格合规性检查（0.5d）
+
+```typescript
+export interface StyleComplianceCheck {
+  readonly avgSentenceLength: [number, number];
+  readonly dialogueRatio: [number, number];
+  readonly sensoryDensity: "low" | "medium" | "high";
+
+  check(content: string): ReadonlyArray<{
+    readonly rule: string;
+    readonly actual: number | string;
+    readonly expected: number | string;
+    readonly severity: "warning" | "error";
+  }>;
+}
+```
+
+**规则示例**：
+- 紧张场景句长应 ≤ 15 字/句（检测超标段落）
+- 高潮场景对话比应 ≥ 40%（检测叙述过多）
+- 情感低谷段应包含 ≥ 1 处内心描写（检测纯事件推进）
+
+### Step 2：场景完整性检查（0.5d）
+
+检测章节是否包含 SceneBlueprint 中声明的所有场景：
+
+```typescript
+export function checkSceneIntegrity(
+  content: string,
+  blueprints: ReadonlyArray<SceneBlueprint>,
+): ReadonlyArray<string> {
+  // 1. 按场景标记分割内容（通过 ### 场景标题或 POV 切换）
+  // 2. 对比实际场景数与蓝图数
+  // 3. 检测场景间是否有过渡缺失
+}
+```
+
+### Step 3：字数偏差预警（0.5d）
+
+```typescript
+export function checkWordCountDeviation(
+  content: string,
+  target: number,
+  tolerance: number, // 默认 0.3 = ±30%
+): ReadonlyArray<string> {
+  const actual = content.length;
+  const deviation = Math.abs(actual - target) / target;
+  if (deviation > tolerance) {
+    return [`字数偏差 ${(deviation * 100).toFixed(0)}%（目标 ${target}，实际 ${actual}）`];
+  }
+  return [];
+}
+```
+
+**完成标准**：
+- [ ] 风格合规性检查可识别句长/对话比/感官密度违规
+- [ ] 场景完整性检查可检测缺失场景
+- [ ] 字数偏差预警在偏差 > 30% 时告警
+- [ ] 所有检查向后兼容（新增维度不影响现有通过率）
+
+---
+
+## 子组件 B：Reviser 针对性修订改造（1d）
+
+**修改** `packages/core/src/agents/reviser.ts`
+
+### Step 1：定位式修订模式（0.5d）
+
+当前的 Reviser 是"整章改写"。新增"定位式修订"模式——只重写低分段落：
+
+```typescript
+export async function targetedRevise(
+  input: {
+    readonly chapterContent: string;
+    readonly targetParagraphs: Array<{
+      readonly paragraphIndex: number;
+      readonly issue: string;
+      readonly severity: "style" | "continuity" | "authenticity";
+    }>;
+    readonly chapterIntent: ChapterIntent;
+  },
+): Promise<string> {
+  // 1. 分割章节为段落列表
+  // 2. 对每个 targetParagraph 生成局部重写 prompt
+  // 3. 只重写该段落，保留上下文
+  // 4. 拼接回完整章节
+}
+```
+
+### Step 2：基于 StoryValue 的修订触发（0.5d）
+
+当 Phase 4 的 StoryValueEvaluator 输出 `attention_needed` 时，自动选择修订段落：
+
+```typescript
+export function selectRevisionTargets(
+  betaReaderOutput: BetaReaderOutput,
+  content: string,
+): Array<{ paragraphIndex: number; issue: string }> {
+  // 1. 解析 Beta Reader 的 weaknesses
+  // 2. 在正文中定位对应段落
+  // 3. 返回需要修订的段落列表
+}
+```
+
+**完成标准**：
+- [ ] 定位式修订模式可用，不修改现有整章改写路径
+- [ ] 段落定位准确率 ≥ 80%
+- [ ] 修订后段落与原章节风格一致
+
+---
+
+## 子组件 C：Issue Arbiter 审校收敛器（1.5d）
+
+**新建** `packages/core/src/agents/issue-arbiter.ts`
+
+### Step 1：核心数据模型（0.5d）
+
+```typescript
+export interface AuditIssue {
+  readonly source: "auditor" | "post-write-validator" | "genre-pact" | "character-authenticity";
+  readonly category: string;
+  readonly severity: "error" | "warning" | "info";
+  readonly description: string;
+  readonly location?: string;    // 段落序号或位置
+  readonly confidence: number;   // 0-1
+}
+
+export interface ArbitratedOutput {
+  readonly uniqueIssues: ReadonlyArray<AuditIssue>;
+  readonly mergedCount: number;   // 合并的重复问题数
+  readonly conflicts: ReadonlyArray<{
+    readonly issueA: string;
+    readonly issueB: string;
+    readonly resolution: string;
+  }>;
+  readonly prioritySorted: ReadonlyArray<AuditIssue>;
+}
+```
+
+### Step 2：去重与冲突检测（0.5d）
+
+```typescript
+export function arbitrate(issues: ReadonlyArray<AuditIssue>): ArbitratedOutput {
+  // 1. 合并重复问题（相同 category + 相同 location）
+  // 2. 检测冲突建议（如"加长对话"vs"减少对话"）
+  // 3. 按 severity + confidence 排序
+  // 4. 输出最小修改集
+}
+```
+
+### Step 3：管线集成（0.5d）
+
+在 Auditor → Reviser 之间插入 Issue Arbiter：
+
+```typescript
+// runner.ts 管线插入点
+const auditResult = await auditor.audit({ ... });
+const pwvIssues = await postWriteValidator.validate({ ... });
+const allIssues = [...auditResult.issues, ...pwvIssues];
+const arbitrated = arbitrate(allIssues);
+// 传给 Reviser 的现在是最小修改集
+```
+
+**完成标准**：
+- [ ] 可合并重复问题
+- [ ] 可检测互相冲突的修改建议
+- [ ] 输出按优先级排序的最小修改集
+- [ ] 管线集成后 Reviser 处理的问题数减少（去重）
+
+## Phase 1.5 完成标准
+
+- [ ] PostWriteValidator 新增 3 个校验维度
+- [ ] Reviser 定位式修订模式可用
+- [ ] Issue Arbiter 可收敛审校结果
+- [ ] 全部组件零 LLM 成本
+- [ ] 全部测试通过
+
+---
+
+# Phase 2：场景工艺改造
+
+**工作量**：11d（开发 6.5d + 测试 3d + 集成 1.5d）
+**前置条件**：Phase 1 完成 + Phase 0.5 实验 2 通过
+**启动门禁**：
+- [ ] Phase 0.5 实验 2（Scene Blueprint 注入）通过
+- [ ] Beta Reader 数据表明"场景结构需要改进"
+- [ ] CLI 测试全绿
+**否决条件**：
+- Beta Reader 数据显示"角色问题是首要矛盾" → 优先 Phase 3
+- "读者投入度已 > 7/10" → 暂缓本阶段
+
+## 子组件 A：Scene Craft Engine（3d）
+
+**目标**：将 Planner 的意图解析为可执行的场景序列。
+
+**实现方式**：增强 `composer.ts`，不新增 Agent。
+
+**Step 1（1d）**：SceneBlueprint 数据模型
+
+**新建** `packages/core/src/models/scene-blueprint.ts`
+
+```typescript
+export interface SceneBlueprint {
+  readonly sceneNumber: number;
+  readonly totalScenes: number;
+  readonly type: "scene" | "sequel";  // 主动/被动场景
+  readonly goal: string;
+  readonly conflict: string;
+  readonly disaster?: string;          // 场景结束时
+  readonly location: string;
+  readonly povCharacter: string;
+  readonly emotionArc: {
+    readonly start: string;
+    readonly end: string;
+    readonly peakIntensity: 1-10;
+  };
+  readonly sensoryHighlights: string[];
+  readonly targetWordCount: number;
+  readonly forbiddenMoves: string[];
+}
+```
+
+**Step 2（1.5d）**：场景解析逻辑
+
+**修改** `packages/core/src/agents/composer.ts`
+
+在 `composeGovernedChapter()` 中增加场景序列生成路径：
+
+```typescript
+export function designSceneSequence(
+  intent: EnhancedChapterIntent,
+  bookConfig: BookConfig,
+): SceneBlueprint[] {
+  // 1. 根据 narrativePosition 确定场景模板
+  //    - opening: 3-4 场景，快速建立钩子
+  //    - climax: 2-3 场景，放慢节奏
+  //    - falling: 3-4 场景，情绪回落
+  // 2. 根据字数分配每个场景的目标字数
+  // 3. 根据 emotionalBeatMap 分配每个场景的情绪弧线
+  // 4. 校验 scene/sequel 交替合理性
+  // 5. 返回 SceneBlueprint[]
+}
+```
+
+**Step 3（0.5d）**：字数分配算法
+
+基于全书节奏曲线计算，非每章独立分配：
+
+```typescript
+function allocateWordCount(
+  chapterNumber: number,
+  totalChapters: number,
+  totalTargetWords: number,
+): number {
+  // 开篇章: 标准 100%
+  // 中段: 80-120% 根据 tension 调整
+  // 高潮章: 120-150%
+  // 收尾章: 100-120%
+}
+```
+
+## 子组件 B：Emotional Beat Map（2d）
+
+**Step 1（1d）**：数据模型 + 持久化
+
+**新建** `packages/core/src/models/emotional-beat-map.ts`
+
+```typescript
+export interface EmotionalBeatMap {
+  readonly chapterNumber: number;
+  readonly beats: Array<{
+    readonly position: number;          // 0-1 章节中的位置
+    readonly emotion: string;
+    readonly intensity: 1-10;
+    readonly trigger: string;
+    readonly targetReaderFeeling: string;
+  }>;
+}
+```
+
+**Step 2（1d）**：Planner prompt 增强
+
+**修改** `packages/core/src/agents/planner-prompts.ts`
+
+在 memo prompt 中增加情感蓝图段落：
+
+```markdown
+## Emotional Beat Map（请填充）
+在本章中，读者的情感旅程应该是什么？
+
+位置 0%: {承接上一章结尾的情绪}
+位置 25%: {第一个情绪转折}
+位置 50%: {本章中间点情绪}
+位置 75%: {高潮情绪}
+位置 100%: {本章结尾情绪}
+
+每个位置需要给出：情绪名称、强度(1-10)、触发事件
+```
+
+## 子组件 C：Writer 场景级拆分（3d）
+
+**Step 1（0.5d）**：在 `writeChapter()` 中增加场景循环分支
+
+```typescript
+async writeChapter(input: WriteChapterInput): Promise<WriteChapterOutput> {
+  if (input.sceneBlueprints && input.sceneBlueprints.length > 0) {
+    return this.writeChapterByScenes(input);
+  }
+  return this.writeChapterLegacy(input);  // 原有路径
+}
+```
+
+**Step 2（1d）**：实现 `writeSingleScene()`
+
+```typescript
+private async writeSingleScene(
+  scene: SceneBlueprint,
+  context: SceneContext,
+): Promise<string> {
+  const prompt = this.buildScenePrompt(scene, context);
+  const response = await this.chat(prompt, {
+    temperature: this.sceneTemperature(scene),
+  });
+  return response.content;
+}
+```
+
+**Step 3（1.5d）**：集成 + 测试
+
+重点测试：
+- 场景数量变化（2-8 场景）
+- 截断续写（`ContinuationAnchor` 机制）
+- 情绪连贯性（场景间不出现情绪跳变）
+- 回归测试：确保一次性路径完全不受影响
+
+## 子组件 D：跨章情绪连接（1.5d）
+
+**新建** `packages/core/src/utils/chapter-emotional-bridge.ts`
+
+```typescript
+export interface ChapterEmotionalBridge {
+  readonly readerStateAtChapterStart: {
+    readonly dominantEmotion: string;
+    readonly unresolvedFeelings: string[];
+    readonly hangingQuestions: string[];
+  };
+  readonly emotionalJourney: {
+    readonly start: string;
+    readonly mid: string;
+    readonly end: string;
+    readonly peak: { emotion: string; scene: number; intensity: 1-10 };
+  };
+}
+```
+
+注入到 Writer prompt 中第一个段落之前。
+
+## 子组件 E：节奏 blueprint + 实时控制（2d）
+
+**新建** `packages/core/src/utils/pacing-controller.ts`
+
+规则引擎：
+1. 从 SceneBlueprint 读取 `targetWordCount`
+2. Writer 每生成一段后检查累计字数
+3. 根据剩余字数和场景剩余 beats 动态调整后续段落节奏
+4. 输出节奏控制提示给 Writer 下一轮调用
+
+## Phase 2 完成标准
+
+- [ ] SceneBlueprint 数据模型 + 场景解析逻辑就绪
+- [ ] EmotionalBeatMap 在 Planner memo 中生效
+- [ ] Writer 场景循环分支可用（一次性路径保留为 fallback）
+- [ ] 跨章情绪连接正常传递
+- [ ] 节奏实时控制在 ±15% 字数偏差内
+- [ ] Phase 0.5 实验 2 通过标准持续满足
+- [ ] 全部测试通过
+
+---
+
+# Phase 3：角色与声音深度
+
+**工作量**：6.5d（开发 4d + 测试 1.5d + 集成 1d）
+**前置条件**：Phase 1 完成 + Beta Reader 数据表明需要
+**启动门禁**：
+- [ ] Beta Reader 数据显示"角色问题是核心痛点"
+- [ ] Phase 1 Character Voice Tracker 已上线
+
+## 子组件 A：Character Authenticity 系统（2d）
+
+**新建** `packages/core/src/agents/character-authenticity.ts`
+
+**评估维度**：
+- 对话一致性（说话方式是否匹配 profile）
+- 行为一致性（行为是否符合性格设定）
+- 信念一致性（价值判断是否连贯）
+- 深度评分（内心矛盾、意料之外的行为、示弱时刻、成长时刻）
+
+**实现**：纯规则 + 关键词匹配，零 LLM 成本。
+
+## 子组件 B：Observer 行为提取扩展（1d）
+
+**修改** `packages/core/src/agents/observer-prompts.ts`
+
+在现有 Observer prompt 中增加提取指令：
+
+```diff
+  ## 提取类别
+  + 10. **角色决策**：关键决策 + 动机 + 未选择的选项
+  + 11. **角色关系**：互动类型（冲突/支持/回避/亲密）+ 关系变化
+```
+
+## 子组件 C：Writer 角色声音深度注入（1d）
+
+**修改** `packages/core/src/agents/writer-prompts.ts`
+
+增强角色声音段落：
+
+```markdown
+🎭 角色声音：
+
+  ${characterName}:
+  语言: ${avgSentenceLength}字/句, ${useOfQuestions ? '常用问句' : '陈述为主'}
+  口头禅: "${catchphrases}"
+  表达方式: ${emotionalExpression}
+  
+  本章特别注意：
+  - ${characterName}不能出现以下行为（违背角色性格）: ${forbiddenBehaviors}
+  - ${characterName}当前情绪状态: ${currentEmotion}
+  - ${characterName}与其他角色的关系: ${relationships}
+```
+
+## 子组件 D：Style Evolution Engine 基础版（2d）
+
+**新建** `packages/core/src/utils/style-evolution.ts`
+
+按叙事职能动态调整风格参数：
+
+```typescript
+export interface StyleTarget {
+  readonly avgSentenceLength: [number, number];  // [min, max]
+  readonly dialogueRatio: [number, number];
+  readonly sensoryDensity: "low" | "medium" | "high";
+  readonly paragraphLength: "short" | "medium" | "long";
+}
+
+// 根据章节职能返回风格目标
+export function deriveStyleTarget(
+  chapterFunction: "setup" | "escalate" | "twist" | "climax" | "resolve",
+  language: "zh" | "en",
+): StyleTarget { ... }
+```
+
+## Phase 3 完成标准
+
+- [ ] Character Authenticity 系统输出可读报告
+- [ ] Observer 输出包含角色决策和关系变化
+- [ ] Writer prompt 包含深度角色声音注入
+- [ ] Style Evolution Engine 按章节职能调整风格参数
+- [ ] 全部测试通过
+
+---
+
+# Phase 3.5：模型认知与记忆系统
+
+**工作量**：5d（开发 3d + 测试 1.5d + 集成 0.5d） | **前置条件**：Phase 3 完成 | **LLM 成本增加**：+0 LLM calls/章
+
+## 目标
+
+为系统建立对 LLM 模型行为的认知能力和长效记忆能力，为 Phase 4 的叙事架构改造提供底层基础设施。
+
+## 子组件 A：ModelBehaviorProfile（2d）
+
+**新建** `packages/core/src/models/model-behavior-profile.ts`
+
+### Step 1：数据模型（0.5d）
+
+```typescript
+export interface ModelBehaviorProfile {
+  readonly modelId: string;
+
+  // 中文长文质量（项目实测，非厂商指标）
+  readonly proseQuality: {
+    readonly chineseLongform: 1-10;     // 中文长篇叙事质量
+    readonly instructionFollowing: 1-10; // 指令遵循稳定性
+    readonly jsonReliability: 1-10;     // JSON/Schema 输出可靠性
+  };
+
+  // 专有能力
+  readonly strengths: string[];          // "角色声音保持", "悬念设计"
+  readonly weaknesses: string[];         // "容易忘细节", "结尾仓促"
+
+  // 工程指标
+  readonly latencyPerToken: number;      // ms/token
+  readonly pricePer1KTokens: number;     // $/1K tokens
+  readonly maxConcurrency: number;
+  readonly knownRefusals: string[];      // 已知拒答模式
+
+  // 版本化成绩
+  readonly benchmarkResults: Array<{
+    readonly benchmarkId: string;
+    readonly date: string;
+    readonly score: number;
+    readonly sampleSize: number;         // 测试样本数
+  }>;
+}
+```
+
+### Step 2：离线基准测试脚本（1d）
+
+**新建** `scripts/benchmark-model.mjs`
+
+```javascript
+// 基准测试项目：
+// 1. 长文生成质量：用 3 个固定 prompt 各生成 1 章，人工评分
+// 2. 指令遵循：注入 5 个 MUST/MUST NOT 规则，检查执行率
+// 3. JSON Schema：要求输出 3 种 Schema，检查合规率
+// 4. 角色一致性：固定角色设定，生成对话段落，检查角色声音保持度
+// 5. 速度和成本：记录 token/s 和 $/1K tokens
+
+// 用法: node scripts/benchmark-model.mjs --model deepseek-v4-flash
+```
+
+### Step 3：路由决策支持（0.5d）
+
+```typescript
+export function suggestModelForTask(
+  task: "planning" | "writing" | "auditing" | "evaluation" | "revision",
+  profiles: ReadonlyArray<ModelBehaviorProfile>,
+): ModelBehaviorProfile | null {
+  // 根据任务类型推荐最合适的模型
+  // planning → 高 jsonReliability
+  // writing → 高 chineseLongform
+  // auditing → 高 instructionFollowing
+  // 返回 null 表示使用默认模型
+}
+```
+
+**完成标准**：
+- [ ] 模型档案数据模型就绪
+- [ ] 基准测试脚本可用
+- [ ] 路由建议函数逻辑正确
+- [ ] 不改变默认路由（仅建议，不自动切换）
+
+---
+
+## 子组件 B：五层记忆系统（3d）
+
+**修改** `packages/core/src/state/memory-db.ts` 大幅扩展
+
+### 架构概述
+
+来自分析文档十二.组件21。五层记忆结构：
+
+| 层 | 名称 | 内容 | 存储方式 | 访问频率 |
+|:--:|------|------|----------|:--------:|
+| T0 | 不可变规则 | book_rules, style_guide, genre_pact | JSON 文件 | 每章读取 |
+| T1 | 当前状态 | 角色状态、位置、关系 | snapshots/state.json | 每章读+写 |
+| T2 | 活跃叙事 | 弧线进度、伏笔到期提醒 | memory-db 表 | 每章读+写 |
+| T3 | 层级摘要 | 章节摘要、卷摘要、全书摘要 | memory-db 表 + 文件 | 规划时读取 |
+| T4 | 原始档案 | 完整章节内容 | chapters/目录 | 审计时读取 |
+
+### Step 1：T2 活跃叙事表（1d）
+
+```typescript
+// memory-db.ts 新增
+
+export interface ActiveNarrative {
+  readonly id: string;
+  readonly type: "arc" | "hook" | "subplot";
+  readonly status: "active" | "paused" | "completed" | "abandoned";
+  readonly lastUpdatedChapter: number;
+  readonly nextDueChapter?: number;    // 伏笔到期提醒
+  readonly summary: string;
+  readonly relatedCharacterIds: string[];
+}
+
+// 新增方法
+db.addActiveNarrative(narrative: ActiveNarrative): Promise<void>;
+db.getActiveNarratives(chapterNumber: number): Promise<ActiveNarrative[]>;
+db.getDueHooks(chapterNumber: number): Promise<ActiveNarrative[]>;
+db.updateNarrativeStatus(id: string, status: string): Promise<void>;
+```
+
+### Step 2：T3 层级摘要增量更新（1d）
+
+```typescript
+export interface ChapterSummary {
+  readonly chapterNumber: number;
+  readonly summary: string;
+  readonly keyEvents: string[];
+  readonly characterStates: Record<string, string>;
+  readonly emotionalArc: string;
+  readonly hookChanges: string[];
+}
+
+export interface VolumeSummary {
+  readonly volumeNumber: number;
+  readonly chapters: [number, number];  // 起止章号
+  readonly summary: string;
+  readonly majorArcProgress: string[];
+  readonly remainingHooks: string[];
+}
+
+// 增量更新逻辑：新章加入后只更新受影响的摘要节点
+export async function incrementallyUpdateSummaries(
+  bookDir: string,
+  newChapterSummary: ChapterSummary,
+): Promise<void> {
+  // 1. 更新该章摘要
+  // 2. 如果该章是卷的结尾，更新卷摘要
+  // 3. 如果卷是全书的关键节点，更新全书摘要
+  // 4. 只更新变化的部分，不重新生成全部
+}
+```
+
+### Step 3：Agent 检索策略配置（0.5d）
+
+```typescript
+// 各 Agent 的检索配置
+export const AGENT_MEMORY_ACCESS: Record<string, {
+  readonly read: ReadonlyArray<"T0" | "T1" | "T2" | "T3" | "T4">;
+  readonly write: ReadonlyArray<"T0" | "T1" | "T2" | "T3" | "T4">;
+}> = {
+  director:  { read: ["T0", "T2"], write: ["T2"] },
+  planner:   { read: ["T1", "T3"], write: [] },
+  writer:    { read: ["T1", "T2"], write: [] },
+  continuity: { read: ["T1", "T2", "T4"], write: [] },
+  observer:  { read: [], write: ["T1", "T2", "T3"] },
+};
+```
+
+### Step 4：混合检索评分（0.5d）
+
+```typescript
+export function rankMemoryResults(
+  lexical: Array<{ id: string; score: number }>,
+  semantic: Array<{ id: string; score: number }>,
+  recency: Array<{ id: string; chapterNumber: number }>,
+  hookDue: Array<{ id: string; nextDueChapter: number }>,
+  currentChapter: number,
+): Array<{ id: string; finalScore: number }> {
+  // 加权公式:
+  // finalScore = 0.3 * lexical + 0.3 * semantic
+  //             + 0.2 * recency + 0.2 * hookDue
+  // 其中 recency = 1 - (currentChapter - chapterNumber) / maxGap
+  // 其中 hookDue = nextDueChapter 越近越高
+}
+```
+
+**完成标准**：
+- [ ] T2 活跃叙事表就绪，伏笔到期可查询
+- [ ] T3 层级摘要增量更新不重复生成
+- [ ] Agent 检索策略配置生效
+- [ ] 混合检索评分可用
+
+## Phase 3.5 完成标准
+
+- [ ] ModelBehaviorProfile 数据模型 + 基准测试脚本
+- [ ] 五层记忆系统 T0-T4 全部就绪
+- [ ] Agent 检索策略按角色差异化配置
+- [ ] 全部测试通过
+- [ ] 不改变现有管线行为（新增基础设施，默认不启用）
+
+---
+
+# Phase 4：叙事架构改造
+
+**工作量**：24d（开发 14d + 测试 6d + 集成 4d）
+**前置条件**：Phase 0-3 全部完成 + CLI 测试全绿
+
+## 启动门禁
+
+```
+□ Phase 0 完成: 有人工阅读基线数据
+□ Phase 1 完成: Character Voice + Beta Reader + Genre Pact 已上线
+□ Phase 2/3 按需完成
+□ CLI 测试 171/171 全绿
+□ 至少有一位真人用户确认"最近 10 章的产出稳定可接受"
+□ 当前文档中所有"如果失败"条件均未触发
+```
+
+## 子组件 A：StoryIntent 模型 + Narrative Director（5d）
+
+**新建** `packages/core/src/models/story-intent.ts`
+
+全书级意图模型：
+
+```typescript
+export interface StoryIntent {
+  readonly corePremise: string;         // 故事核心 premise
+  readonly thematicStatement: string;   // 主题陈述
+  readonly readerJourney: {
+    readonly arc: EmotionalArc[];
+    readonly promiseToReader: string;
+  };
+  readonly characterArcs: CharacterArc[];
+  readonly pacingBlueprint: {
+    readonly earlyChapters: PacingMode;
+    readonly midChapters: PacingMode;
+    readonly lateChapters: PacingMode;
+  };
+}
+```
+
+存储：`books/<bookId>/story/story_intent.json`
+
+**新建** `packages/core/src/agents/narrative-director.ts`
+
+```typescript
+export class NarrativeDirector extends BaseAgent {
+  get name(): string { return "narrative-director"; }
+
+  async getDirectorNote(input: {
+    readonly storyIntent: StoryIntent;
+    readonly chapterNumber: number;
+    readonly bookDir: string;
+  }): Promise<DirectorNote> {
+    // 1. 加载全书意图
+    // 2. 确定当前章在全书中位置
+    // 3. 确定当前弧线进度
+    // 4. 生成 DirectorNote
+  }
+}
+
+export interface DirectorNote {
+  readonly chapterFunction: "setup" | "escalate" | "twist" | "climax" | "resolve";
+  readonly arcProgress: {
+    readonly arcName: string;
+    readonly overallBeatCount: number;
+    readonly completedBeats: number;
+  };
+  readonly activeCharacterArcs: Array<{
+    readonly characterId: string;
+    readonly beliefAtStart: string;
+    readonly expectedShift: string;
+  }>;
+  readonly recommendedPacing: {
+    readonly tensionLevel: "low" | "medium" | "high";
+    readonly infoRevealRate: "slow" | "normal" | "fast";
+  };
+}
+```
+
+## 子组件 B：Arc Planner（3d）
+
+**新建** `packages/core/src/agents/arc-planner.ts`
+
+每 5 章运行一次，做 5 章前瞻规划：
+
+```typescript
+export interface ArcPlan {
+  readonly upcomingChapters: Array<{
+    readonly chapterNumber: number;
+    readonly function: string;
+    readonly hookToLay: string[];
+    readonly hookToRecover: string[];
+    readonly tensionTarget: number;
+  }>;
+  readonly pacingCurve: number[];   // 5 章的 tension 值
+}
+```
+
+## 子组件 C：Planner 四层意图改造（3d）
+
+**修改** `packages/core/src/agents/planner.ts`
+
+在 `planChapter()` 中插入新步骤链：
+
+```typescript
+async planChapter(input: PlanChapterInput): Promise<PlanChapterOutput> {
+  // 新增步骤
+  const storyIntent = await this.loadStoryIntent(input.bookDir);
+  const directorNote = await this.getNarrativeDirectorNote(input.bookDir, input.chapterNumber, storyIntent);
+  const emotionalBeatMap = await this.designEmotionalBeats(input.chapterNumber, directorNote);
+  const sceneBlueprints = await this.designScenes(emotionalBeatMap, storyIntent);
+
+  // 原有步骤（增强）
+  const memo = await this.planChapterMemo({
+    ...input,
+    directorNote,
+    emotionalBeatMap,
+    sceneBlueprints,
+    storyIntent,
+  });
+
+  return { ...existingOutput, sceneBlueprints, emotionalBeatMap };
+}
+```
+
+## 子组件 D：Story Value Evaluator + Reviser 针对性修订（3d）
+
+**新建** `packages/core/src/agents/story-value-evaluator.ts`
+
+在 Beta Reader 输出上做聚合统计：
+
+```typescript
+export class StoryValueEvaluator {
+  async evaluate(input: {
+    readonly betaReaderResults: BetaReaderOutput[];
+    readonly windowSize: number;  // 滑动窗口大小，默认 5
+  }): Promise<StoryValueTrend> {
+    // 1. 计算最近 N 章均值
+    // 2. 计算趋势斜率
+    // 3. 输出三档: good / attention_needed / critical
+  }
+}
+
+export interface StoryValueTrend {
+  readonly status: "good" | "attention_needed" | "critical";
+  readonly runningAverage: number;
+  readonly slope: number;            // 正 = 上升，负 = 下降
+  readonly chapterCount: number;
+  readonly recentScores: number[];
+}
+```
+
+**修改** `packages/core/src/agents/reviser.ts`
+
+增加针对性修订模式：基于 StoryValueEvaluator 的 `attention_needed` 标签，定位低分段落并局部重写。
+
+## 子组件 E：Continuity Bible（2d）
+
+**修改** `packages/core/src/agents/continuity.ts`
+
+在当前 continuity audit 中增加"预防性"环节——在 Planner 阶段提供 Continuity Bible：
+
+```typescript
+export async function buildContinuityBible(
+  bookDir: string,
+  chapterNumber: number,
+): Promise<string> {
+  // 1. 加载所有角色当前状态
+  // 2. 加载所有活跃伏笔
+  // 3. 加载所有未解决的 continuity 问题
+  // 4. 生成约束块注入 Planner prompt
+}
+```
+
+## 子组件 F：Prompt Compiler 接入（2d）
+
+**新建** `packages/core/src/agents/prompt-compiler.ts`
+
+统一上下文编译层：
+
+```typescript
+export class PromptCompiler {
+  compile(input: {
+    readonly agent: string;
+    readonly fragments: PromptFragment[];
+    readonly tokenBudget: number;
+  }): PromptManifest {
+    // 1. 收集所有候选 fragment
+    // 2. 按 hard→slot→priority 排序
+    // 3. 分配 token 预算
+    // 4. 超出时压缩 soft 内容
+    // 5. 输出 compiled prompt
+  }
+}
+```
+
+## Phase 4 完成标准
+
+- [ ] StoryIntent 模型 + 持久化 + Studio 编辑页面
+- [ ] Narrative Director 输出 DirectorNote 并被 Planner 消费
+- [ ] Arc Planner 每 5 章运行一次，输出 5 章前瞻
+- [ ] Planner 四层意图改造完成（含测试）
+- [ ] Story Value Evaluator 输出趋势报告
+- [ ] Reviser 针对性修订可用
+- [ ] Continuity Bible 注入 Planner prompt
+- [ ] Prompt Compiler 接入管线（可选开启）
+- [ ] 全部 200+ 测试通过
+- [ ] TypeScript 编译零错误
+- [ ] Phase 1、1.5、2、3、3.5 全部完成且未触发否决条件
+- [ ] Phase 0.5 四个实验全部通过
+
+---
+
+# 附录 A：文件变更总表
+
+| 操作 | 文件路径 | Phase |
+|:----:|---------|:-----:|
+| 🆕 | `packages/core/src/proactive/types.ts` | P0 |
+| 🆕 | `packages/core/src/proactive/engine.ts` | P0 |
+| 🆕 | `packages/core/src/proactive/index.ts` | P0 |
+| 🆕 | `packages/core/src/proactive/detectors/intent-gap-detector.ts` | P0 |
+| 🆕 | `packages/core/src/__tests__/proactive-engine.test.ts` | P0 |
+| 🔧 | `packages/core/src/pipeline/runner.ts` | P0, P1, P1.5, P2, P4 |
+| 🔧 | `packages/core/src/index.ts` | P0, P1, P1.5, P2, P3, P3.5, P4 |
+| 🔧 | `packages/cli/src/commands/write.ts` | P0 |
+| 🔧 | `packages/studio/src/api/server.ts` | P0, P1, P4 |
+| 🆕 | `packages/core/src/evaluation/human-reader-feedback.ts` | 0 |
+| 🆕 | `scripts/evaluate-chapter.mjs` | 0 |
+| 🆕 | `packages/core/src/models/character-voice.ts` | 1 |
+| 🔧 | `packages/core/src/agents/observer-prompts.ts` | 1, 3 |
+| 🔧 | `packages/core/src/agents/writer-prompts.ts` | 1, 3 |
+| 🆕 | `packages/core/src/agents/beta-reader.ts` | 1 |
+| 🆕 | `packages/core/src/agents/beta-reader-prompts.ts` | 1 |
+| 🆕 | `packages/core/src/genres/genre-pact.ts` | 1 |
+| 🆕 | `packages/core/genres/pacts/*.json` | 1 (×4) |
+| 🔧 | `packages/core/src/agents/post-write-validator.ts` | 1, 1.5 |
+| 🔧 | `packages/core/src/agents/continuity.ts` | 1, 4 |
+| 🆕 | `packages/core/src/models/scene-blueprint.ts` | 2 |
+| 🔧 | `packages/core/src/agents/composer.ts` | 2 |
+| 🆕 | `packages/core/src/models/emotional-beat-map.ts` | 2 |
+| 🔧 | `packages/core/src/agents/planner-prompts.ts` | 2, 4 |
+| 🔧 | `packages/core/src/agents/writer.ts` | 2 |
+| 🆕 | `packages/core/src/utils/chapter-emotional-bridge.ts` | 2 |
+| 🆕 | `packages/core/src/utils/pacing-controller.ts` | 2 |
+| 🆕 | `packages/core/src/agents/character-authenticity.ts` | 3 |
+| 🆕 | `packages/core/src/utils/style-evolution.ts` | 3 |
+| 🆕 | `packages/core/src/agents/issue-arbiter.ts` | 1.5 |
+| 🔧 | `packages/core/src/agents/reviser.ts` | 1.5, 4 |
+| 🆕 | `packages/core/src/models/model-behavior-profile.ts` | 3.5 |
+| 🆕 | `scripts/benchmark-model.mjs` | 3.5 |
+| 🔧 | `packages/core/src/state/memory-db.ts` | 3.5 |
+| 🆕 | `packages/core/src/models/story-intent.ts` | 4 |
+| 🆕 | `packages/core/src/agents/narrative-director.ts` | 4 |
+| 🆕 | `packages/core/src/agents/arc-planner.ts` | 4 |
+| 🔧 | `packages/core/src/agents/planner.ts` | 4 |
+| 🆕 | `packages/core/src/agents/story-value-evaluator.ts` | 4 |
+| 🆕 | `packages/core/src/agents/prompt-compiler.ts` | 4 |
+
+**总计**：🆕 新增 28 个文件 + 🔧 修改 14 个文件 = 42 个文件变更
+
+---
+
+# 附录 B：质量门禁检查清单
+
+## 跨 Phase 门禁
+
+```
+□ 每个 Phase 完成后，运行 pnpm -r test 确保全部测试通过
+□ 每个 Phase 完成后，pnpm run build 确保编译通过
+□ 每个 Phase 完成后，至少用 1 本书生成 3 章验证回归
+□ 每个 Phase 不能降低现有管线通过率
+□ 每个组件必须可独立关闭（通过配置或 feature flag）
+```
+
+## 代码质量门禁
+
+```
+□ 新建文件必须有对应的单元测试
+□ 修改文件必须保持 100% 测试通过率
+□ 新 Agent 必须 mock LLM 调用测试
+□ 管线集成必须有集成测试
+□ 所有 public API 必须有 JSDoc 注释
+□ 所有接口变更必须向后兼容或提供 migration path
+```
+
+## 性能门禁
+
+```
+□ 单章生成时间不超过 Phase 0 基线的 3 倍
+□ 单章 LLM token 消耗不超过 Phase 0 基线的 5 倍
+□ Beta Reader 等新增 LLM 调用通过 qualityBudget 控制
+□ 场景化 Writer 有 fallback 到一次性生成的路径
+```
+
+---
+
+# 附录 C：风险和应对
+
+| 风险 | 概率 | 影响 | 应对 |
+|------|:----:|:----:|------|
+| LLM 评分与人类评分不相关 (r < 0.7) | 中 | 高 | Beta Reader 仅作为参考，不作为门禁；增加评分校准实验 |
+| 场景化改造后单章耗时 > 10 分钟 | 中 | 高 | 保留一次性生成路径作为默认，场景拆分设为 opt-in |
+| 新增组件导致现有测试失败 | 高 | 中 | 每个 Phase 结束时跑回归测试；新组件通过 feature flag 隔离 |
+| 用户不适应"写作前提问"流程 | 低 | 中 | 提问可跳过（`--skip-questions`）；提问数量可配置 |
+| 架构改造范围扩大（scope creep） | 中 | 高 | 每个 Phase 有明确的启动门禁和否决条件；超过范围需单独审批 |
+| 成本估算严重不准确 | 中 | 中 | 每个 Phase 结束更新成本估算；Phase 0.5 实验 4 提供基准数据 |
+
+---
+
+# 附录 D：成本跟踪模板
+
+每个 Phase 完成后，更新以下表格：
+
+```markdown
+## Phase [N] 实际成本
+
+| 项目 | 预算 | 实际 | 偏差 |
+|------|:----:|:----:|:----:|
+| 开发时间(d) | | | |
+| 测试时间(d) | | | |
+| 集成时间(d) | | | |
+| 人均 d | | | |
+| 新增 LLM calls/章 | | | |
+| 新增 Token/章 | | | |
+| 月度额外成本($) | | | |
+
+## 完成标准检查
+
+- [ ] 全部测试通过
+- [ ] 编译通过
+- [ ] 回归验证通过
+- [ ] 组件可独立关闭
+
+## 学到的教训
+
+1. ...
+2. ...
+```
+
+---
+
+# 附录 E：最低成本替代路径
+
+> 来自分析文档 十二.4。如果因资源限制无法全量实施，可选择此路径——**只做纯新增，不修改任何现有 Agent 核心逻辑**。
+
+## 适用范围
+
+| 条件 | 说明 |
+|------|------|
+| 预算 | ≤ 23d（含测试 8d + 集成 4d） |
+| 目标 | 提升管线质量，但不冒回归风险 |
+| 约束 | 不修改 planner.ts / writer.ts / continuity.ts 核心逻辑 |
+
+## 路径组件
+
+| # | 组件 | 开发(d) | 测试(d) | 集成(d) | 说明 |
+|:-:|------|:-------:|:-------:|:-------:|------|
+| 18 | **Prompt Compiler** | 3 | 2 | 1 | 新增统一编译层，逐步替换现有 context-assembly |
+| 3 | **Genre Pact（纯校验）** | 2 | 1 | 0.5 | 只做规则校验，不注入 Writer prompt |
+| 13 | **Beta Reader** | 2 | 1 | 1 | 新 Agent，后续独立关闭不影响管线 |
+| 20 | **ModelBehaviorProfile** | 1 | 0.5 | 0.5 | 数据模型 + 基线脚本 |
+| 19 | **Issue Arbiter** | 1.5 | 1 | 0.5 | 审校收敛器 |
+| 21 | **五层记忆（基础）** | 2 | 1.5 | 1 | 扩展现有 memory-db |
+| **合计** | | **11.5** | **7** | **4.5** | **~23d** |
+
+## 放弃的内容
+
+| 放弃项 | 原因 | 替代方案 |
+|--------|------|----------|
+| Character Voice Tracker | 需要修改 writer-prompts.ts | 暂不注入 prompt，仅建立数据模型 |
+| Writer 场景化改造 | 修改 writeChapter() 核心循环 | 用 prompt 注入替代 |
+| Emotional Beat Map | 修改 planner-prompts.ts | 手工注入实验（Phase 0.5） |
+| Scene Craft Engine | 修改 composer.ts | 不实施 |
+| Narrative Director | 新 Agent + runner 注册 | 不实施 |
+| StoryIntent | 新数据模型 + 管线集成 | 不实施 |
+| Planner 四层意图 | 修改 planner.ts 核心方法 | 不实施 |
+
+## 实施顺序
+
+```
+Step 1 (6d): Prompt Compiler 基础框架 + 并行路径
+Step 2 (4d): Genre Pact 校验 + Beta Reader 
+Step 3 (4d): ModelBehaviorProfile + Issue Arbiter
+Step 4 (4.5d): 五层记忆系统（T0-T2 优先）
+Step 5 (4.5d): 集成测试 + 回归验证
+```
+
+## 完成标准
+
+- [ ] Prompt Compiler 与现有 context-assembly 并列运行，开关可控
+- [ ] Genre Pact 在 PostWriteValidator 中生效
+- [ ] Beta Reader 输出结构化评分
+- [ ] ModelBehaviorProfile 数据就绪
+- [ ] Issue Arbiter 可收敛多源审校结果
+- [ ] 五层记忆 T0-T2 可用
+- [ ] planner.ts / writer.ts / continuity.ts 零修改
+- [ ] 全部 171+ CLI 测试通过
+
+---
+
+> **本执行方案遵循的原则**：
+> 1. **可验证**：每个 Phase 都有明确的完成标准和门禁
+> 2. **可回退**：每个组件可独立关闭，不影响现有管线
+> 3. **可迭代**：每个 Phase 产出可独立交付的价值
+> 4. **诚实估算**：包含测试和集成成本，不低估隐藏工作
+> 5. **数据驱动**：Phase 0 建立基线，Phase 0.5 验证假设，后续基于数据决策

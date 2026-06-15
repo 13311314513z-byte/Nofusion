@@ -1,0 +1,11 @@
+pairId,questionId,humanReader1,humanReader2,confidence1,confidence2,notes
+synth-001,engagement,B,B,4,4,
+synth-001,character,B,A,3,3,
+synth-001,emotion,A,A,4,4,
+synth-001,clarity,B,B,3,4,
+synth-001,expectation,B,B,4,3,
+synth-002,engagement,B,B,3,3,
+synth-002,character,A,A,4,4,
+synth-002,emotion,B,B,3,3,
+synth-002,clarity,A,A,4,4,
+synth-002,expectation,tie,tie,2,2,

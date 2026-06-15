@@ -7,7 +7,6 @@ tmp-test-logs/
 books/
 dist/
 coverage/
-reports/
 *.tsbuildinfo
 *.log
 **/test-results.txt
