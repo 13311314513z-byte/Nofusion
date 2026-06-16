@@ -7284,7 +7284,32 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           } catch { /* skip unreadable files */ }
         }
       } catch { /* directory doesn't exist yet */ }
-      return c.json({ profiles });
+
+      // P1-5: When profiles list is empty, return available characters from role cards
+      // so the frontend can offer "Analyze Voice" buttons for each character.
+      const availableCharacters: Array<{ id: string; name: string }> = [];
+      if (profiles.length === 0) {
+        try {
+          const rolesDir = join(bookDir, "story", "roles");
+          const roleFiles = (await readdir(rolesDir)).filter(f => f.endsWith(".md"));
+          for (const file of roleFiles) {
+            try {
+              const raw = await readFile(join(rolesDir, file), "utf-8");
+              const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+              if (fmMatch) {
+                const fm = fmMatch[1];
+                const nameMatch = fm.match(/^name:\s*(.+)/m);
+                const idMatch = fm.match(/^id:\s*(.+)/m) || [undefined, file.replace(/\.md$/, "")];
+                if (nameMatch) {
+                  availableCharacters.push({ id: idMatch[1], name: nameMatch[1] });
+                }
+              }
+            } catch { /* skip unreadable role card */ }
+          }
+        } catch { /* roles dir doesn't exist */ }
+      }
+
+      return c.json({ profiles, availableCharacters });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
