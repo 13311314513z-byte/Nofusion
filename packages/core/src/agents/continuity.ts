@@ -129,6 +129,7 @@ const DIMENSION_LABELS: Record<number, { readonly zh: string; readonly en: strin
   35: { zh: "世界规则遵守", en: "World Rule Compliance Check" },
   36: { zh: "关系动态", en: "Relationship Dynamics Check" },
   37: { zh: "正典事件一致性", en: "Canon Event Consistency Check" },
+  38: { zh: "角色声音偏移", en: "Character Voice Drift Check" },
 };
 
 function containsChinese(text: string): boolean {

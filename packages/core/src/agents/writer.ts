@@ -202,6 +202,7 @@ export class WriterAgent extends BaseAgent {
     const styleFingerprint = this.buildStyleFingerprint(styleProfileRaw);
 
     const dialogueFingerprints = this.extractDialogueFingerprints(fingerprintChapters, storyBible);
+    const voiceProfileBlock = await this.loadVoiceProfiles(bookDir);
     const relevantSummaries = this.findRelevantSummaries(chapterSummaries, volumeOutline, chapterNumber);
 
     const hasParentCanon = parentCanon !== "(文件尚未创建)";
@@ -235,6 +236,11 @@ export class WriterAgent extends BaseAgent {
       input.chapterMemo ? "governed" : "legacy",
       resolvedLengthSpec,
     );
+
+    // Inject voice profiles if available
+    const creativePromptWithVoice = voiceProfileBlock
+      ? `${creativeSystemPrompt}\n\n## 角色声音画像\n\n${voiceProfileBlock}`
+      : creativeSystemPrompt;
 
     const creativeUserPrompt = input.chapterMemo && input.contextPackage && input.ruleStack
       ? this.buildGovernedUserPrompt({
@@ -303,9 +309,9 @@ export class WriterAgent extends BaseAgent {
       role: "system",
       slot: "system-prompt",
       priority: 100,
-      content: creativeSystemPrompt,
+      content: creativePromptWithVoice,
       optional: false,
-      estimatedTokens: Math.ceil(creativeSystemPrompt.length / 4),
+      estimatedTokens: Math.ceil(creativePromptWithVoice.length / 4),
     };
     const creativeUserFragment: PromptFragment = {
       id: "writer-creative-user",
@@ -1509,6 +1515,68 @@ ${overrides}\n`;
     }
 
     return fingerprints.length > 0 ? fingerprints.join("；") : "";
+  }
+
+  /**
+   * Load persisted voice profiles from story/voice_profiles/ and build a
+   * compact summary block for the writer prompt. Each character gets at most
+   * a single line describing their voice signature.
+   */
+  private async loadVoiceProfiles(bookDir: string): Promise<string | undefined> {
+    const profilesDir = join(bookDir, "story", "voice_profiles");
+    let files: string[];
+    try {
+      files = await readdir(profilesDir);
+    } catch {
+      return undefined; // No profiles yet — silent skip
+    }
+    const profiles = files.filter(f => f.endsWith(".json"));
+    if (profiles.length === 0) return undefined;
+
+    const chunks: string[] = [];
+    for (const file of profiles.slice(0, 10)) {
+      try {
+        const raw = await readFile(join(profilesDir, file), "utf-8");
+        const profile = JSON.parse(raw) as {
+          characterName?: string;
+          avgSentenceLength?: number;
+          sentenceComplexity?: string;
+          signaturePhrases?: string[];
+          dialogueStyle?: string;
+          vocabularyLevel?: string;
+        };
+        if (!profile.characterName) continue;
+
+        const parts: string[] = [];
+        if (profile.avgSentenceLength) {
+          parts.push(`句长约${profile.avgSentenceLength}字`);
+        }
+        if (profile.sentenceComplexity) {
+          parts.push(
+            profile.sentenceComplexity === "simple" ? "简洁" :
+            profile.sentenceComplexity === "complex" ? "复杂" : ""
+          );
+        }
+        if (profile.dialogueStyle) {
+          parts.push(
+            profile.dialogueStyle === "casual" ? "口语化" :
+            profile.dialogueStyle === "formal" ? "正式" : ""
+          );
+        }
+        if (profile.signaturePhrases?.length) {
+          parts.push(`口头禅：${profile.signaturePhrases.slice(0, 3).join("、")}`);
+        }
+        const summary = parts.filter(Boolean).join("，");
+        if (summary) {
+          chunks.push(`- **${profile.characterName}**：${summary}。`);
+        }
+      } catch {
+        // Corrupt profile — skip
+      }
+    }
+
+    if (chunks.length === 0) return undefined;
+    return `以下是角色声音画像，请在角色对话中遵循每个角色的语言特征：\n\n${chunks.join("\n")}`;
   }
 
   /**

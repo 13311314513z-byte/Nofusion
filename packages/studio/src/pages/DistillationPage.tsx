@@ -11,30 +11,28 @@ import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
 
+interface DistillationRule {
+  readonly id: string;
+  readonly dimension: string;
+  readonly mode: string;
+  readonly instruction: string;
+  readonly targetRange?: { readonly min: number; readonly max: number };
+  readonly confidence: number;
+  readonly source: string;
+  readonly enabled: boolean;
+}
+
 interface DistillationData {
-  readonly id?: string;
   readonly authorId: string;
-  readonly version: number;
   readonly authorProfileVersion: number;
+  readonly version: number;
   readonly isStale?: boolean;
   readonly currentAuthorProfileVersion?: number;
   readonly createdAt?: string;
   readonly updatedAt?: string;
-  readonly rules?: ReadonlyArray<string>;
-  readonly sentencePatterns?: ReadonlyArray<{
-    readonly pattern: string;
-    readonly frequency: number;
-    readonly examples?: ReadonlyArray<string>;
-  }>;
-  readonly wordPreferences?: ReadonlyArray<{
-    readonly word: string;
-    readonly category: string;
-    readonly frequency: number;
-  }>;
-  readonly narrativeHabits?: ReadonlyArray<{
-    readonly habit: string;
-    readonly description: string;
-  }>;
+  readonly rules?: ReadonlyArray<DistillationRule>;
+  readonly evidenceRefs?: ReadonlyArray<string>;
+  readonly warnings?: ReadonlyArray<string>;
   readonly markdown?: string;
 }
 
@@ -70,10 +68,7 @@ export function DistillationPage({
   if (!data) return null;
 
   const rules = data.rules ?? [];
-  const patterns = data.sentencePatterns ?? [];
-  const words = data.wordPreferences ?? [];
-  const habits = data.narrativeHabits ?? [];
-  const hasData = rules.length > 0 || patterns.length > 0 || words.length > 0 || habits.length > 0;
+  const hasData = rules.length > 0;
 
   return (
     <div className="space-y-6">
@@ -99,72 +94,21 @@ export function DistillationPage({
         </div>
       ) : (
         <>
-          {/* Sentence Patterns */}
-          {patterns.length > 0 && (
-            <div className={`border ${c.cardStatic} rounded-lg p-5`}>
-              <h2 className={`text-sm font-medium ${c.subtle} mb-4`}>句式特征</h2>
-              <div className="space-y-3">
-                {patterns.map((p, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className={c.subtle}>{p.pattern}</span>
-                      <span className={c.muted}>{p.frequency}次</span>
-                    </div>
-                    {p.examples && p.examples.length > 0 && (
-                      <div className={`text-xs ${c.muted} pl-2 border-l-2 ${c.btnSecondary}`}>
-                        {p.examples.slice(0, 2).map((ex, j) => (
-                          <div key={j} className="truncate">{ex}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Word Preferences */}
-          {words.length > 0 && (
-            <div className={`border ${c.cardStatic} rounded-lg p-5`}>
-              <h2 className={`text-sm font-medium ${c.subtle} mb-4`}>用词偏好</h2>
-              <div className="flex flex-wrap gap-2">
-                {words.map((w, i) => (
-                  <span key={i} className={`text-xs px-2 py-1 rounded ${c.btnSecondary}`}>
-                    {w.word}
-                    <span className={`ml-1 ${c.muted}`}>({w.category} · {w.frequency})</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Narrative Habits */}
-          {habits.length > 0 && (
-            <div className={`border ${c.cardStatic} rounded-lg p-5`}>
-              <h2 className={`text-sm font-medium ${c.subtle} mb-4`}>叙事习惯</h2>
-              <div className="space-y-2">
-                {habits.map((h, i) => (
-                  <div key={i} className={`text-sm ${c.subtle}`}>
-                    <span className="font-medium">{h.habit}</span>
-                    <span className={`ml-2 ${c.muted}`}>{h.description}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Writing Rules */}
+          {/* Distillation Rules */}
           {rules.length > 0 && (
             <div className={`border ${c.cardStatic} rounded-lg p-5`}>
               <h2 className={`text-sm font-medium ${c.subtle} mb-4`}>写作规则</h2>
-              <ul className="space-y-1">
-                {rules.map((rule, i) => (
-                  <li key={i} className={`text-sm ${c.subtle} flex gap-2`}>
-                    <span className={c.muted}>{i + 1}.</span>
-                    <span>{rule}</span>
-                  </li>
+              <div className="space-y-3">
+                {rules.map((rule) => (
+                  <div key={rule.id} className="flex items-start gap-3">
+                    <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${rule.enabled ? "bg-emerald-500/20 text-emerald-600" : "bg-zinc-500/20 text-zinc-500"}`}>
+                      {rule.dimension}
+                    </span>
+                    <span className={`text-sm ${c.subtle} flex-1`}>{rule.instruction}</span>
+                    <span className={`text-[10px] ${c.muted} shrink-0`}>{rule.mode}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 

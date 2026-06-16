@@ -25,6 +25,10 @@
     "./browser": {
       "types": "./dist/browser-index.d.ts",
       "import": "./dist/browser-index.js"
+    },
+    "./utils/chapter-artifacts.js": {
+      "types": "./dist/utils/chapter-artifacts.d.ts",
+      "import": "./dist/utils/chapter-artifacts.js"
     }
   },
   "files": [

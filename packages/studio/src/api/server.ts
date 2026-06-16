@@ -554,6 +554,38 @@ function resolveExternalChatEditPath(root: string, requestedPath: string): { pat
   return { path: resolved, rel };
 }
 
+/**
+ * Extract dialogue lines attributable to a specific character from chapter content.
+ * Matches patterns like:
+ * - "角色名：" (Chinese colon), "角色名：" (fullwidth colon), "角色名："
+ * - 「对话内容」 preceded by character name mentions
+ * - 角色名 followed by dialogue-like text
+ */
+function extractCharacterDialogue(content: string, characterId: string, characterName: string): string[] {
+  const lines: string[] = [];
+  const names = [characterName, characterId].filter(Boolean);
+  // Build a regex that matches lines starting with or containing the character name + colon
+  // Chinese dialogue patterns: 角色名："...", 角色名：「...」, "角色名...", 「角色名...」
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`${escaped}[：:"：]\\s*["「](.+?)["」]`, "g"),
+      new RegExp(`["「]${escaped}(.+?)["」]`, "g"),
+      new RegExp(`${escaped}[说问道喊叫嚷叹答]\\s*[：:"：]\\s*(.+?)(?:[。！？!?]|$)`, "g"),
+    ];
+    for (const regex of patterns) {
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(content)) !== null) {
+        const dialogue = match[1]!.trim();
+        if (dialogue.length > 1 && dialogue.length < 200) {
+          lines.push(dialogue);
+        }
+      }
+    }
+  }
+  return [...new Set(lines)].slice(0, 50); // Dedup, cap at 50
+}
+
 async function findChapterFile(root: string, bookId: string, chapterNumber: number): Promise<string | null> {
   const chaptersDir = join(root, "books", bookId, "chapters");
   const padded = String(chapterNumber).padStart(4, "0");
@@ -6938,7 +6970,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
     try {
       const bookDir = new StateManager(root).bookDir(id);
-      const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+      const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core");
       const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
       const latest = await readLatestArtifact(artifactDir, "event-chain");
       if (!latest) {
@@ -6962,7 +6994,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = new StateManager(root).bookDir(id);
       const { readFile, readdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
-      const { saveArtifactAutoVersion } = await import("@actalk/inkos-core/utils/chapter-artifacts.js");
+      const { saveArtifactAutoVersion } = await import("@actalk/inkos-core");
 
       // Gather sources from story/sources/
       const sourcesDir = join(bookDir, "story", "sources");
@@ -6985,35 +7017,58 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         }
       } catch { /* no sources dir — return empty */ }
 
-      // Build a basic event chain from frontmatter only (no LLM agent in API server)
+      // Build event chain from sources frontmatter with proper array parsing
       const events: Array<Record<string, unknown>> = [];
       let idx = 0;
       for (const src of sourceFiles) {
         const sourceType = src.frontmatter["type"] as string | undefined;
         if (!sourceType) continue;
-        const linkedChars = (src.frontmatter["linkedCharacters"] as string ?? "").split(",").map(s => s.trim()).filter(Boolean);
+
+        // Parse frontmatter arrays (supports both YAML list and comma-separated)
+        const parseFmList = (key: string): string[] => {
+          const val = src.frontmatter[key];
+          if (Array.isArray(val)) return val.map(String).filter(Boolean);
+          if (typeof val === "string") return val.split(",").map(s => s.trim()).filter(Boolean);
+          return [];
+        };
+
+        const linkedChars = parseFmList("linkedCharacters");
+        const linkedScenes = parseFmList("linkedScenes");
+        const linkedEvents = parseFmList("linkedEvents");
+
+        const participants = linkedChars.map((name, pi) => ({
+          characterId: name,
+          role: pi === 0 ? "protagonist" : "ally",
+          initialEmotion: (src.frontmatter["initialEmotion"] as string) ?? "平静",
+          goalInScene: (src.frontmatter["goalInScene"] as string) ?? `参与${src.path.replace(/\.md$/, "")}`,
+        }));
+
+        if (participants.length === 0 && linkedScenes.length === 0) continue;
+
         events.push({
-          eventId: `evt-${String(idx).padStart(3, "0")}`,
+          eventId: `evt-${sourceType}-${String(idx).padStart(3, "0")}`,
           chapterNumber,
           sceneIndex: idx,
           location: (src.frontmatter["location"] as string) ?? "待定",
           timeOfDay: (src.frontmatter["timeOfDay"] as string) ?? "待定",
           atmosphere: (src.frontmatter["atmosphere"] as string) ?? "中性",
-          participants: linkedChars.map((name, pi) => ({
-            characterId: name, role: pi === 0 ? "protagonist" : "ally",
-            initialEmotion: "平静", goalInScene: `参与${src.path}`,
-          })),
-          actions: [{
-            actorId: linkedChars[0] ?? "narrator", type: "physical",
-            description: `事件: ${src.path}`, intent: "推进叙事", outcome: "事件展开",
-          }],
+          participants,
+          linkedScenes,
+          linkedEvents,
           sourceFiles: [src.path],
-          confidence: 0.3,
+          sourceType,
+          confidence: participants.length >= 2 ? 0.7 : 0.5,
         });
         idx++;
       }
 
-      const chain = { bookId: id, chapterNumber, events, generatedAt: new Date().toISOString(), sourceFiles: [], confidence: events.length > 0 ? 0.3 : 0 };
+      const chain = {
+        bookId: id,
+        chapterNumber,
+        events,
+        generatedAt: new Date().toISOString(),
+        confidence: events.length > 0 ? 0.5 : 0,
+      };
       const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
       await saveArtifactAutoVersion(artifactDir, "event-chain", JSON.stringify(chain, null, 2));
 
@@ -7047,13 +7102,16 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = new StateManager(root).bookDir(id);
       const { writeFile, mkdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
+      const { SceneTemplateIndexSchema } = await import("@actalk/inkos-core");
       const body = await c.req.json();
+      // Validate structure before persisting
+      const validated = SceneTemplateIndexSchema.parse(body);
       const dir = join(bookDir, "story", "sources");
       await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, "scene_templates.json"), JSON.stringify(body, null, 2), "utf-8");
+      await writeFile(join(dir, "scene_templates.json"), JSON.stringify(validated, null, 2), "utf-8");
       return c.json({ ok: true });
     } catch (e) {
-      return c.json({ error: String(e) }, 500);
+      return c.json({ error: String(e) }, e instanceof SyntaxError || (e as Record<string, unknown>).issues ? 400 : 500);
     }
   });
 
@@ -7082,24 +7140,70 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: "Missing character parameter" }, 400);
     }
     try {
-      // Lightweight analysis without LLM agent instantiation
-      const profile = {
+      // Load the role card for character name
+      const { loadRoleCard } = await import("@actalk/inkos-core");
+      const bookDir = new StateManager(root).bookDir(id);
+      let characterName = characterId;
+
+      try {
+        const card = await loadRoleCard(bookDir, characterId);
+        if (card) characterName = card.frontmatter.name;
+      } catch {
+        // Role card not found — continue with characterId as fallback name
+      }
+
+      // Collect dialogue lines from recent chapters
+      const { readFile, readdir, mkdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const chaptersDir = join(bookDir, "chapters");
+      const dialogueLines: string[] = [];
+      const sourceChapters: number[] = [];
+      const MAX_CHAPTERS = 5;
+
+      try {
+        const entries = (await readdir(chaptersDir))
+          .filter(f => /^\d{4}_/.test(f) && f.endsWith(".md"))
+          .sort()
+          .slice(-MAX_CHAPTERS);
+
+        for (const entry of entries) {
+          const chapterNum = parseInt(entry.slice(0, 4), 10);
+          const content = await readFile(join(chaptersDir, entry), "utf-8");
+          const lines = extractCharacterDialogue(content, characterId, characterName);
+          if (lines.length > 0) {
+            dialogueLines.push(...lines);
+            sourceChapters.push(chapterNum);
+          }
+        }
+      } catch {
+        // No chapters yet — proceed with empty dialogue
+      }
+
+      // Use VoiceProfileAnalyzer for rule-based analysis (no LLM needed for baseline)
+      const { VoiceProfileAnalyzer } = await import("@actalk/inkos-core");
+      // Create a minimal AgentContext — LLM client is only needed when useLlm=true
+      const profile = await new VoiceProfileAnalyzer({
+        client: undefined as never, // not used when useLlm=false
+        model: "none",
+        projectRoot: root,
+        bookId: id,
+      }).analyze({
         characterId,
-        characterName: characterId,
-        avgSentenceLength: 0,
-        sentenceComplexity: "moderate" as const,
-        prefersShortSentences: false,
-        usesRhetoricalQuestions: false,
-        signaturePhrases: [] as string[],
-        vocabularyLevel: "standard" as const,
-        dialogueStyle: "casual" as const,
-        interruptionTendency: 0.3,
-        usesDialect: false,
-        dialectNotes: "",
-        analyzedFromChapters: [] as number[],
-        confidence: 0.3,
-        updatedAt: new Date().toISOString(),
-      };
+        characterName,
+        dialogueLines,
+        sourceChapters,
+        useLlm: false,
+      });
+
+      // Persist to story/voice_profiles/<characterId>.json
+      const profilesDir = join(bookDir, "story", "voice_profiles");
+      await mkdir(profilesDir, { recursive: true });
+      await writeFile(
+        join(profilesDir, `${characterId}.json`),
+        JSON.stringify(profile, null, 2),
+        "utf-8",
+      );
+
       return c.json({ profile });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
