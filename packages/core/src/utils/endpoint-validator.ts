@@ -162,8 +162,8 @@ export function validateEndpointLock(
 // ─── Private helpers ────────────────────────────────────────────────
 
 /**
- * Fuzzy content match using normalized substring + token overlap.
- * Simple heuristic — can be upgraded to embedding similarity later.
+ * Fuzzy content match using normalized substring + token overlap + CJK bigram overlap.
+ * Three-tier matching: direct substring → token overlap → CJK character bigram overlap.
  */
 function fuzzyContains(text: string, pattern: string): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
@@ -173,12 +173,34 @@ function fuzzyContains(text: string, pattern: string): boolean {
   // 1. Direct substring match (after normalization)
   if (normText.includes(normPattern)) return true;
 
-  // 2. 70%+ token overlap
+  // 2. 70%+ token overlap (word-level)
   const patternTokens = new Set(
     normPattern.split(/\s+/).filter((t) => t.length > 1),
   );
-  if (patternTokens.size === 0) return false;
-  const textTokens = new Set(normText.split(/\s+/).filter((t) => t.length > 1));
-  const overlap = [...patternTokens].filter((t) => textTokens.has(t)).length;
-  return overlap / patternTokens.size >= 0.7;
+  if (patternTokens.size > 0) {
+    const textTokens = new Set(normText.split(/\s+/).filter((t) => t.length > 1));
+    const overlap = [...patternTokens].filter((t) => textTokens.has(t)).length;
+    if (overlap / patternTokens.size >= 0.7) return true;
+  }
+
+  // 3. CJK character bigram overlap (for Chinese/Japanese without word boundaries)
+  const cjkPattern = normPattern.replace(/[a-z0-9\s]/gi, "");
+  if (cjkPattern.length >= 4) {
+    const bigrams = (s: string): Set<string> => {
+      const bg = new Set<string>();
+      for (let i = 0; i < s.length - 1; i++) {
+        bg.add(s.slice(i, i + 2));
+      }
+      return bg;
+    };
+    const patternBigrams = bigrams(cjkPattern);
+    const textCjk = normText.replace(/[a-z0-9\s]/gi, "");
+    const textBigrams = bigrams(textCjk);
+    if (patternBigrams.size > 0 && textBigrams.size > 0) {
+      const overlap = [...patternBigrams].filter((b) => textBigrams.has(b)).length;
+      if (overlap / patternBigrams.size >= 0.6) return true;
+    }
+  }
+
+  return false;
 }

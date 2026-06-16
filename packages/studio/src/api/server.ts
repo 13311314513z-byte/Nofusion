@@ -2191,13 +2191,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const cleanStringArray = (value: unknown): string[] | undefined => {
       if (Array.isArray(value)) {
         const arr = value.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean);
-        return arr.length > 0 ? arr : undefined;
+        return arr;  // Always return array if input was array — empty means "clear"
       }
       if (typeof value === "string") {
         const arr = value.split(/[,，\n]/).map((v) => v.trim()).filter(Boolean);
         return arr.length > 0 ? arr : undefined;
       }
-      return undefined;
+      return undefined;  // Not sent at all
     };
 
     try {
@@ -2990,7 +2990,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       if (!chapterIntent?.coreNarrative) warnings.push("未完成创作访谈——建议先回答核心三问");
       if (overdueHookIds.length > 0) warnings.push(`${overdueHookIds.length} 条伏笔已逾期：${overdueHookIds.join("、")}`);
 
-      return c.json({ chapterNumber, contextSummary, warnings, planAlternatives: [] });
+      // M3: Parse plan alternatives from the existing .plan.md (if Planner has already run)
+      const { join: jn2 } = await import("node:path");
+      const padded = String(chapterNumber).padStart(4, "0");
+      const planPath = jn2(bookDir, "story", "runtime", `chapter-${padded}.plan.md`);
+      const planAlternatives = await parsePlanAlternatives(planPath);
+
+      return c.json({ chapterNumber, contextSummary, warnings, planAlternatives });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -2998,6 +3004,35 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Plan Alternatives (M3/U6) ---
   // Returns previously generated plan alternatives for user selection.
+
+  /**
+   * Parse plan alternatives from a .plan.md file.
+   * Extracted as shared helper so both /write-preview and /plan-alternatives
+   * can return the same data.
+   */
+  async function parsePlanAlternatives(planPath: string): Promise<Array<{ id: string; label: string; description: string; goal: string }>> {
+    const alternatives: Array<{ id: string; label: string; description: string; goal: string }> = [];
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const raw = await readFile(planPath, "utf-8");
+      const altMatch = raw.match(/## Plan Alternatives[\s\S]*$/);
+      if (altMatch) {
+        const altBlocks = altMatch[0].split(/### Variant /).filter(Boolean);
+        return altBlocks.map((block, i) => {
+          const labelMatch = block.match(/^(\S[^\n]*)/);
+          const goalMatch = block.match(/\*\*Goal\*\*:\s*(.+)/);
+          const descMatch = block.match(/\*\*Description\*\*:\s*(.+)/);
+          return {
+            id: `variant-${String.fromCharCode(98 + i)}`,
+            label: labelMatch?.[1]?.trim() || `方案 ${String.fromCharCode(65 + i)}`,
+            description: descMatch?.[1]?.trim() || "",
+            goal: goalMatch?.[1]?.trim() || "",
+          };
+        });
+      }
+    } catch { /* no plan file yet */ }
+    return alternatives;
+  }
 
   app.get("/api/v1/books/:id/plan-alternatives", async (c) => {
     const id = c.req.param("id");
@@ -3008,35 +3043,10 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
     try {
       const bookDir = new StateManager(root).bookDir(id);
-      const { readFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const padded = String(chapterNumber).padStart(4, "0");
       const planPath = join(bookDir, "story", "runtime", `chapter-${padded}.plan.md`);
-      let alternatives: Array<{ id: string; label: string; description: string; goal: string }> = [];
-      try {
-        const raw = await readFile(planPath, "utf-8");
-        // Parse YAML frontmatter for alternatives
-        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
-        if (fmMatch) {
-          const yaml = fmMatch[1];
-          // Look for alternatives section in YAML or body
-          const altMatch = raw.match(/## Plan Alternatives[\s\S]*$/);
-          if (altMatch) {
-            const altBlocks = altMatch[0].split(/### Variant /).filter(Boolean);
-            alternatives = altBlocks.map((block, i) => {
-              const labelMatch = block.match(/^(\S[^\n]*)/);
-              const goalMatch = block.match(/\*\*Goal\*\*:\s*(.+)/);
-              const descMatch = block.match(/\*\*Description\*\*:\s*(.+)/);
-              return {
-                id: `variant-${String.fromCharCode(98 + i)}`,
-                label: labelMatch?.[1]?.trim() || `方案 ${String.fromCharCode(65 + i)}`,
-                description: descMatch?.[1]?.trim() || "",
-                goal: goalMatch?.[1]?.trim() || "",
-              };
-            });
-          }
-        }
-      } catch { /* no plan file yet */ }
+      const alternatives = await parsePlanAlternatives(planPath);
       return c.json({ chapterNumber, alternatives });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
