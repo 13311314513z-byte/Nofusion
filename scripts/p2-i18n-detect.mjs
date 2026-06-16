@@ -61,7 +61,7 @@ async function scanDir(dir, findings) {
 
 async function main() {
   console.log("P2-2: Scanning for hardcoded Chinese strings...");
-  const findings: Finding[] = [];
+  const findings = [];
   await scanDir(srcDir, findings);
 
   // Group by file
@@ -73,7 +73,7 @@ async function main() {
   }
 
   // Generate report
-  const lines: string[] = [
+  const lines = [
     "# P2-2: Hardcoded Chinese String Report",
     `# Generated: ${new Date().toISOString()}`,
     `# Total findings: ${findings.length} across ${byFile.size} files`,
