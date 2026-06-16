@@ -2990,7 +2990,54 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       if (!chapterIntent?.coreNarrative) warnings.push("未完成创作访谈——建议先回答核心三问");
       if (overdueHookIds.length > 0) warnings.push(`${overdueHookIds.length} 条伏笔已逾期：${overdueHookIds.join("、")}`);
 
-      return c.json({ chapterNumber, contextSummary, warnings });
+      return c.json({ chapterNumber, contextSummary, warnings, planAlternatives: [] });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Plan Alternatives (M3/U6) ---
+  // Returns previously generated plan alternatives for user selection.
+
+  app.get("/api/v1/books/:id/plan-alternatives", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.query("chapter"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const padded = String(chapterNumber).padStart(4, "0");
+      const planPath = join(bookDir, "story", "runtime", `chapter-${padded}.plan.md`);
+      let alternatives: Array<{ id: string; label: string; description: string; goal: string }> = [];
+      try {
+        const raw = await readFile(planPath, "utf-8");
+        // Parse YAML frontmatter for alternatives
+        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const yaml = fmMatch[1];
+          // Look for alternatives section in YAML or body
+          const altMatch = raw.match(/## Plan Alternatives[\s\S]*$/);
+          if (altMatch) {
+            const altBlocks = altMatch[0].split(/### Variant /).filter(Boolean);
+            alternatives = altBlocks.map((block, i) => {
+              const labelMatch = block.match(/^(\S[^\n]*)/);
+              const goalMatch = block.match(/\*\*Goal\*\*:\s*(.+)/);
+              const descMatch = block.match(/\*\*Description\*\*:\s*(.+)/);
+              return {
+                id: `variant-${String.fromCharCode(98 + i)}`,
+                label: labelMatch?.[1]?.trim() || `方案 ${String.fromCharCode(65 + i)}`,
+                description: descMatch?.[1]?.trim() || "",
+                goal: goalMatch?.[1]?.trim() || "",
+              };
+            });
+          }
+        }
+      } catch { /* no plan file yet */ }
+      return c.json({ chapterNumber, alternatives });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
@@ -6799,6 +6846,110 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = state.bookDir(id);
       const suggestions = await generateSuggestions(bookDir, chapterNumber);
       return c.json({ suggestions });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- Endpoint Lock Check (M2/U8) ---
+  // Reads the author's chapter intent (openingFrame/closingFrame/requiredBeats/forbiddenMoves)
+  // and checks whether the written chapter content satisfies those constraints.
+
+  app.get("/api/v1/books/:id/chapters/:chapterNumber/endpoint-check", async (c) => {
+    const id = c.req.param("id");
+    const chapterNumber = Number(c.req.param("chapterNumber"));
+    await assertBookExists(state, id);
+    if (!Number.isInteger(chapterNumber) || chapterNumber < 1) {
+      return c.json({ error: "Invalid chapter number" }, 400);
+    }
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+
+      // Load chapter intent
+      const intentsIdx = await loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> }));
+      const intent = getChapterIntent(intentsIdx.intents, chapterNumber);
+
+      // Load chapter content
+      const chaptersDir = join(bookDir, "chapters");
+      let chapterContent = "";
+      try {
+        const { readdir: rd } = await import("node:fs/promises");
+        const files = await rd(chaptersDir);
+        const padded = String(chapterNumber).padStart(4, "0");
+        const match = files.find((f) => f.startsWith(padded) && f.endsWith(".md"));
+        if (match) {
+          chapterContent = await readFile(join(chaptersDir, match), "utf-8");
+        }
+      } catch { /* no chapters yet */ }
+
+      // Build checks array
+      const checks: Array<{ name: string; passed: boolean; detail: string }> = [];
+      const lang = "zh"; // could be derived from book config
+
+      if (intent?.openingFrame) {
+        const frame = intent.openingFrame.scene;
+        const opening = chapterContent.slice(0, 200).toLowerCase();
+        const hasOpening = opening.includes(frame.toLowerCase()) ||
+          frame.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1).every((w: string) => opening.includes(w));
+        checks.push({
+          name: "开篇框架",
+          passed: hasOpening,
+          detail: hasOpening ? "开篇与声明框架一致" : `预期开篇应包含："${frame}"`,
+        });
+        if (intent.openingFrame.forbiddenOpenings?.length) {
+          for (const fb of intent.openingFrame.forbiddenOpenings) {
+            const found = opening.includes(fb.toLowerCase());
+            checks.push({
+              name: `开篇禁止：${fb}`,
+              passed: !found,
+              detail: found ? "发现禁止的开篇模式" : "未发现禁止模式",
+            });
+          }
+        }
+      }
+
+      if (intent?.closingFrame) {
+        const frame = intent.closingFrame.scene;
+        const closing = chapterContent.slice(-500).toLowerCase();
+        const hasClosing = closing.includes(frame.toLowerCase()) ||
+          frame.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1).every((w: string) => closing.includes(w));
+        checks.push({
+          name: "收尾框架",
+          passed: hasClosing,
+          detail: hasClosing ? "收尾与声明框架一致" : `预期收尾应包含："${frame}"`,
+        });
+      }
+
+      if (intent?.requiredBeats?.length) {
+        for (const beat of intent.requiredBeats) {
+          const found = chapterContent.toLowerCase().includes(beat.toLowerCase());
+          checks.push({
+            name: `必达事件：${beat}`,
+            passed: found,
+            detail: found ? "事件已达成" : "章节中未发现此事件",
+          });
+        }
+      }
+
+      if (intent?.forbiddenMoves?.length) {
+        for (const move of intent.forbiddenMoves) {
+          const found = chapterContent.toLowerCase().includes(move.toLowerCase());
+          checks.push({
+            name: `禁用动作：${move}`,
+            passed: !found,
+            detail: found ? "章节中发现禁用动作！" : "未发现禁用动作",
+          });
+        }
+      }
+
+      return c.json({
+        chapterNumber,
+        passed: checks.length > 0 ? checks.every((ch) => ch.passed) : true,
+        checks,
+        hasIntent: !!intent,
+      });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }

@@ -1,6 +1,12 @@
 /**
  * State Changelog — append-only log of state transitions within a BookWorkspace.
  *
+ * @deprecated Use `state-logger.ts` instead. This module writes to
+ *   `books/<bookId>/state_changelog.jsonl` while the canonical path is now
+ *   `books/<bookId>/story/state/state_changelog.jsonl` (managed by state-logger.ts).
+ *   The two modules have different schemas and are not interoperable.
+ *   New code should use `logStateDelta()` from `state-logger.ts`.
+ *
  * Every mutation to truth files, hooks, roles, and chapters writes a
  * changelog entry. The log is stored as JSONL at:
  *   books/<bookId>/state_changelog.jsonl

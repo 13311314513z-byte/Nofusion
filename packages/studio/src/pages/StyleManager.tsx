@@ -13,6 +13,8 @@ import { DuplicateParagraphPanel } from "../components/readability/DuplicatePara
 import { RhetoricIssuePanel } from "../components/readability/RhetoricIssuePanel.js";
 import { StyleTextTab } from "./StyleTextTab.js";
 import { DistillationPage } from "./DistillationPage";
+import { StyleAiDetectTab } from "./style-manager/StyleAiDetectTab.js";
+import { StyleDiagnoseTab } from "./style-manager/StyleDiagnoseTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
@@ -1194,46 +1196,23 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
       {/* Step 3: AI Detection */}
       {activeTab === "ai-detect" && (
-        <div className="max-w-2xl mx-auto py-4">
-          <AITellsPanel
-            t={t as unknown as (key: string) => string}
-            initialText={text || undefined}
-            language="zh"
-          />
-        </div>
+        <StyleAiDetectTab text={text} t={t} />
       )}
 
       {/* Step 2: Style Diagnosis */}
       {activeTab === "diagnose" && (
-        <div className="max-w-4xl mx-auto py-4 space-y-6">
-          {profile ? (
-            <>
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">文风诊断报告</h2>
-                <button
-                  onClick={handleDiagnostics}
-                  disabled={loadingDiagnostics || !text.trim()}
-                  className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-1`}
-                >
-                  {loadingDiagnostics ? <div className="w-3 h-3 border-2 border-muted-foreground/20 border-t-mforeground rounded-full animate-spin" /> : <Stethoscope size={12} />}
-                  完整诊断
-                </button>
-              </div>
-              {renderProfileCard(profile, true)}
-              {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} text={text} t={t as any} />}
-
-              {/* Style drift score — shown when source is a book */}
-              {importBookId && (
-                <StyleDriftScoreSection bookId={importBookId} chapterNumber={importChapterNumber} t={t as unknown as (key: string) => string} />
-              )}
-            </>
-          ) : (
-            <div className="text-center text-muted-foreground py-16 border border-dashed border-border/40 rounded-lg">
-              <p className="text-sm">请在「文本导入」步骤中先粘贴或上传文本并运行分析</p>
-              <p className="text-xs mt-2">分析完成后将在此展示详细的文风诊断报告</p>
-            </div>
-          )}
-        </div>
+        <StyleDiagnoseTab
+          text={text}
+          profile={profile}
+          diagnostics={diagnostics}
+          loadingDiagnostics={loadingDiagnostics}
+          importBookId={importBookId}
+          importChapterNumber={importChapterNumber}
+          renderProfileCard={renderProfileCard}
+          c={c}
+          t={t}
+          handleDiagnostics={handleDiagnostics}
+        />
       )}
 
       {/* Step 4: Rhetoric Deduplication */}
