@@ -68,6 +68,8 @@ export const BookConfigSchema = z.object({
   volumeCount: z.number().int().min(1).optional(),
   currentVolume: z.number().int().min(1).optional(),
   keywords: z.array(z.string()).optional(),
+  genreTags: z.array(z.string()).optional(),
+  contentWarnings: z.array(z.string()).optional(),
   targetAudience: z.string().optional(),
   serializationStatus: z.enum(["draft", "serializing", "completed", "hiatus"]).optional(),
   // ── Extended fields (P1-1) ──────────────────────────────

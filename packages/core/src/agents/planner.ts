@@ -28,6 +28,7 @@ import {
   type AuthorChapterIntent,
 } from "../models/chapter-intent.js";
 import { buildAuthorIntentBlock } from "../utils/intent-injection.js";
+import { loadSceneTemplates, buildSceneTemplatesBlock } from "../utils/scene-template-loader.js";
 import { parseMemo, PlannerParseError } from "../utils/chapter-memo-parser.js";
 import {
   buildPlannerUserMessage,
@@ -188,6 +189,13 @@ export class PlannerAgent extends BaseAgent {
     const chapterIntentsIndex = await loadChapterIntents(input.bookDir);
     const chapterIntent = getChapterIntent(chapterIntentsIndex.intents, input.chapterNumber);
     const authorIntentBlock = chapterIntent ? buildAuthorIntentBlock(chapterIntent) : "";
+    // M5: Load scene templates and build prompt block for Planner consumption
+    const sceneTemplates = await loadSceneTemplates(input.bookDir);
+    const sceneTemplatesBlock = buildSceneTemplatesBlock(sceneTemplates, input.book.language ?? "zh");
+    // Combine author intent + scene templates into a single injected block
+    const enrichedIntentBlock = [authorIntentBlock, sceneTemplatesBlock]
+      .filter(Boolean)
+      .join("\n\n");
     const goal = this.deriveGoal(
       input.externalContext,
       seedMaterials.currentFocus,
@@ -260,7 +268,7 @@ export class PlannerAgent extends BaseAgent {
       chapterContext: input.externalContext,
       // Pass chapter goal so the memo LLM prompt can render requiredBeats / forbiddenMoves
       chapterGoal,
-      authorIntentBlock,
+      authorIntentBlock: enrichedIntentBlock,
       recyclableHooks: memorySelection.recyclableHooks,
       // Phase hotfix 4: thread book language through so the planner uses
       // English prompts (system + user template + golden opening guidance)

@@ -66,6 +66,8 @@ interface BookData {
     readonly keywords?: ReadonlyArray<string>;
     readonly targetAudience?: string;
     readonly serializationStatus?: "draft" | "serializing" | "completed" | "hiatus";
+    readonly genreTags?: ReadonlyArray<string>;
+    readonly contentWarnings?: ReadonlyArray<string>;
   };
   readonly chapters: ReadonlyArray<ChapterMeta>;
   readonly nextChapter: number;
@@ -170,6 +172,8 @@ export function BookDetail({
   const [settingsKeywords, setSettingsKeywords] = useState<string | null>(null);
   const [settingsTargetAudience, setSettingsTargetAudience] = useState<string | null>(null);
   const [settingsSerializationStatus, setSettingsSerializationStatus] = useState<string | null>(null);
+  const [settingsGenreTags, setSettingsGenreTags] = useState<string | null>(null);
+  const [settingsContentWarnings, setSettingsContentWarnings] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("txt");
   const [exportApprovedOnly, setExportApprovedOnly] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
@@ -395,6 +399,8 @@ export function BookDetail({
       if (settingsKeywords !== null) body.keywords = settingsKeywords.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
       if (settingsTargetAudience !== null) body.targetAudience = settingsTargetAudience;
       if (settingsSerializationStatus !== null) body.serializationStatus = settingsSerializationStatus;
+      if (settingsGenreTags !== null) body.genreTags = settingsGenreTags.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+      if (settingsContentWarnings !== null) body.contentWarnings = settingsContentWarnings.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
       await fetchJson(`/books/${bookId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -580,6 +586,8 @@ export function BookDetail({
   const currentKeywords = settingsKeywords ?? book.keywords?.join(", ") ?? "";
   const currentTargetAudience = settingsTargetAudience ?? book.targetAudience ?? "";
   const currentSerializationStatus = settingsSerializationStatus ?? book.serializationStatus ?? "";
+  const currentGenreTags = settingsGenreTags ?? book.genreTags?.join(", ") ?? "";
+  const currentContentWarnings = settingsContentWarnings ?? book.contentWarnings?.join(", ") ?? "";
   const roles = rolesData?.roles ?? [];
   const majorRoleCount = roles.filter((role) => role.roleTier === "major").length;
   const minorRoleCount = roles.filter((role) => role.roleTier === "minor").length;
@@ -847,6 +855,24 @@ export function BookDetail({
               <option value="completed">{t("book.statusCompleted")}</option>
               <option value="hiatus">{t("book.hiatus")}</option>
             </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">流派标签</label>
+            <input
+              value={currentGenreTags}
+              onChange={(e) => setSettingsGenreTags(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-40"
+              placeholder="悬疑, 犯罪, 心理"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">内容警告</label>
+            <input
+              value={currentContentWarnings}
+              onChange={(e) => setSettingsContentWarnings(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-border/50 bg-secondary/30 outline-none focus:border-primary/50 w-40"
+              placeholder="暴力, 血腥"
+            />
           </div>
           <button
             onClick={handleSaveSettings}

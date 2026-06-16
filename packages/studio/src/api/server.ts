@@ -2212,6 +2212,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
         ...(typeof body.serializationStatus === "string" && ["draft", "serializing", "completed", "hiatus"].includes(body.serializationStatus)
           ? { serializationStatus: body.serializationStatus as "draft" | "serializing" | "completed" | "hiatus" }
           : {}),
+        ...(cleanStringArray(body.genreTags) !== undefined ? { genreTags: cleanStringArray(body.genreTags) } : {}),
+        ...(cleanStringArray(body.contentWarnings) !== undefined ? { contentWarnings: cleanStringArray(body.contentWarnings) } : {}),
       };
       await state.saveBookConfig(id, updated);
       return c.json({ ok: true });
@@ -6994,9 +6996,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const bookDir = new StateManager(root).bookDir(id);
       const { readFile, readdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
-      const { saveArtifactAutoVersion } = await import("@actalk/inkos-core");
+      const { saveArtifactAutoVersion, EventChainExtractor } = await import("@actalk/inkos-core");
 
-      // Gather sources from story/sources/
+      // Gather source files
       const sourcesDir = join(bookDir, "story", "sources");
       const sourceFiles: Array<{ path: string; content: string; frontmatter: Record<string, unknown> }> = [];
       try {
@@ -7015,59 +7017,43 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
           sourceFiles.push({ path: file, content: body, frontmatter });
         }
-      } catch { /* no sources dir — return empty */ }
+      } catch { /* no sources dir */ }
 
-      // Build event chain from sources frontmatter with proper array parsing
-      const events: Array<Record<string, unknown>> = [];
-      let idx = 0;
-      for (const src of sourceFiles) {
-        const sourceType = src.frontmatter["type"] as string | undefined;
-        if (!sourceType) continue;
+      // Read known characters
+      const characterDir = join(bookDir, "story", "characters");
+      const characters: Array<{ id: string; name: string; traits?: string[] }> = [];
+      try {
+        const charFiles = await readdir(characterDir);
+        for (const file of charFiles) {
+          if (!file.endsWith(".json")) continue;
+          const charRaw = await readFile(join(characterDir, file), "utf-8");
+          const charData = JSON.parse(charRaw) as { id?: string; name?: string; traits?: string[] };
+          if (charData.id && charData.name) {
+            characters.push({ id: charData.id, name: charData.name, traits: charData.traits });
+          }
+        }
+      } catch { /* no characters dir */ }
 
-        // Parse frontmatter arrays (supports both YAML list and comma-separated)
-        const parseFmList = (key: string): string[] => {
-          const val = src.frontmatter[key];
-          if (Array.isArray(val)) return val.map(String).filter(Boolean);
-          if (typeof val === "string") return val.split(",").map(s => s.trim()).filter(Boolean);
-          return [];
-        };
-
-        const linkedChars = parseFmList("linkedCharacters");
-        const linkedScenes = parseFmList("linkedScenes");
-        const linkedEvents = parseFmList("linkedEvents");
-
-        const participants = linkedChars.map((name, pi) => ({
-          characterId: name,
-          role: pi === 0 ? "protagonist" : "ally",
-          initialEmotion: (src.frontmatter["initialEmotion"] as string) ?? "平静",
-          goalInScene: (src.frontmatter["goalInScene"] as string) ?? `参与${src.path.replace(/\.md$/, "")}`,
-        }));
-
-        if (participants.length === 0 && linkedScenes.length === 0) continue;
-
-        events.push({
-          eventId: `evt-${sourceType}-${String(idx).padStart(3, "0")}`,
-          chapterNumber,
-          sceneIndex: idx,
-          location: (src.frontmatter["location"] as string) ?? "待定",
-          timeOfDay: (src.frontmatter["timeOfDay"] as string) ?? "待定",
-          atmosphere: (src.frontmatter["atmosphere"] as string) ?? "中性",
-          participants,
-          linkedScenes,
-          linkedEvents,
-          sourceFiles: [src.path],
-          sourceType,
-          confidence: participants.length >= 2 ? 0.7 : 0.5,
-        });
-        idx++;
-      }
+      // M4: Use the real EventChainExtractor Agent (frontmatter mode, zero LLM cost)
+      const extractor = new EventChainExtractor({} as never);
+      const result = await extractor.execute({
+        sources: sourceFiles.map((src) => ({
+          path: src.path,
+          content: src.content,
+          frontmatter: src.frontmatter,
+        })),
+        chapterNumber,
+        characters,
+        useLlm: false,
+      });
 
       const chain = {
         bookId: id,
         chapterNumber,
-        events,
+        events: result.events,
         generatedAt: new Date().toISOString(),
-        confidence: events.length > 0 ? 0.5 : 0,
+        confidence: result.confidence,
+        warnings: result.warnings,
       };
       const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
       await saveArtifactAutoVersion(artifactDir, "event-chain", JSON.stringify(chain, null, 2));
@@ -7122,11 +7108,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     await assertBookExists(state, id);
     try {
       const bookDir = new StateManager(root).bookDir(id);
-      const { readFile } = await import("node:fs/promises");
+      const { readFile, readdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
-      const path = join(bookDir, "story", "voice_profiles", "index.json");
-      const raw = await readFile(path, "utf-8").catch(() => '{"profiles":[]}');
-      return c.json(JSON.parse(raw));
+      const profilesDir = join(bookDir, "story", "voice_profiles");
+      // Scan directory for individual <characterId>.json files (M6 fix)
+      const profiles: unknown[] = [];
+      try {
+        const files = await readdir(profilesDir);
+        for (const file of files) {
+          if (!file.endsWith(".json") || file === "index.json") continue;
+          try {
+            const raw = await readFile(join(profilesDir, file), "utf-8");
+            profiles.push(JSON.parse(raw));
+          } catch { /* skip unreadable files */ }
+        }
+      } catch { /* directory doesn't exist yet */ }
+      return c.json({ profiles });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }

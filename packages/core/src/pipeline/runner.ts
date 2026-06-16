@@ -50,6 +50,7 @@ import {
 import { StateManager } from "../state/manager.js";
 import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
 import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
+import { logPlanGenerated, logChapterWritten, logAuditCompleted } from "../utils/state-logger.js";
 import type { WebhookEvent } from "../notify/webhook.js";
 import type { AgentContext } from "../agents/base.js";
 import type { AuditResult, AuditIssue } from "../agents/continuity.js";
@@ -1390,6 +1391,12 @@ export class PipelineRunner {
         wordCount: draftOutput.wordCount,
       });
 
+      // M10: Log chapter written for state audit trail
+      logChapterWritten(bookDir, chapterNumber, {
+        wordCount: draftOutput.wordCount,
+        title: draftOutput.title,
+      }).catch(() => { /* best-effort */ });
+
       return {
         chapterNumber,
         title: draftOutput.title,
@@ -1511,6 +1518,14 @@ export class PipelineRunner {
       targetChapter,
       { summary: result.summary, issueCount: result.issues.length },
     );
+
+    // M10: Log audit completed for state audit trail
+    logAuditCompleted(bookDir, targetChapter, {
+      passed: result.passed,
+      issueCount: result.issues.length,
+      criticalCount: result.issues.filter((i) => i.severity === "critical").length,
+      summary: result.summary,
+    }).catch(() => { /* best-effort */ });
 
     return { ...result, chapterNumber: targetChapter };
   }
@@ -4051,10 +4066,16 @@ ${matrix}`,
       bookDir,
       chapterNumber,
       externalContext,
+      generateAlternatives: true,
     });
     // Persist in the new memo format so subsequent compose/write phases can
     // skip the planner LLM call when no new context is supplied.
     await savePersistedPlan(bookDir, plan);
+    // M10: Log plan generation for state audit trail
+    logPlanGenerated(bookDir, chapterNumber, {
+      goal: plan.intent.goal,
+      alternativesCount: plan.alternatives?.length ?? 0,
+    }).catch(() => { /* best-effort — never block the pipeline on logging */ });
     return plan;
   }
 

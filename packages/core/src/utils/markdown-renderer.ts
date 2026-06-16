@@ -380,3 +380,49 @@ export function renderChapterGoalToMarkdown(
 
   return sections.join("\n");
 }
+
+// ─── Chapter Memo (M1) ──────────────────────────────────────────────
+
+import type { ChapterMemo } from "../models/input-governance.js";
+
+/** Render a ChapterMemo (YAML frontmatter + body) to Markdown. */
+export function renderMemoToMarkdown(
+  memo: ChapterMemo,
+  _lang: "zh" | "en" = "zh",
+): string {
+  const lines: string[] = [];
+  lines.push("---");
+  lines.push(`chapter: ${memo.chapter}`);
+  lines.push(`goal: "${memo.goal.replace(/"/g, '\\"')}"`);
+  if (memo.isGoldenOpening) lines.push("isGoldenOpening: true");
+  if (memo.threadRefs.length > 0) {
+    lines.push(`threadRefs: [${memo.threadRefs.join(", ")}]`);
+  }
+  lines.push("---");
+  lines.push("");
+  lines.push(memo.body);
+  return lines.join("\n");
+}
+
+// ─── Chapter Intent runtime (M1) ────────────────────────────────────
+
+import type { ChapterIntent } from "../models/input-governance.js";
+
+/** Render a ChapterIntent (Planner runtime output) to Markdown. */
+export function renderChapterIntentRuntimeToMarkdown(
+  intent: ChapterIntent,
+  lang: "zh" | "en" = "zh",
+): string {
+  const isEn = lang === "en";
+  const sections: string[] = [];
+  sections.push(isEn ? `## Chapter ${intent.chapter} Writing Plan` : `## 第${intent.chapter}章 写作规划`);
+  sections.push("");
+  sections.push(`**${isEn ? "Goal" : "目标"}**：${intent.goal}`);
+  sections.push("");
+  if (intent.outlineNode) { sections.push(`### ${isEn ? "Outline" : "大纲"}`); sections.push(""); sections.push(intent.outlineNode); sections.push(""); }
+  if (intent.arcContext) { sections.push(`### ${isEn ? "Arc" : "卷弧"}`); sections.push(""); sections.push(intent.arcContext); sections.push(""); }
+  if (intent.mustKeep.length) { sections.push(`### ${isEn ? "Must Keep" : "必须保留"}`); sections.push(""); for (const k of intent.mustKeep) sections.push(`- ${k}`); sections.push(""); }
+  if (intent.mustAvoid.length) { sections.push(`### ${isEn ? "Must Avoid" : "必须避免"}`); sections.push(""); for (const k of intent.mustAvoid) sections.push(`- ${k}`); sections.push(""); }
+  if (intent.styleEmphasis.length) { sections.push(`### ${isEn ? "Style" : "风格"}`); sections.push(""); for (const k of intent.styleEmphasis) sections.push(`- ${k}`); sections.push(""); }
+  return sections.join("\n");
+}

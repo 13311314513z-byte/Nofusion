@@ -12,12 +12,13 @@ import { ReadabilityDashboard } from "../components/readability/ReadabilityDashb
 import { DuplicateParagraphPanel } from "../components/readability/DuplicateParagraphPanel.js";
 import { RhetoricIssuePanel } from "../components/readability/RhetoricIssuePanel.js";
 import { StyleTextTab } from "./StyleTextTab.js";
+import { DistillationPage } from "./DistillationPage";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
 import type { CoreStyleProfile, AuthorIndexItem, AuthorDetail, ExtractedDoc, BookSummary } from "./style-types.js";
 
-type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit";
+type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
 type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
 
 interface Nav { toDashboard: () => void }
@@ -1133,8 +1134,9 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           { key: "ai-detect", label: "3. AI 检测" },
           { key: "deduplicate", label: "4. 修辞去重" },
           { key: "audit", label: "5. 应用审计" },
+          { key: "distillation", label: "6. 蒸馏规则" },
         ] as const).map((step, idx) => {
-          const stepKeys: ReadonlyArray<StyleTab> = ["import", "diagnose", "ai-detect", "deduplicate", "audit"];
+          const stepKeys: ReadonlyArray<StyleTab> = ["import", "diagnose", "ai-detect", "deduplicate", "audit", "distillation"];
           const currentIdx = stepKeys.indexOf(activeTab);
           const thisIdx = stepKeys.indexOf(step.key);
           const completed = thisIdx >= 0 && thisIdx < currentIdx;
@@ -2119,6 +2121,16 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
       </>
+      )}
+
+      {/* Step 6: Distillation — writer style distillation rules */}
+      {activeTab === "distillation" && (
+        <DistillationPage
+          authorId={selectedAuthorId ?? ""}
+          nav={nav}
+          theme={theme}
+          t={t}
+        />
       )}
 
       {statusNotice && (

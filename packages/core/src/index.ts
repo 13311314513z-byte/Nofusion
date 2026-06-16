@@ -547,6 +547,8 @@ export {
 } from "./utils/style-dimensions.js";
 export { relayoutText, type RelayoutOptions, type RelayoutResult } from "./utils/text-relayout.js";
 export { exportDocument, type ExportFormat, type ExportResult } from "./utils/document-writer.js";
+export { logStateDelta, logHookCreated, logHookAdvanced, logPlanGenerated, logChapterWritten, logAuditCompleted, type StateDelta } from "./utils/state-logger.js";
+export { loadSceneTemplates, buildSceneTemplatesBlock, type SceneTemplateRecord, type SceneTemplatesIndex } from "./utils/scene-template-loader.js";
 export { analyzeDetectionInsights } from "./agents/detection-insights.js";
 export { validatePostWrite, validateEndpointLock, validateAuthorIntentInContent, detectParagraphLengthDrift, detectParagraphShapeWarnings, detectDuplicateTitle, type PostWriteViolation } from "./agents/post-write-validator.js";
 export { ChapterAnalyzerAgent, type AnalyzeChapterInput, type AnalyzeChapterOutput } from "./agents/chapter-analyzer.js";
@@ -729,6 +731,8 @@ export {
   renderCurrentStateToMarkdown,
   renderChapterIntentToMarkdown,
   renderChapterGoalToMarkdown,
+  renderMemoToMarkdown,
+  renderChapterIntentRuntimeToMarkdown,
 } from "./utils/markdown-renderer.js";
 export {
   parseChapterIntentFromMarkdown,
