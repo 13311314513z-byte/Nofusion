@@ -83,8 +83,8 @@ interface StyleImportTabProps {
   readonly handleImportUrl: () => void;
   readonly handleAnalyze: () => void;
   readonly handleDiagnostics: () => void;
-  readonly handleImportBookChapter: (bookId: string, chapterNumber?: number) => void;
-  readonly handleSelectBook: (bookId: string) => void;
+  readonly handleImportBookChapter: (bookId: string, chapterNumber?: number) => Promise<void>;
+  readonly handleSelectBook: (bookId: string) => Promise<void>;
   readonly handleFileAnalysisLocalFile: (event: React.ChangeEvent<HTMLInputElement>) => void;
   readonly handleExtractText: () => void;
   readonly handleLoadNextChunk: () => void;
@@ -167,11 +167,11 @@ export function StyleImportTab(props: StyleImportTabProps) {
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
-              {(() => { const { display, isSampled } = sampleLargeText(fileText); return (<><textarea value={display} readOnly rows={10} className="w-full px-3 py-2 rounded-lg bg-secondary/20 border border-border text-xs focus:outline-none resize-none font-mono" />{isSampled && <div className="text-xs text-amber-600 mt-1">{t("style.textSampled")}</div>}</>); })()}
-              {extractedDoc && extractedDoc.totalChunks !== undefined && loadedChunks < extractedDoc.totalChunks && (<button onClick={handleLoadNextChunk} disabled={loadingChunk} className={`mt-2 px-3 py-1 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30`}>{loadingChunk ? t("style.loadingChunk") : `${t("style.loadNextChunk")} (${loadedChunks + 1}/${extractedDoc.totalChunks})`}</button>)}
+              {(() => { const { display, isSampled } = sampleLargeText(fileText); return (<><textarea value={display} readOnly rows={10} className="w-full px-3 py-2 rounded-lg bg-secondary/20 border border-border text-xs focus:outline-none resize-none font-mono" />{isSampled && <div className="text-xs text-amber-600 mt-1">{t("style.largeTextSampled")}</div>}</>); })()}
+              {extractedDoc && extractedDoc.totalChunks !== undefined && loadedChunks < extractedDoc.totalChunks && (<button onClick={handleLoadNextChunk} disabled={loadingChunk} className={`mt-2 px-3 py-1 text-xs rounded-lg ${c.btnSecondary} disabled:opacity-30`}>{loadingChunk ? t("common.loading") : `${t("style.loadNextChunk")} (${loadedChunks + 1}/${extractedDoc.totalChunks})`}</button>)}
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleExtractText} disabled={!fileText.trim() || loading} className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}>{t("style.extract")}</button>
+              <button onClick={handleExtractText} disabled={!fileText.trim() || loading} className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}>{t("style.extractText")}</button>
               <span className="text-xs text-muted-foreground">{fileType}</span>
             </div>
             {extractedDoc && (<div className={`border ${c.cardStatic} rounded-lg p-4 space-y-2`}><div className="flex items-center justify-between"><span className="text-xs">{t("style.extracted")}</span><span className="text-xs text-muted-foreground">{extractedDoc.charCount?.toLocaleString()} {t("truth.chars")}</span></div></div>)}
@@ -180,7 +180,7 @@ export function StyleImportTab(props: StyleImportTabProps) {
             <div className={`border ${c.cardStatic} rounded-lg p-4 space-y-3`}>
               <div className="flex items-center justify-between"><h4 className="font-semibold text-sm">{t("style.preprocessTitle")}</h4><button onClick={() => setShowPreprocessPanel(!showPreprocessPanel)} className={`text-xs px-2 py-1 rounded ${showPreprocessPanel ? c.btnPrimary : c.btnSecondary}`}>{showPreprocessPanel ? t("common.on") : t("common.off")}</button></div>
               {showPreprocessPanel && (<div className="space-y-3">
-                <div className="flex flex-wrap gap-1.5"><button onClick={() => { setActivePreset("fidelity"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "fidelity" ? c.btnPrimary : c.btnSecondary}`}>{t("style.presetFidelity")}</button><button onClick={() => { setActivePreset("balanced"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "balanced" ? c.btnPrimary : c.btnSecondary}`}>{t("style.presetBalanced")}</button><button onClick={() => { setActivePreset("aggressive"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "aggressive" ? c.btnPrimary : c.btnSecondary}`}>{t("style.presetAggressive")}</button></div>
+                <div className="flex flex-wrap gap-1.5"><button onClick={() => { setActivePreset("fidelity"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "fidelity" ? c.btnPrimary : c.btnSecondary}`}>{t("style.preset.fidelity")}</button><button onClick={() => { setActivePreset("conservative"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "conservative" ? c.btnPrimary : c.btnSecondary}`}>{t("style.preset.conservative")}</button><button onClick={() => { setActivePreset("chatExport"); }} className={`text-xs px-2 py-0.5 rounded ${activePreset === "chatExport" ? c.btnPrimary : c.btnSecondary}`}>{t("style.preset.chatExport")}</button></div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={filterCode} onChange={(e) => { setFilterCode(e.target.checked); setActivePreset("custom"); }} /><span>{t("style.filterCode")}</span></label>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={filterRepeatedPrompts} onChange={(e) => { setFilterRepeatedPrompts(e.target.checked); setActivePreset("custom"); }} /><span>{t("style.filterRepeatedPrompts")}</span></label>

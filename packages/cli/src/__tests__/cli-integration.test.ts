@@ -33,7 +33,9 @@ function buildTestEnv(overrides?: Record<string, string>) {
 }
 
 function run(args: string[], options?: { env?: Record<string, string> }): string {
-  return execFileSync("node", [cliEntry, ...args], {
+  // Use pnpm exec so child process inherits workspace module resolution
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  return execFileSync(pnpmBin, ["exec", "node", cliEntry, ...args], {
     cwd: projectDir,
     encoding: "utf-8",
     env: buildTestEnv(options?.env),
@@ -42,8 +44,9 @@ function run(args: string[], options?: { env?: Record<string, string> }): string
 }
 
 function runStderr(args: string[], options?: { env?: Record<string, string> }): { stdout: string; stderr: string; exitCode: number } {
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   try {
-    const stdout = execFileSync("node", [cliEntry, ...args], {
+    const stdout = execFileSync(pnpmBin, ["exec", "node", cliEntry, ...args], {
       cwd: projectDir,
       encoding: "utf-8",
       env: buildTestEnv(options?.env),

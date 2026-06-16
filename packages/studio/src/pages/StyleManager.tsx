@@ -1031,7 +1031,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           filterIds={filterIds} setFilterIds={setFilterIds}
           filterNoiseMarkers={filterNoiseMarkers} setFilterNoiseMarkers={setFilterNoiseMarkers}
           minLineLength={minLineLength} setMinLineLength={setMinLineLength}
-          setActivePreset={setActivePreset}
+          setActivePreset={setActivePreset as unknown as (v: string) => void}
           relayoutedText={relayoutedText}
           showRelayoutPanel={showRelayoutPanel} setShowRelayoutPanel={setShowRelayoutPanel}
           mergeShortParagraphs={mergeShortParagraphs} setMergeShortParagraphs={setMergeShortParagraphs}
@@ -1043,7 +1043,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           showRiskConfirm={showRiskConfirm} setShowRiskConfirm={setShowRiskConfirm}
           pendingRiskStats={pendingRiskStats} setPendingRiskStats={setPendingRiskStats}
           showExportPanel={showExportPanel} setShowExportPanel={setShowExportPanel}
-          exportFormat={exportFormat} setExportFormat={setExportFormat}
+          exportFormat={exportFormat} setExportFormat={setExportFormat as unknown as (v: string) => void}
           exportStatus={exportStatus}
           importBookId={importBookId} importChapterNumber={importChapterNumber}
           setImportChapterNumber={setImportChapterNumber} chapterIndex={chapterIndex}

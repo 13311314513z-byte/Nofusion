@@ -11,17 +11,30 @@ import { join } from "node:path";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
+/**
+ * Scene template record consumed by the Planner.
+ * Mirrors the fields from SceneTemplateSchema (scene-template.ts) so
+ * that templates saved via the API are directly consumable without
+ * field translation.
+ */
 export interface SceneTemplateRecord {
   readonly id: string;
   readonly name: string;
-  readonly description: string;
-  /** Structural beats that define this template's narrative shape. */
-  readonly beats: ReadonlyArray<string>;
-  /** Emotional tone of the template. */
-  readonly mood?: string;
-  /** Suggested pacing. */
-  readonly pacing?: "slow" | "medium" | "fast";
-  /** Tags for categorization. */
+  /** Scene type tag (e.g. "药房取药", "军营审讯"). */
+  readonly type?: string;
+  /** Physical location. */
+  readonly location?: string;
+  /** Atmospheric / emotional tone — used as "mood" in Planner prompt. */
+  readonly atmosphere?: string;
+  /** Notable props. */
+  readonly props?: ReadonlyArray<string>;
+  /** Recurring routines or rituals — used as "beats" in Planner prompt. */
+  readonly routines?: ReadonlyArray<string>;
+  /** Default characters who appear in this scene type. */
+  readonly defaultCharacters?: ReadonlyArray<string>;
+  /** Free-form notes — used as "description" in Planner prompt. */
+  readonly notes?: string;
+  /** Tags for categorization (derived from type + linkedScene names). */
   readonly tags?: ReadonlyArray<string>;
 }
 
@@ -72,23 +85,44 @@ export function buildSceneTemplatesBlock(
   lines.push("");
 
   for (const tpl of templates) {
-    const mood = tpl.mood ? ` · ${tpl.mood}` : "";
-    const pacing = tpl.pacing
-      ? (isEn ? ` · pacing: ${tpl.pacing}` : ` · 节奏：${tpl.pacing}`)
-      : "";
-    lines.push(`### ${tpl.name}${mood}${pacing}`);
+    const location = tpl.location ? ` · ${tpl.location}` : "";
+    const atmosphere = tpl.atmosphere ? ` · ${tpl.atmosphere}` : "";
+    lines.push(`### ${tpl.name}${location}${atmosphere}`);
     lines.push("");
-    lines.push(tpl.description);
-    lines.push("");
-    if (tpl.beats.length > 0) {
-      lines.push(isEn ? "**Beats:**" : "**节拍：**");
-      for (const beat of tpl.beats) {
-        lines.push(`- ${beat}`);
+
+    if (tpl.notes) {
+      lines.push(tpl.notes);
+      lines.push("");
+    }
+
+    const routines = tpl.routines ?? [];
+    if (routines.length > 0) {
+      lines.push(isEn ? "**Routines / Beats:**" : "**套路 / 节拍：**");
+      for (const r of routines) {
+        lines.push(`- ${r}`);
       }
       lines.push("");
     }
-    if (tpl.tags?.length) {
-      lines.push(`> ${isEn ? "Tags" : "标签"}：${tpl.tags.join("、")}`);
+
+    const props = tpl.props ?? [];
+    if (props.length > 0) {
+      lines.push(isEn ? "**Props:**" : "**道具：**");
+      lines.push(`  ${props.join("、")}`);
+      lines.push("");
+    }
+
+    const characters = tpl.defaultCharacters ?? [];
+    if (characters.length > 0) {
+      lines.push(isEn ? "**Default Characters:**" : "**默认角色：**");
+      lines.push(`  ${characters.join("、")}`);
+      lines.push("");
+    }
+
+    const tags: string[] = [];
+    if (tpl.type) tags.push(tpl.type);
+    if (tpl.tags) tags.push(...tpl.tags);
+    if (tags.length > 0) {
+      lines.push(`> ${isEn ? "Tags" : "标签"}：${tags.join("、")}`);
       lines.push("");
     }
   }
