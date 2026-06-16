@@ -46,6 +46,7 @@ const TYPE_ORDER = [
   "plan",
   "context",
   "trace",
+  "rule-stack",
   "memo",
   "delta",
   "unknown",
@@ -396,6 +397,12 @@ export function BookRuntimeSection({
                 ) : fileContent !== null ? (
                   selectedType === "plan" || selectedFile?.endsWith(".plan.md") ? (
                     <PlanCardView content={fileContent} />
+                  ) : selectedType === "context" || selectedFile?.endsWith(".context.json") ? (
+                    <ContextTracePanel content={fileContent} />
+                  ) : selectedType === "trace" || selectedFile?.endsWith(".trace.json") ? (
+                    <TraceFlowChart content={fileContent} />
+                  ) : selectedType === "rule-stack" || selectedFile?.endsWith(".rule-stack.yaml") || selectedFile?.endsWith(".rule-stack.yml") ? (
+                    <RuleStackView content={fileContent} />
                   ) : (
                     <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
                       {fileContent}
@@ -491,6 +498,144 @@ function PlanCardView({ content }: { content: string }) {
           {content.slice(0, 5000)}
         </pre>
       </details>
+    </div>
+  );
+}
+
+/** Render Composer context.json selectedContext as traceable source table. */
+function ContextTracePanel({ content }: { content: string }) {
+  try {
+    const data = JSON.parse(content) as {
+      selectedContext?: Array<{ source: string; reason: string; excerpt?: string }>;
+    };
+    const items = data.selectedContext ?? [];
+    if (items.length === 0) {
+      return <p className="text-sm text-muted-foreground p-4">上下文溯源为空</p>;
+    }
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+          上下文溯源 ({items.length} 条来源)
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/30 text-left text-xs text-muted-foreground">
+              <th className="py-2 pr-2">来源</th>
+              <th className="py-2 pr-2">引入原因</th>
+              <th className="py-2">内容片段</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i} className="border-b border-border/10 hover:bg-secondary/10">
+                <td className="py-2 pr-2 font-medium whitespace-nowrap">{item.source}</td>
+                <td className="py-2 pr-2 text-muted-foreground text-xs">{item.reason}</td>
+                <td className="py-2 text-xs text-muted-foreground max-w-xs truncate">
+                  {item.excerpt?.slice(0, 80) ?? "—"}{item.excerpt && item.excerpt.length > 80 ? "…" : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  } catch {
+    return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
+  }
+}
+
+/** Render chapter trace.json as Agent pipeline flow. */
+function TraceFlowChart({ content }: { content: string }) {
+  try {
+    const trace = JSON.parse(content) as Record<string, unknown>;
+    const agents = Object.keys(trace).filter(k => !k.startsWith("_") && typeof trace[k] === "object");
+    const stageOrder = ["planner", "composer", "writer", "observer", "settler", "auditor", "reviser"];
+
+    return (
+      <div className="space-y-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+          Agent 管线溯源 ({agents.length} 阶段)
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {stageOrder.filter(s => agents.includes(s)).map((stage, i, arr) => (
+            <div key={stage} className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-lg bg-secondary/10 border border-border/30 text-sm font-medium">
+                {stage}
+              </div>
+              {i < arr.length - 1 && (
+                <span className="text-muted-foreground text-xs">→</span>
+              )}
+            </div>
+          ))}
+          {/* Extra agents not in stage order */}
+          {agents.filter(a => !stageOrder.includes(a)).map(stage => (
+            <div key={stage} className="px-3 py-1.5 rounded-lg bg-amber-100/20 border border-amber-500/20 text-sm">
+              +{stage}
+            </div>
+          ))}
+        </div>
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">原始 JSON</summary>
+          <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed max-h-48 overflow-y-auto border border-border/30 rounded p-2 bg-secondary/5">
+            {JSON.stringify(trace, null, 2).slice(0, 3000)}
+          </pre>
+        </details>
+      </div>
+    );
+  } catch {
+    return <pre className="text-xs whitespace-pre-wrap font-mono">{content}</pre>;
+  }
+}
+
+/** Render rule-stack.yaml as structured rule cards with category/scope tags. */
+function RuleStackView({ content }: { content: string }) {
+  const rules: Array<{ key: string; value: string }> = [];
+  const docs = content.split(/^---$/m).filter(d => d.trim());
+  for (const doc of docs) {
+    const lines = doc.trim().split("\n");
+    const ruleKey = lines[0]?.replace(/^#\s*/, "").replace(/:\s*$/, "").trim() ?? "";
+    const val = lines.slice(1).join("\n").trim();
+    if (ruleKey) rules.push({ key: ruleKey, value: val });
+  }
+  if (rules.length === 0) {
+    let ck = ""; let cv = "";
+    for (const line of content.split("\n")) {
+      const m = line.match(/^([\w_-]+)\s*:\s*(.*)/);
+      if (m && !line.startsWith(" ")) { if (ck) rules.push({ key: ck, value: cv.trim() }); ck = m[1]; cv = m[2]; }
+      else if (ck) cv += "\n" + line;
+    }
+    if (ck) rules.push({ key: ck, value: cv.trim() });
+  }
+  const categorize = (k: string): { cat: string; sc: string } => {
+    if (/character|voice/i.test(k)) return { cat: "角色", sc: "per-char" };
+    if (/scene|location/i.test(k)) return { cat: "场景", sc: "per-scene" };
+    if (/plot|narrative/i.test(k)) return { cat: "剧情", sc: "global" };
+    if (/style|prose/i.test(k)) return { cat: "文风", sc: "global" };
+    if (/world|setting/i.test(k)) return { cat: "世界观", sc: "global" };
+    if (/hook|foreshadow/i.test(k)) return { cat: "伏笔", sc: "global" };
+    return { cat: "其他", sc: "global" };
+  };
+  if (rules.length === 0) return <p className="text-sm text-muted-foreground p-4">规则栈为空</p>;
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground uppercase tracking-wider">规则栈 ({rules.length} 条规则)</div>
+      <div className="grid gap-3">
+        {rules.map((rule, i) => {
+          const { cat, sc } = categorize(rule.key);
+          return (
+            <div key={i} className="border border-border/30 rounded-lg p-4 bg-card/40">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-violet-600 dark:text-violet-400 font-mono">{rule.key}</h4>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400">{cat}</span>
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-secondary/20 text-muted-foreground">{sc}</span>
+                </div>
+              </div>
+              <pre className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">{rule.value.slice(0, 1000)}{rule.value.length > 1000 ? "…" : ""}</pre>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

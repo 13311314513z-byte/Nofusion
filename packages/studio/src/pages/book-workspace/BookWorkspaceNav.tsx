@@ -16,6 +16,9 @@ import {
   Cpu,
   Database,
   Settings,
+  ArrowLeftRight,
+  LayoutTemplate,
+  Mic,
 } from "lucide-react";
 import { useColors } from "../../hooks/use-colors";
 import type { Theme } from "../../hooks/use-theme";
@@ -38,6 +41,9 @@ const MENU_ITEMS: { readonly key: BookSection; readonly icon: React.ElementType 
   { key: "fanfic", icon: Sparkles },
   { key: "runtime", icon: Cpu },
   { key: "sources", icon: Database },
+  { key: "event-chain", icon: ArrowLeftRight },
+  { key: "scene-templates", icon: LayoutTemplate },
+  { key: "voice-profiles", icon: Mic },
   { key: "settings", icon: Settings },
 ];
 

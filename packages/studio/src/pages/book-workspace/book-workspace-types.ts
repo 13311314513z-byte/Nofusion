@@ -14,6 +14,9 @@ export type BookSection =
   | "fanfic"
   | "runtime"
   | "sources"
+  | "event-chain"
+  | "scene-templates"
+  | "voice-profiles"
   | "settings";
 
 export const BOOK_SECTIONS: BookSection[] = [
@@ -32,6 +35,9 @@ export const BOOK_SECTIONS: BookSection[] = [
   "fanfic",
   "runtime",
   "sources",
+  "event-chain",
+  "scene-templates",
+  "voice-profiles",
   "settings",
 ];
 

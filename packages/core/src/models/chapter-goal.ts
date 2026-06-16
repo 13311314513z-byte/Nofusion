@@ -78,6 +78,34 @@ export function getChapterGoal(
   return goals.find((g) => g.chapterNumber === chapterNumber);
 }
 
+/**
+ * Deduplicate chapter goals by keeping only the latest entry per chapterNumber.
+ * When multiple goals share the same chapterNumber, the last one in the array wins.
+ */
+export function deduplicateChapterGoals(
+  goals: ReadonlyArray<ChapterGoalCard>,
+): ChapterGoalCard[] {
+  const map = new Map<number, ChapterGoalCard>();
+  for (const g of goals) {
+    map.set(g.chapterNumber, g);
+  }
+  return [...map.values()].sort((a, b) => a.chapterNumber - b.chapterNumber);
+}
+
+/**
+ * Validate that all chapter numbers in the goals array are contiguous
+ * starting from 1 (no gaps). Returns the first gap if found, or null if valid.
+ */
+export function findGoalNumberGap(
+  goals: ReadonlyArray<ChapterGoalCard>,
+): number | null {
+  const nums = [...new Set(goals.map(g => g.chapterNumber))].sort((a, b) => a - b);
+  for (let i = 0; i < nums.length; i++) {
+    if (nums[i] !== i + 1) return i + 1;
+  }
+  return null;
+}
+
 export function upsertChapterGoal(
   goals: ReadonlyArray<ChapterGoalCard>,
   goal: ChapterGoalCard,

@@ -112,6 +112,74 @@ export {
 } from "./utils/chapter-artifacts.js";
 export { ResourceRegistry, globalRegistry, type Resource } from "./utils/resource-registry.js";
 export {
+  acquireLock,
+  isLocked,
+  releaseAllLocks,
+  chapterKey,
+  truthKey,
+  hookKey,
+  roleKey,
+  sceneTemplatesKey,
+  eventChainKey,
+} from "./utils/reentrancy-guard.js";
+export {
+  METRIC_DEFINITIONS,
+  MetricValueSchema,
+  MetricSnapshotSchema,
+  evaluateThreshold,
+  createMetricValue,
+  type MetricId,
+  type MetricValue,
+  type MetricSnapshot,
+} from "./utils/quantitative-metrics.js";
+export {
+  ChangelogEntrySchema,
+  initChangelog,
+  appendChangelog,
+  logTruthUpdate,
+  logChapterStatus,
+  logResourceChange,
+  type ChangelogEntry,
+} from "./utils/state-changelog.js";
+export {
+  checkRuntimeArtifactCompleteness,
+  checkChapterCountConsistency,
+  checkHookReferences,
+  checkRoleReferences,
+  runConsistencyChecks,
+  type ConsistencyIssue,
+  type ConsistencyReport,
+} from "./utils/data-consistency.js";
+export {
+  EnhancedTraceSchema,
+  StageTimingSchema,
+  AgentDecisionSchema,
+  createStageTiming,
+  type StageTiming,
+  type AgentDecision,
+  type EnhancedTrace,
+} from "./models/enhanced-trace.js";
+export {
+  BookSoulSchema,
+  DEFAULT_BOOK_SOUL,
+  type BookSoul,
+} from "./models/book-soul.js";
+export {
+  ReaderContractSchema,
+  SatisfactionTypeSchema,
+  DEFAULT_READER_CONTRACT,
+  type ReaderContract,
+  type SatisfactionType,
+} from "./models/reader-contract.js";
+export {
+  CreativeTensionSchema,
+  CreativeTensionMapSchema,
+  findAttentionTensions,
+  tensionOverdueIndex,
+  type CreativeTension,
+  type CreativeTensionMap,
+} from "./models/creative-tension.js";
+export {
   computePreferenceMetrics,
   type PairedPreference,
   type PairedPreferenceQuestion,
@@ -519,6 +587,8 @@ export {
   getChapterGoal,
   upsertChapterGoal,
   removeChapterGoal,
+  deduplicateChapterGoals,
+  findGoalNumberGap,
   type ChapterGoalCard,
   type ChapterGoalsIndex,
 } from "./models/chapter-goal.js";
