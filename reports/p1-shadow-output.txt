@@ -1,0 +1,17 @@
+=== P1-8: Beta Reader Shadow Simulator ===
+
+Found 9 chapters
+  ✅ Ch1 vs Ch2: 0A-2B-3T
+  ✅ Ch2 vs Ch3: 0A-1B-4T
+  ✅ Ch3 vs Ch4: 0A-1B-4T
+  ✅ Ch4 vs Ch5: 1A-0B-4T
+  ✅ Ch5 vs Ch6: 0A-1B-4T
+  ✅ Ch6 vs Ch7: 1A-0B-4T
+  ✅ Ch7 vs Ch8: 0A-0B-5T
+  ✅ Ch8 vs Ch9: 0A-0B-5T
+
+✅ Generated 40 comparisons across 8 chapter pairs
+   Shadow data: c:\Users\white\Downloads\Nofusion-main\books\test-book-0609\story\beta-reader-shadow/
+   CSV: c:\Users\white\Downloads\Nofusion-main\books\test-book-0609\story\calibration-results.csv
+
+📊 Stats: 2A-wins / 5B-wins / 33ties (40 total)

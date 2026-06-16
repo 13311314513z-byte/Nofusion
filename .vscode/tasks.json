@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "git-commit-push",
+			"type": "shell",
+			"command": "git add -A && git commit -m \"chore: final delivery reports and config sync\" && git pull --rebase origin master && git push origin master && git push gitee master",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git-commit-push",
+			"type": "shell",
+			"command": "git add -A; git commit -m 'chore: final delivery reports and config sync'; git pull --rebase origin master; git push origin master; git push gitee master",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

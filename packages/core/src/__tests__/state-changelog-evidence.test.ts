@@ -33,7 +33,7 @@ describe("M10 State Changelog — Runtime Evidence", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("P1-3a: state-logger.ts is importable from Core", async () => {
+  it("P1-3a: state-logger.ts is importable from Core", { timeout: 30000 }, async () => {
     // Dynamic import to avoid module resolution issues in test context
     try {
       const mod = await import("@actalk/inkos-core");

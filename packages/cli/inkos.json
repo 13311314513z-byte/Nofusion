@@ -1,0 +1,26 @@
+{
+  "name": "cli",
+  "version": "0.1.0",
+  "language": "zh",
+  "llm": {
+    "provider": "anthropic",
+    "service": "custom",
+    "configSource": "studio",
+    "baseUrl": "",
+    "model": "gpt-5",
+    "apiFormat": "chat",
+    "stream": true
+  },
+  "notify": [],
+  "inputGovernanceMode": "v2",
+  "daemon": {
+    "schedule": {
+      "radarCron": "0 */6 * * *",
+      "writeCron": "*/15 * * * *"
+    },
+    "maxConcurrentBooks": 3
+  },
+  "writing": {
+    "reviewRetries": 3
+  }
+}

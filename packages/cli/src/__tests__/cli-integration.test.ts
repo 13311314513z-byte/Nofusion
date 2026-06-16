@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { StateManager } from "@actalk/inkos-core";
 
@@ -32,11 +33,23 @@ function buildTestEnv(overrides?: Record<string, string>) {
   };
 }
 
+function resolvePnpmMjs(): string {
+  const candidates = [
+    join(process.env.ProgramData ?? "", "npm", "node_modules", "pnpm", "bin", "pnpm.mjs"),
+    join(process.env.APPDATA ?? "", "npm", "node_modules", "pnpm", "bin", "pnpm.mjs"),
+    join(dirname(process.execPath), "..", "node_modules", "pnpm", "bin", "pnpm.mjs"),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  throw new Error("pnpm.mjs not found; required for CLI integration tests");
+}
+
 function run(args: string[], options?: { env?: Record<string, string> }): string {
-  // Use pnpm exec so child process inherits workspace module resolution
-  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  return execFileSync(pnpmBin, ["exec", "node", cliEntry, ...args], {
-    cwd: projectDir,
+  // pnpm exec from a temp dir requires a package.json; we create one in beforeAll.
+  // Use pnpm.mjs directly via node to avoid Windows .cmd EINVAL and quoting issues.
+  const pnpmMjs = resolvePnpmMjs();
+  return execFileSync(process.execPath, [pnpmMjs, "--dir", projectDir, "exec", "node", cliEntry, ...args], {
     encoding: "utf-8",
     env: buildTestEnv(options?.env),
     timeout: CLI_PROCESS_TIMEOUT_MS,
@@ -44,10 +57,9 @@ function run(args: string[], options?: { env?: Record<string, string> }): string
 }
 
 function runStderr(args: string[], options?: { env?: Record<string, string> }): { stdout: string; stderr: string; exitCode: number } {
-  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const pnpmMjs = resolvePnpmMjs();
   try {
-    const stdout = execFileSync(pnpmBin, ["exec", "node", cliEntry, ...args], {
-      cwd: projectDir,
+    const stdout = execFileSync(process.execPath, [pnpmMjs, "--dir", projectDir, "exec", "node", cliEntry, ...args], {
       encoding: "utf-8",
       env: buildTestEnv(options?.env),
       timeout: CLI_PROCESS_TIMEOUT_MS,
@@ -69,6 +81,12 @@ const failingLlmEnv = {
 describe("CLI integration", () => {
   beforeAll(async () => {
     projectDir = await mkdtemp(join(tmpdir(), "inkos-cli-test-"));
+    // pnpm exec requires a package.json in the cwd; the temp project dir is
+    // outside the workspace, so provide a minimal manifest.
+    await writeFile(
+      join(projectDir, "package.json"),
+      JSON.stringify({ name: "inkos-cli-test-project", version: "1.0.0", private: true }),
+    );
   });
 
   afterAll(async () => {
