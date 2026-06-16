@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useState, useCallback, type ChangeEvent } from "react";
 import { fetchJson, postApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { AuthorIndexItem, AuthorDetail, BookSummary } from "../style-types.js";
