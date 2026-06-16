@@ -3,16 +3,16 @@ import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { BarChart3, AlertTriangle, Library, Plus, Upload, Wand2, FileText, AlertCircle } from "lucide-react";
-import { StyleTextTab } from "./StyleTextTab.js";
+import { BarChart3, Library, Plus, Upload, Wand2 } from "lucide-react";
 import { DistillationPage } from "./DistillationPage";
 import { StyleAiDetectTab } from "./style-manager/StyleAiDetectTab.js";
 import { StyleDiagnoseTab } from "./style-manager/StyleDiagnoseTab.js";
 import { StyleDeduplicateTab } from "./style-manager/StyleDeduplicateTab.js";
 import { StyleAuditTab } from "./style-manager/StyleAuditTab.js";
+import { StyleImportTab } from "./style-manager/StyleImportTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
-import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
+import type { PresetId, InspectionResult } from "./style-preprocess-state.js";
+import { PRESETS, computeRemovalStats, requiresConfirmation } from "./style-preprocess-state.js";
 import type { CoreStyleProfile, AuthorIndexItem, ExtractedDoc, BookSummary } from "./style-types.js";
 
 type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
@@ -1006,33 +1006,68 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
 
       {/* Step 1: Text Import & Analysis */}
       {activeTab === "import" && (
-        <StyleTextTab
-          text={text}
-          setText={setText}
-          sourceName={sourceName}
-          setSourceName={setSourceName}
-          urlSource={urlSource}
-          setUrlSource={setUrlSource}
-          profile={profile}
-          diagnostics={diagnostics}
-          loading={loading}
-          loadingDiagnostics={loadingDiagnostics}
+        <StyleImportTab
+          text={text} setText={setText}
+          sourceName={sourceName} setSourceName={setSourceName}
+          urlSource={urlSource} setUrlSource={setUrlSource}
+          profile={profile} diagnostics={diagnostics}
+          loading={loading} loadingDiagnostics={loadingDiagnostics}
           textFileInputRef={textFileInputRef}
-          libraryData={libraryData}
-          booksData={booksData}
-          c={c}
-          t={t as unknown as (key: string) => string}
+          fileAnalysisInputRef={fileAnalysisInputRef}
+          libraryData={libraryData} booksData={booksData}
+          fileText={fileText} fileSourceName={fileSourceName} setFileSourceName={setFileSourceName}
+          fileType={fileType} extractedDoc={extractedDoc}
+          loadedChunks={loadedChunks} loadingChunk={loadingChunk}
+          activePreset={activePreset} analysisStage={analysisStage}
+          preprocessedText={preprocessedText} preprocessActions={preprocessActions}
+          showPreprocessPanel={showPreprocessPanel} setShowPreprocessPanel={setShowPreprocessPanel}
+          filterCode={filterCode} setFilterCode={setFilterCode}
+          filterRepeatedPrompts={filterRepeatedPrompts} setFilterRepeatedPrompts={setFilterRepeatedPrompts}
+          filterUrls={filterUrls} setFilterUrls={setFilterUrls}
+          filterStructuredData={filterStructuredData} setFilterStructuredData={setFilterStructuredData}
+          stripMarkdown={stripMarkdown} setStripMarkdown={setStripMarkdown}
+          deduplicateParagraphs={deduplicateParagraphs} setDeduplicateParagraphs={setDeduplicateParagraphs}
+          filterTimestamps={filterTimestamps} setFilterTimestamps={setFilterTimestamps}
+          filterIds={filterIds} setFilterIds={setFilterIds}
+          filterNoiseMarkers={filterNoiseMarkers} setFilterNoiseMarkers={setFilterNoiseMarkers}
+          minLineLength={minLineLength} setMinLineLength={setMinLineLength}
+          setActivePreset={setActivePreset}
+          relayoutedText={relayoutedText}
+          showRelayoutPanel={showRelayoutPanel} setShowRelayoutPanel={setShowRelayoutPanel}
+          mergeShortParagraphs={mergeShortParagraphs} setMergeShortParagraphs={setMergeShortParagraphs}
+          formatDialogue={formatDialogue} setFormatDialogue={setFormatDialogue}
+          ensureParagraphSpacing={ensureParagraphSpacing} setEnsureParagraphSpacing={setEnsureParagraphSpacing}
+          normalizeQuotes={normalizeQuotes} setNormalizeQuotes={setNormalizeQuotes}
+          compressBlankLines={compressBlankLines} setCompressBlankLines={setCompressBlankLines}
+          inspectionResult={inspectionResult}
+          showRiskConfirm={showRiskConfirm} setShowRiskConfirm={setShowRiskConfirm}
+          pendingRiskStats={pendingRiskStats} setPendingRiskStats={setPendingRiskStats}
+          showExportPanel={showExportPanel} setShowExportPanel={setShowExportPanel}
+          exportFormat={exportFormat} setExportFormat={setExportFormat}
+          exportStatus={exportStatus}
+          importBookId={importBookId} importChapterNumber={importChapterNumber}
+          setImportChapterNumber={setImportChapterNumber} chapterIndex={chapterIndex}
+          c={c} t={t}
           handleTextLocalFile={handleTextLocalFile}
           handleImportUrl={handleImportUrl}
           handleAnalyze={handleAnalyze}
           handleDiagnostics={handleDiagnostics}
           handleImportBookChapter={handleImportBookChapter}
-          renderProfileCard={renderProfileCard}
-          importBookId={importBookId}
-          chapterIndex={chapterIndex}
-          importChapterNumber={importChapterNumber}
           handleSelectBook={handleSelectBook}
-          onSelectChapter={setImportChapterNumber}
+          handleFileAnalysisLocalFile={handleFileAnalysisLocalFile}
+          handleExtractText={handleExtractText}
+          handleLoadNextChunk={handleLoadNextChunk}
+          runPreprocess={runPreprocess}
+          runRelayout={runRelayout}
+          handleRunPreprocess={handleRunPreprocess}
+          getStageText={getStageText}
+          sampleLargeText={sampleLargeText}
+          setAnalysisToExtracted={setAnalysisToExtracted}
+          setAnalysisToCleaned={setAnalysisToCleaned}
+          setAnalysisToRelayouted={setAnalysisToRelayouted}
+          handleImportProcessedToTextAnalysis={handleImportProcessedToTextAnalysis}
+          handleExport={handleExport}
+          renderProfileCard={renderProfileCard}
         />
       )}
 
@@ -1067,434 +1102,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         />
       )}
 
-      {/* Step: File Processing (shown alongside import) */}
-      {activeTab === "import" && fileText && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.sourceName")}</label>
-              <input
-                type="text"
-                value={fileSourceName}
-                onChange={(e) => setFileSourceName(e.target.value)}
-                placeholder={t("style.sourceExample")}
-                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">{t("style.textSample")}</label>
-              {(() => {
-                const { display, isSampled } = sampleLargeText(fileText);
-                return (
-                  <>
-                    {isSampled && (
-                      <div className="text-xs text-amber-600 mb-1">
-                        {t("style.largeTextSampled")} ({fileText.length.toLocaleString()} chars)
-                      </div>
-                    )}
-                    <textarea
-                      value={display}
-                      onChange={(e) => setFileText(e.target.value)}
-                      rows={10}
-                      placeholder={t("style.uploadHint")}
-                      className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm focus:outline-none focus:border-primary resize-none font-mono"
-                    />
-                  </>
-                );
-              })()}
-            </div>
-            <div className="flex gap-3 items-center flex-wrap">
-              <input
-                ref={fileAnalysisInputRef}
-                type="file"
-                accept=".txt,.md,.markdown,.jsonl,.json,.ts,.js,.html,.htm,.css"
-                className="hidden"
-                onChange={handleFileAnalysisLocalFile}
-              />
-              <button
-                onClick={() => fileAnalysisInputRef.current?.click()}
-                disabled={loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <Upload size={14} />
-                {t("style.importLocalFile")}
-              </button>
-              <select
-                value={fileType}
-                onChange={(e) => setFileType(e.target.value as LocalStyleFileType)}
-                className="px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm"
-              >
-                <option value="txt">.txt</option>
-                <option value="md">.md</option>
-                <option value="jsonl">.jsonl</option>
-                <option value="json">.json</option>
-                <option value="ts">.ts</option>
-                <option value="js">.js</option>
-                <option value="html">.html</option>
-                <option value="css">.css</option>
-              </select>
-              <button
-                onClick={handleExtractText}
-                disabled={!fileText.trim() || loading}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnPrimary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <FileText size={14} />
-                {loading ? t("style.processing") : t("style.extractText")}
-              </button>
-              <button
-                onClick={handleImportProcessedToTextAnalysis}
-                disabled={!getStageText().trim()}
-                className={`px-4 py-2 text-sm rounded-lg ${c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
-              >
-                <BarChart3 size={14} />
-                {t("style.importToTextAnalysis")}
-              </button>
-            </div>
-            {extractedDoc && extractedDoc.warnings.length > 0 && (
-              <div className="space-y-1">
-                {extractedDoc.warnings.map((w, i) => (
-                  <div key={i} className="flex items-center gap-1 text-xs text-amber-600">
-                    <AlertCircle size={12} />
-                    {w}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Chunked extraction indicator */}
-            {extractedDoc && extractedDoc.totalChunks !== undefined && extractedDoc.totalChunks > 1 && (
-              <div className="flex items-center gap-2 text-xs text-secondary">
-                <FileText size={12} />
-                <span>
-                  {t("style.chunkProgress").replace("{{loaded}}", String(loadedChunks)).replace("{{total}}", String(extractedDoc.totalChunks))}
-                </span>
-                {loadedChunks < extractedDoc.totalChunks && (
-                  <button
-                    className={`text-xs px-2 py-0.5 rounded ${c.btnSecondary} hover:opacity-80`}
-                    onClick={handleLoadNextChunk}
-                    disabled={loadingChunk}
-                  >
-                    {loadingChunk ? t("common.loading") : t("style.loadNextChunk")}
-                  </button>
-                )}
-                {loadedChunks === extractedDoc.totalChunks && (
-                  <span className="text-green-600">{t("style.allChunksLoaded")}</span>
-                )}
-              </div>
-            )}
-
-            {/* Preprocess Panel */}
-            <div className={`border ${c.cardStatic} rounded-lg p-4 space-y-3`}>
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm">{t("style.preprocessTitle")}</h4>
-                <button
-                  onClick={() => setShowPreprocessPanel(!showPreprocessPanel)}
-                  className={`text-xs px-2 py-1 rounded ${showPreprocessPanel ? c.btnPrimary : c.btnSecondary}`}
-                >
-                  {showPreprocessPanel ? t("common.on") : t("common.off")}
-                </button>
-              </div>
-              {showPreprocessPanel && (
-                <div className="space-y-2">
-                  {/* Preset selector */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => {
-                          setActivePreset(preset.id);
-                          setFilterCode(preset.preprocess.filterCode ?? false);
-                          setFilterRepeatedPrompts(preset.preprocess.filterRepeatedPrompts ?? false);
-                          setFilterUrls(preset.preprocess.filterUrls ?? false);
-                          setFilterStructuredData(preset.preprocess.filterStructuredData ?? false);
-                          setStripMarkdown(preset.preprocess.stripMarkdown ?? false);
-                          setDeduplicateParagraphs(preset.preprocess.deduplicateParagraphs ?? false);
-                          setFilterTimestamps(preset.preprocess.filterTimestamps ?? false);
-                          setFilterIds(preset.preprocess.filterIds ?? false);
-                          setFilterNoiseMarkers(preset.preprocess.filterNoiseMarkers ?? false);
-                          setMinLineLength(preset.preprocess.minLineLength ?? 0);
-                          // Also update relayout options to match preset
-                          setMergeShortParagraphs(preset.relayout.mergeShortParagraphs ?? false);
-                          setFormatDialogue(preset.relayout.formatDialogue ?? false);
-                          setEnsureParagraphSpacing(preset.relayout.ensureParagraphSpacing ?? false);
-                          setNormalizeQuotes(preset.relayout.normalizeQuotes ?? false);
-                          setCompressBlankLines(preset.relayout.compressBlankLines ?? false);
-                        }}
-                        className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                          activePreset === preset.id
-                            ? `${c.btnPrimary} border-transparent`
-                            : `${c.btnSecondary} border-border hover:opacity-80`
-                        } ${preset.risk === "high" ? "text-amber-600" : ""}`}
-                        title={t(preset.descriptionKey as any)}
-                      >
-                        {t(preset.labelKey as any)}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Options grid */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterCode} onChange={(e) => { setFilterCode(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.filterCode")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterRepeatedPrompts} onChange={(e) => { setFilterRepeatedPrompts(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span className={filterRepeatedPrompts ? "text-amber-600" : ""}>{t("style.filterRepeatedPrompts")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterUrls} onChange={(e) => { setFilterUrls(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.filterUrls")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterStructuredData} onChange={(e) => { setFilterStructuredData(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span className="text-amber-600">{t("style.filterStructuredData")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={stripMarkdown} onChange={(e) => { setStripMarkdown(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.stripMarkdown")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={deduplicateParagraphs} onChange={(e) => { setDeduplicateParagraphs(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.deduplicateParagraphs")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterTimestamps} onChange={(e) => { setFilterTimestamps(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.filterTimestamps")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterIds} onChange={(e) => { setFilterIds(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.filterIds")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={filterNoiseMarkers} onChange={(e) => { setFilterNoiseMarkers(e.target.checked); setActivePreset("custom" as any); }} />
-                      <span>{t("style.filterNoiseMarkers")}</span>
-                    </label>
-                  </div>
-
-                  {/* Numeric threshold */}
-                  <div className="flex items-center gap-2 text-xs">
-                    <span>{t("style.minLineLength")}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={minLineLength}
-                      onChange={(e) => { setMinLineLength(Math.max(0, Math.min(100, Number(e.target.value) || 0))); setActivePreset("custom" as any); }}
-                      className="w-16 px-1.5 py-0.5 rounded border border-border bg-background text-xs text-right"
-                    />
-                    <span className="text-muted-foreground">(0 = {t("common.off")})</span>
-                  </div>
-
-                  {/* Inspection results */}
-                  {inspectionResult && inspectionResult.findings.length > 0 && (
-                    <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        {t("style.inspect.title")}（{inspectionResult.findings.length}）
-                      </div>
-                      {inspectionResult.findings.map((f, i) => (
-                        <div key={i} className="text-xs text-amber-600 dark:text-amber-500">
-                          {f.count > 1 ? `${t(f.messageKey as any)}（${f.count} 处）` : t(f.messageKey as any)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Actions log */}
-                  {preprocessActions.length > 0 && (
-                    <div className="space-y-1">
-                      {preprocessActions.map((a, i) => (
-                        <div key={i} className="text-xs text-muted-foreground">✓ {a}</div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Run button with risk warning */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleRunPreprocess(extractedDoc?.text || fileText)}
-                      disabled={!(extractedDoc?.text || fileText).trim() || loading}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
-                    >
-                      {t("style.runPreprocess")}
-                    </button>
-                    {preprocessedText && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{t("style.removalRate")}: {((extractedDoc?.text.length ?? 1 - preprocessedText.length) / (extractedDoc?.text.length ?? 1) * 100).toFixed(1)}%</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Analysis stage selector */}
-                  {preprocessedText && (
-                    <div className="flex flex-wrap items-center gap-2 p-2 rounded bg-primary/5 border border-primary/20">
-                      <span className="text-xs font-medium">{t("style.stage.analysisSource")}:</span>
-                      <button
-                        onClick={setAnalysisToExtracted}
-                        className={`text-xs px-2 py-0.5 rounded ${analysisStage === "extracted" ? c.btnPrimary : c.btnSecondary}`}
-                      >
-                        {t("style.stage.extracted")}（{extractedDoc?.text.length.toLocaleString()}）
-                      </button>
-                      <button
-                        onClick={setAnalysisToCleaned}
-                        className={`text-xs px-2 py-0.5 rounded ${analysisStage === "cleaned" ? c.btnPrimary : c.btnSecondary}`}
-                      >
-                        {t("style.stage.cleaned")}（{preprocessedText.length.toLocaleString()}）
-                      </button>
-                      {relayoutedText && (
-                        <button
-                          onClick={setAnalysisToRelayouted}
-                          className={`text-xs px-2 py-0.5 rounded ${analysisStage === "relayouted" ? c.btnPrimary : c.btnSecondary}`}
-                        >
-                          {t("style.stage.relayouted")}（{relayoutedText.length.toLocaleString()}）
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Preview */}
-                  {preprocessedText && (
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {t("style.preprocessed")}（{getStageText().length.toLocaleString()} {t("truth.chars")}）
-                      </div>
-                      <textarea
-                        value={getStageText()}
-                        readOnly
-                        rows={4}
-                        className="w-full px-2 py-1 rounded bg-secondary/20 border border-border text-xs font-mono resize-none"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Relayout Panel */}
-            <div className={`border ${c.cardStatic} rounded-lg p-4 space-y-3`}>
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm">{t("style.relayoutTitle")}</h4>
-                <button
-                  onClick={() => setShowRelayoutPanel(!showRelayoutPanel)}
-                  className={`text-xs px-2 py-1 rounded ${showRelayoutPanel ? c.btnPrimary : c.btnSecondary}`}
-                >
-                  {showRelayoutPanel ? t("common.on") : t("common.off")}
-                </button>
-              </div>
-              {showRelayoutPanel && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={mergeShortParagraphs} onChange={(e) => setMergeShortParagraphs(e.target.checked)} />
-                      <span>{t("style.mergeShortParagraphs")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={formatDialogue} onChange={(e) => setFormatDialogue(e.target.checked)} />
-                      <span>{t("style.formatDialogue")}</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={normalizeQuotes} onChange={(e) => setNormalizeQuotes(e.target.checked)} />
-                      <span>{t("style.normalizeQuotes")}</span>
-                    </label>
-                  </div>
-                  <button
-                    onClick={() => runRelayout(preprocessedText || extractedDoc?.text || fileText)}
-                    disabled={!(preprocessedText || extractedDoc?.text || fileText).trim() || loading}
-                    className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
-                  >
-                    {t("style.runRelayout")}
-                  </button>
-                  {relayoutedText && (
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">{t("style.relayouted")}（{relayoutedText.length} {t("truth.chars")}）</div>
-                      <textarea
-                        value={relayoutedText}
-                        readOnly
-                        rows={4}
-                        className="w-full px-2 py-1 rounded bg-secondary/20 border border-border text-xs font-mono resize-none"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Export Panel */}
-            <div className={`border ${c.cardStatic} rounded-lg p-4 space-y-3`}>
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm">{t("style.exportTitle")}</h4>
-                <button
-                  onClick={() => setShowExportPanel(!showExportPanel)}
-                  className={`text-xs px-2 py-1 rounded ${showExportPanel ? c.btnPrimary : c.btnSecondary}`}
-                >
-                  {showExportPanel ? t("common.on") : t("common.off")}
-                </button>
-              </div>
-              {showExportPanel && (
-                <div className="flex gap-2 items-center">
-                  <select
-                    value={exportFormat}
-                    onChange={(e) => setExportFormat(e.target.value as "txt" | "md" | "html")}
-                    className="px-3 py-1.5 rounded-lg bg-secondary/30 border border-border text-xs"
-                  >
-                    <option value="txt">.txt</option>
-                    <option value="md">.md</option>
-                    <option value="html">.html</option>
-                  </select>
-                  <button
-                    onClick={handleExport}
-                    disabled={!extractedDoc && !fileText}
-                    className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}
-                  >
-                    {t("style.export")}
-                  </button>
-                  {exportStatus && <span className="text-xs text-muted-foreground">{exportStatus}</span>}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {(preprocessedText || extractedDoc?.text) ? (
-              <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.preprocessResult")}</h3>
-                  <button
-                    onClick={handleImportProcessedToTextAnalysis}
-                    className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} flex items-center gap-1`}
-                  >
-                    <BarChart3 size={12} />
-                    {t("style.importToTextAnalysis")}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-secondary/30 rounded-lg p-3">
-                    <div className="text-muted-foreground text-xs">{t("style.extractedChars")}</div>
-                    <div className="text-xl font-bold">{(extractedDoc?.charCount ?? 0).toLocaleString()}</div>
-                  </div>
-                  <div className="bg-secondary/30 rounded-lg p-3">
-                    <div className="text-muted-foreground text-xs">{t("style.finalChars")}</div>
-                    <div className="text-xl font-bold">{getStageText().length.toLocaleString()}</div>
-                  </div>
-                </div>
-                <textarea
-                  value={getStageText()}
-                  readOnly
-                  rows={18}
-                  className="w-full px-3 py-2 rounded-lg bg-secondary/20 border border-border text-xs focus:outline-none resize-none font-mono"
-                />
-              </div>
-            ) : (
-              !loading && (
-                <div className={`border border-dashed ${c.cardStatic} rounded-lg p-8 text-center text-muted-foreground text-sm italic`}>
-                  {t("style.preprocessEmptyHint")}
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      )}
+      {/* Step: File Processing — moved to StyleImportTab */}
 
       {/* Step 5: Audit - Author Library */}
       {activeTab === "audit" && (
@@ -1542,42 +1150,6 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         </div>
       )}
 
-      {/* Risk confirmation modal */}
-      {showRiskConfirm && pendingRiskStats && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md p-6 rounded-xl bg-background border border-border shadow-xl space-y-4">
-            <h3 className="text-lg font-semibold text-destructive">{t("style.riskConfirmTitle")}</h3>
-            <div className="space-y-2 text-sm">
-              <p>{t("style.riskConfirmMessage")}</p>
-              <ul className="list-disc list-inside text-muted-foreground">
-                {pendingRiskStats.highRiskOptions.map((opt) => (
-                  <li key={opt}>{opt}</li>
-                ))}
-              </ul>
-              <p className="font-medium">{t("style.removalRate")}: {(pendingRiskStats.removalRate * 100).toFixed(1)}%</p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => { setShowRiskConfirm(false); setPendingRiskStats(null); }}
-                className={`px-3 py-1.5 text-xs rounded-lg ${c.btnSecondary}`}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={() => {
-                  setShowRiskConfirm(false);
-                  const text = extractedDoc?.text || fileText;
-                  runPreprocess(text);
-                  setPendingRiskStats(null);
-                }}
-                className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary}`}
-              >
-                {t("common.confirm")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
