@@ -1,16 +1,9 @@
-import { useState, useCallback, useRef, useMemo, type ChangeEvent } from "react";
+import { useState, useRef, useMemo, type ChangeEvent } from "react";
 import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { Wand2, Upload, BarChart3, FileText, Library, Plus, RefreshCw, Trash2, AlertCircle, Link, ChevronDown, ChevronRight, AlertTriangle, Stethoscope, User } from "lucide-react";
-import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel.js";
-import { AITellsPanel } from "../components/style/AITellsPanel.js";
-import { AdjustmentSuggestionsPanel } from "./style-manager/AdjustmentSuggestionsPanel.js";
-import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
-import { ReadabilityDashboard } from "../components/readability/ReadabilityDashboard.js";
-import { DuplicateParagraphPanel } from "../components/readability/DuplicateParagraphPanel.js";
-import { RhetoricIssuePanel } from "../components/readability/RhetoricIssuePanel.js";
+import { BarChart3, AlertTriangle, Library, Plus, Upload, Wand2, FileText, AlertCircle } from "lucide-react";
 import { StyleTextTab } from "./StyleTextTab.js";
 import { DistillationPage } from "./DistillationPage";
 import { StyleAiDetectTab } from "./style-manager/StyleAiDetectTab.js";
@@ -20,7 +13,7 @@ import { StyleAuditTab } from "./style-manager/StyleAuditTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, RiskLevel, TextStage, InspectionResult, InspectionFinding } from "./style-preprocess-state.js";
 import { PRESETS, getPreset, computeRemovalStats, requiresConfirmation, buildSnapshot, getInvalidatedStages } from "./style-preprocess-state.js";
-import type { CoreStyleProfile, AuthorIndexItem, AuthorDetail, ExtractedDoc, BookSummary } from "./style-types.js";
+import type { CoreStyleProfile, AuthorIndexItem, ExtractedDoc, BookSummary } from "./style-types.js";
 
 type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
 type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
@@ -242,9 +235,15 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   // Library state — kept for Import tab usage
   const { data: libraryData, refetch: refetchLibrary } = useApi<{ authors: ReadonlyArray<AuthorIndexItem> }>("/style/authors");
 
-  // Audit state — moved to StyleAuditTab
+  // Audit author state — kept for renderProfileCard + DistillationPage
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string>("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newAuthorId, setNewAuthorId] = useState("");
+  const [newAuthorName, setNewAuthorName] = useState("");
+  const [newAuthorTags, setNewAuthorTags] = useState("");
 
-  // Apply state — moved to StyleAuditTab
+  // Apply state — kept for statusNotice
+  const [applyStatus, setApplyStatus] = useState("");
 
   // Shared
   const [importBookId, setImportBookId] = useState("");
@@ -725,6 +724,18 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
   };
 
   // ── Render helpers ──
+
+  const renderBar = (label: string, value: number, colorClass?: string) => (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{(value * 100).toFixed(0)}%</span>
+      </div>
+      <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${colorClass ?? "bg-primary"}`} style={{ width: `${Math.min(value * 100, 100)}%` }} />
+      </div>
+    </div>
+  );
 
   const renderProfileCard = (p: CoreStyleProfile | null, showImport?: boolean) => {
     if (!p) return null;
@@ -1494,9 +1505,9 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
           setProfile={setProfile}
           diagnostics={diagnostics}
           setDiagnostics={setDiagnostics}
-          libraryData={libraryData}
-          refetchLibrary={refetchLibrary}
-          booksData={booksData}
+          libraryData={libraryData ?? undefined}
+          refetchLibrary={refetchLibrary as () => void}
+          booksData={booksData ?? undefined}
           c={c}
           t={t}
           setAnalyzeStatus={setAnalyzeStatus}

@@ -14,9 +14,9 @@ interface StyleAuditTabProps {
   readonly setProfile: (v: import("../style-types.js").CoreStyleProfile | null) => void;
   readonly diagnostics: import("@actalk/inkos-core").FullStyleDiagnostics | null;
   readonly setDiagnostics: (v: import("@actalk/inkos-core").FullStyleDiagnostics | null) => void;
-  readonly libraryData: { authors: ReadonlyArray<AuthorIndexItem> } | undefined;
+  readonly libraryData: { authors: ReadonlyArray<AuthorIndexItem> } | undefined | null;
   readonly refetchLibrary: () => void;
-  readonly booksData: { books: ReadonlyArray<BookSummary> } | undefined;
+  readonly booksData: { books: ReadonlyArray<BookSummary> } | undefined | null;
   readonly c: Record<string, string>;
   readonly t: TFunction;
   readonly setAnalyzeStatus: (v: string) => void;
