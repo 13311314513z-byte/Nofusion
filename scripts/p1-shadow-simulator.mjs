@@ -26,26 +26,24 @@ const projectRoot = resolve(__dirname, "..");
 // ─── Configuration ───────────────────────────────────────────────────
 
 const BOOK_ID = "test-book-0609";
-const DIMENSIONS = ["clarity", "emotion", "engagement", "consistency", "style"] as const;
-type Dimension = typeof DIMENSIONS[number];
+const DIMENSIONS = ["clarity", "emotion", "engagement", "consistency", "style"];
 
-interface ShadowResult {
-  chapterNumber: number;
-  readerId: string;
-  timestamp: string;
-  dimension: Dimension;
-  scoreA: number;  // 1-5 scale
-  scoreB: number;
-  preference: "A" | "B" | "tie";
-  notes: string;
-}
+/**
+ * @typedef {Object} ShadowResult
+ * @property {number} chapterNumber
+ * @property {string} readerId
+ * @property {string} timestamp
+ * @property {string} dimension
+ * @property {number} scoreA
+ * @property {number} scoreB
+ * @property {"A"|"B"|"tie"} preference
+ * @property {string} notes
+ */
 
 // ─── Simple synthetic scorer (rule-based, no LLM) ────────────────────
 
-function scoreChapter(text: string): Record<Dimension, number> {
+function scoreChapter(text) {
   const len = text.length;
-
-  // Rule-based scoring heuristics
   const dialogueCount = (text.match(/[「「『（(（][\s\S]*?[」」』）)）]/g) || []).length;
   const paragraphCount = (text.match(/\n\n+/g) || []).length + 1;
   const avgParagraphLen = len / Math.max(paragraphCount, 1);
@@ -61,7 +59,7 @@ function scoreChapter(text: string): Record<Dimension, number> {
   };
 }
 
-function clamp(v: number, min: number, max: number): number {
+function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
@@ -106,7 +104,7 @@ async function main() {
   const shadowDir = join(bookDir, "story", "beta-reader-shadow");
   await mkdir(shadowDir, { recursive: true });
 
-  const allResults: ShadowResult[] = [];
+  const allResults = [];
   const now = new Date().toISOString();
 
   // Compare adjacent chapters
@@ -118,14 +116,14 @@ async function main() {
     const scoresB = scoreChapter(chapB);
 
     const chapterNum = i + 1;
-    const resultSet: ShadowResult[] = [];
+    const resultSet = [];
 
     for (const dim of DIMENSIONS) {
       const sA = scoresA[dim];
       const sB = scoresB[dim];
       const preference = sA > sB ? "A" : sB > sA ? "B" : "tie";
 
-      const result: ShadowResult = {
+      const result = {
         chapterNumber: chapterNum,
         readerId: "shadow-sim-v1",
         timestamp: now,

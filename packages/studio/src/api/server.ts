@@ -7393,6 +7393,30 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  // --- State Changelog (M10/P2-1) ---
+
+  app.get("/api/v1/books/:id/state-changelog", async (c) => {
+    const id = c.req.param("id");
+    const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
+    await assertBookExists(state, id);
+    try {
+      const bookDir = new StateManager(root).bookDir(id);
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const changelogPath = join(bookDir, "story", "state", "state_changelog.jsonl");
+      let entries: unknown[] = [];
+      try {
+        const raw = await readFile(changelogPath, "utf-8");
+        entries = raw.trim().split("\n").slice(-limit).map(line => {
+          try { return JSON.parse(line); } catch { return { raw: line }; }
+        });
+      } catch { /* no changelog yet */ }
+      return c.json({ bookId: id, entries, totalEntries: entries.length });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // --- Role Cards ---
 
   app.get("/api/v1/books/:id/roles", async (c) => {
