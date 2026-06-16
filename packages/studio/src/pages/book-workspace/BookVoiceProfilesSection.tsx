@@ -27,6 +27,7 @@ interface VoiceProfileItem {
 
 interface VoiceProfilesData {
   profiles: VoiceProfileItem[];
+  availableCharacters?: Array<{ id: string; name: string }>;
   updatedAt: string;
 }
 
@@ -108,8 +109,36 @@ export function BookVoiceProfilesSection({ bookId, nav, theme, t }: BookVoicePro
       )}
 
       {!loading && !error && profiles.length === 0 && (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          <Mic size={16} className="mr-2" /> 暂无声纹档案 — 需要先运行分析
+        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+          <div className="text-sm text-muted-foreground text-center">
+            <Mic size={24} className="mx-auto mb-2 text-purple-400" />
+            暂无声纹档案
+          </div>
+          {data?.availableCharacters && data.availableCharacters.length > 0 ? (
+            <div className="space-y-2 w-full max-w-md">
+              <p className="text-xs text-muted-foreground text-center">选择角色开始分析：</p>
+              {data.availableCharacters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => handleAnalyze(char.id)}
+                  disabled={analyzingChar === char.id}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-sm transition-colors disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <Mic size={14} className="text-purple-400" />
+                    {char.name}
+                  </span>
+                  <span className="text-xs text-purple-400">
+                    {analyzingChar === char.id ? "分析中…" : "分析声线 →"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              需要先在「角色」面板创建角色档案
+            </p>
+          )}
         </div>
       )}
 
