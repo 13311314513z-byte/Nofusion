@@ -10,6 +10,19 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
+  // P2-6: Chunk splitting to reduce main bundle size
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom"],
+          "vendor-lucide": ["lucide-react"],
+          "vendor-charts": ["recharts"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
+  },
   server: {
     port: 4577,
     // 防止 Windows 文件监听抖动触发 Vite 全量 HMR 刷新
