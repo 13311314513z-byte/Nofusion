@@ -128,6 +128,13 @@ import { registerEventsRoutes } from "./routes/events.js";
 import { registerDaemonRoutes } from "./routes/daemon.js";
 import { registerCoverRoutes } from "./routes/cover.js";
 import { registerProjectRoutes } from "./routes/project.js";
+import { registerLogsRoutes } from "./routes/logs.js";
+import { registerGenresRoutes } from "./routes/genres.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerHealthRoutes } from "./routes/health.js";
+import { registerTruthBrowserRoutes } from "./routes/truth-browser.js";
+import { registerLanguageRoutes } from "./routes/language.js";
+import { registerModelOverridesRoutes, registerNotifyRoutes } from "./routes/project-config.js";
 
 import {
   PreprocessRequestSchema,
@@ -1855,10 +1862,18 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     resolveConfiguredServiceBaseUrl,
   };
 
-  // Register extracted route modules
+  // Register extracted route modules (Phase 2: logs, genres, analytics, health, truth-browser, language, project-config)
   registerEventsRoutes(routeContext);
   registerCoverRoutes(routeContext);
   registerProjectRoutes(routeContext);
+  registerLogsRoutes(routeContext);
+  registerGenresRoutes(routeContext);
+  registerAnalyticsRoutes(routeContext);
+  registerHealthRoutes(routeContext);
+  registerTruthBrowserRoutes(routeContext);
+  registerLanguageRoutes(routeContext);
+  registerModelOverridesRoutes(routeContext);
+  registerNotifyRoutes(routeContext);
   // daemon needs schedulerInstance ref — wire after declaration below
 
   // --- Books ---
@@ -1882,22 +1897,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Genres ---
-
-  app.get("/api/v1/genres", async (c) => {
-    const { listAvailableGenres, readGenreProfile } = await import("@actalk/inkos-core");
-    const rawGenres = await listAvailableGenres(root);
-    const genres = await Promise.all(
-      rawGenres.map(async (g) => {
-        try {
-          const { profile } = await readGenreProfile(root, g.id);
-          return { ...g, language: profile.language ?? "zh" };
-        } catch {
-          return { ...g, language: "zh" };
-        }
-      }),
-    );
-    return c.json({ genres });
-  });
+  // (extracted to routes/genres.ts, registered above)
 
   // --- Book Create ---
 
@@ -2504,84 +2504,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
-  // --- Health ---
-
-  type Metric<T> =
-    | { readonly status: "available"; readonly value: T }
-    | { readonly status: "unavailable"; readonly reason: string };
-
-  app.get("/api/v1/books/:id/health", async (c) => {
-    const id = c.req.param("id");
-    const bookDir = state.bookDir(id);
-    const storyDir = join(bookDir, "story");
-
-    try {
-      const chapters = await state.loadChapterIndexStrict(id);
-      const analytics = computeAnalytics(id, chapters);
-
-      let hookRisks: Metric<{ total: number; stale: number; criticalIds: readonly string[] }>;
-      try {
-        const hooksRaw = await readFile(join(storyDir, "pending_hooks.md"), "utf-8").catch(() => "");
-        const currentChapter = chapters.length > 0
-          ? Math.max(...chapters.map((ch: { number: number }) => ch.number))
-          : 0;
-        const summary = summarizePendingHookHealth({ markdown: hooksRaw, chapterNumber: currentChapter });
-        hookRisks = {
-          status: "available",
-          value: { total: summary.total, stale: summary.stale, criticalIds: summary.criticalIds },
-        };
-      } catch (error) {
-        hookRisks = { status: "unavailable", reason: String(error) };
-      }
-
-      let recentImports: Metric<number>;
-      try {
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const sources = await listFoundationSources(bookDir);
-        recentImports = {
-          status: "available",
-          value: sources.filter((s: { importedAt: string }) => new Date(s.importedAt).getTime() > sevenDaysAgo).length,
-        };
-      } catch (error) {
-        recentImports = { status: "unavailable", reason: String(error) };
-      }
-
-      const styleStatus: Metric<"profile-ready"> = await stat(join(storyDir, "style_profile.json"))
-        .then(() => ({ status: "available" as const, value: "profile-ready" as const }))
-        .catch(() => ({ status: "unavailable" as const, reason: "No style profile" }));
-
-      const pipelineErrors: Metric<number> = {
-        status: "unavailable",
-        reason: "No durable pipeline error history",
-      };
-
-      return c.json({
-        auditPassRate: analytics.auditPassRate,
-        tokenStats: analytics.tokenStats ?? null,
-        hookRisks,
-        recentImports,
-        styleStatus,
-        pipelineErrors,
-      });
-    } catch (error) {
-      return c.json({ error: `Health check failed for "${id}": ${String(error)}` }, 500);
-    }
-  });
-
   // --- Sources ---
 
   app.get("/api/v1/books/:id/sources", async (c) => {
-    const id = c.req.param("id");
-    try {
-      const sources = await listFoundationSources(state.bookDir(id));
-      return c.json({ sources });
-    } catch (error) {
-      return c.json({ error: `Failed to list sources for "${id}": ${String(error)}` }, 500);
-    }
-  });
-
-  // POST /books/:id/sources — add a new foundation source from text
-  app.post("/api/v1/books/:id/sources", async (c) => {
     const id = c.req.param("id");
     let bodyJson: Record<string, unknown> | null = null;
     try {
@@ -3470,77 +3395,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // (basic routes extracted to routes/project.ts; language/model-overrides/notify remain below)
 
   // --- Truth files browser ---
-
-  app.get("/api/v1/books/:id/truth", async (c) => {
-    const id = c.req.param("id");
-    await assertBookDirectoryExists(state, id);
-    const bookDir = state.bookDir(id);
-    const storyDir = join(bookDir, "story");
-
-    async function listDir(subdir: string): Promise<string[]> {
-      try {
-        const entries = await readdir(join(storyDir, subdir));
-        return entries.filter((f) => f.endsWith(".md") || f.endsWith(".json"));
-      } catch {
-        return [];
-      }
-    }
-
-    // Hotfix: only tag shim files as legacy when the book has the new layout.
-    const { isNewLayoutBook } = await import("@actalk/inkos-core");
-    const newLayout = await isNewLayoutBook(bookDir);
-
-    async function describe(relPath: string): Promise<{ readonly name: string; readonly size: number; readonly preview: string; readonly legacy?: true } | null> {
-      try {
-        const content = await readFile(join(storyDir, relPath), "utf-8");
-        const isShim = LEGACY_SHIM_FILES.has(relPath) && newLayout;
-        const entry: { readonly name: string; readonly size: number; readonly preview: string; readonly legacy?: true } =
-          isShim
-            ? { name: relPath, size: content.length, preview: content.slice(0, 200), legacy: true }
-            : { name: relPath, size: content.length, preview: content.slice(0, 200) };
-        return entry;
-      } catch {
-        return null;
-      }
-    }
-
-    try {
-      // Flat story/ files (legacy + runtime logs)
-      const flatFiles = (await listDir(".")).filter((f) => !f.startsWith("outline") && !f.startsWith("roles"));
-      // Phase 5 outline/ files
-      const outlineFiles = (await listDir("outline")).map((f) => `outline/${f}`);
-      // Phase 5 roles/主要角色 + roles/次要角色, plus Phase hotfix 3
-      // English-locale equivalents so en-language books are visible.
-      const majorRolesZh = (await listDir("roles/主要角色")).map((f) => `roles/主要角色/${f}`);
-      const minorRolesZh = (await listDir("roles/次要角色")).map((f) => `roles/次要角色/${f}`);
-      const coreRolesZh = (await listDir("roles/核心角色")).map((f) => `roles/核心角色/${f}`);
-      const functionalRolesZh = (await listDir("roles/功能角色")).map((f) => `roles/功能角色/${f}`);
-      const importantRolesZh = (await listDir("roles/重要角色")).map((f) => `roles/重要角色/${f}`);
-      const majorRolesEn = (await listDir("roles/major")).map((f) => `roles/major/${f}`);
-      const minorRolesEn = (await listDir("roles/minor")).map((f) => `roles/minor/${f}`);
-      const coreRolesEn = (await listDir("roles/core")).map((f) => `roles/core/${f}`);
-      const functionalRolesEn = (await listDir("roles/functional")).map((f) => `roles/functional/${f}`);
-
-      const all = [
-        ...flatFiles,
-        ...outlineFiles,
-        ...coreRolesZh,
-        ...majorRolesZh,
-        ...importantRolesZh,
-        ...minorRolesZh,
-        ...functionalRolesZh,
-        ...coreRolesEn,
-        ...majorRolesEn,
-        ...minorRolesEn,
-        ...functionalRolesEn,
-      ];
-      const described = await Promise.all(all.map(describe));
-      const result = described.filter((x): x is NonNullable<typeof x> => x !== null);
-      return c.json({ files: result });
-    } catch {
-      return c.json({ files: [] });
-    }
-  });
+  // (extracted to routes/truth-browser.ts, registered above)
 
   // --- Daemon control ---
 
@@ -3548,20 +3403,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   registerDaemonRoutes(routeContext);
 
   // --- Logs ---
-
-  app.get("/api/v1/logs", async (c) => {
-    const logPath = join(root, "inkos.log");
-    try {
-      const content = await readFile(logPath, "utf-8");
-      const lines = content.trim().split("\n").slice(-100);
-      const entries = lines.map((line) => {
-        try { return JSON.parse(line); } catch { return { message: line }; }
-      });
-      return c.json({ entries });
-    } catch {
-      return c.json({ entries: [] });
-    }
-  });
+  // (extracted to routes/logs.ts, registered above)
 
   // --- Agent chat ---
 
@@ -4222,26 +4064,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Language setup ---
-
-  app.post("/api/v1/project/language", async (c) => {
-    const { language } = await c.req.json<{ language: "zh" | "en" }>();
-    const configPath = join(root, "inkos.json");
-    try {
-      const raw = await readFile(configPath, "utf-8");
-      if (!raw.trim()) {
-        return c.json({ error: "inkos.json is empty" }, 400);
-      }
-      const existing = JSON.parse(raw);
-      existing.language = language;
-      const tmpPath = configPath + ".tmp." + Date.now().toString(36);
-      const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
-      await writeFileFs(tmpPath, JSON.stringify(existing, null, 2), "utf-8");
-      await renameFs(tmpPath, configPath);
-      return c.json({ ok: true, language });
-    } catch (e) {
-      return c.json({ error: String(e) }, 500);
-    }
-  });
+  // (extracted to routes/language.ts, registered above)
 
   // --- Audit ---
 
@@ -4919,141 +4742,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Model overrides ---
-
-  app.get("/api/v1/project/model-overrides", async (c) => {
-    let overrides = {};
-    try {
-      const rawContent = await readFile(join(root, "inkos.json"), "utf-8");
-      if (rawContent.trim()) {
-        overrides = JSON.parse(rawContent).modelOverrides ?? {};
-      }
-    } catch {
-      // Corrupted config — return empty
-    }
-    return c.json({ overrides });
-  });
-
-  app.put("/api/v1/project/model-overrides", async (c) => {
-    const { overrides } = await c.req.json<{ overrides: Record<string, unknown> }>();
-    const configPath = join(root, "inkos.json");
-    let raw: Record<string, unknown>;
-    try {
-      const rawContent = await readFile(configPath, "utf-8");
-      if (!rawContent.trim()) {
-        return c.json({ error: "inkos.json is empty" }, 400);
-      }
-      raw = JSON.parse(rawContent);
-    } catch (e) {
-      return c.json({ error: `inkos.json parse error: ${e instanceof Error ? e.message : String(e)}` }, 400);
-    }
-    raw.modelOverrides = overrides;
-    const tmpPath = configPath + ".tmp." + Date.now().toString(36);
-    const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
-    await writeFileFs(tmpPath, JSON.stringify(raw, null, 2), "utf-8");
-    await renameFs(tmpPath, configPath);
-    return c.json({ ok: true });
-  });
+  // (extracted to routes/project-config.ts, registered above)
 
   // --- Notify channels ---
+  // (extracted to routes/project-config.ts, registered above)
 
-  app.get("/api/v1/project/notify", async (c) => {
-    let channels: unknown[] = [];
-    try {
-      const rawContent = await readFile(join(root, "inkos.json"), "utf-8");
-      if (rawContent.trim()) {
-        channels = JSON.parse(rawContent).notify ?? [];
-      }
-    } catch {
-      // Corrupted config — return empty
-    }
-    return c.json({ channels });
-  });
-
-  app.put("/api/v1/project/notify", async (c) => {
-    const { channels } = await c.req.json<{ channels: unknown[] }>();
-    const configPath = join(root, "inkos.json");
-    let raw: Record<string, unknown>;
-    try {
-      const rawContent = await readFile(configPath, "utf-8");
-      if (!rawContent.trim()) {
-        return c.json({ error: "inkos.json is empty" }, 400);
-      }
-      raw = JSON.parse(rawContent);
-    } catch (e) {
-      return c.json({ error: `inkos.json parse error: ${e instanceof Error ? e.message : String(e)}` }, 400);
-    }
-    raw.notify = channels;
-    const tmpPath = configPath + ".tmp." + Date.now().toString(36);
-    const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
-    await writeFileFs(tmpPath, JSON.stringify(raw, null, 2), "utf-8");
-    await renameFs(tmpPath, configPath);
-    return c.json({ ok: true });
-  });
-
-  app.post("/api/v1/project/notify/test", async (c) => {
-    const body = await c.req.json<{ channel: Record<string, unknown> }>();
-    const channel = body.channel;
-    if (!channel || typeof channel !== "object") {
-      throw new ApiError(400, "INVALID_NOTIFY_CHANNEL", "Notification channel is required");
-    }
-    const type = String(channel.type ?? "");
-    const title = "InkOS Test Notification";
-    const text = "This is a test message from InkOS notification configuration.";
-    const fullText = `**${title}**\n\n${text}`;
-
-    try {
-      switch (type) {
-        case "telegram": {
-          await sendTelegram(
-            { botToken: String(channel.token ?? ""), chatId: String(channel.chatId ?? "") },
-            fullText,
-          );
-          break;
-        }
-        case "feishu": {
-          const webhookUrl = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.webhookUrl);
-          await sendFeishu(
-            { webhookUrl },
-            title,
-            text,
-          );
-          break;
-        }
-        case "wechat":
-        case "wechat-work": {
-          const webhookUrl = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.webhookUrl);
-          await sendWechatWork(
-            { webhookUrl },
-            fullText,
-          );
-          break;
-        }
-        case "webhook": {
-          const url = await normalizeSafeNotificationWebhookUrl(channel.webhook ?? channel.url);
-          await sendWebhook(
-            {
-              url,
-              secret: typeof channel.secret === "string" ? channel.secret : undefined,
-              events: Array.isArray(channel.events) ? channel.events.map(String) : ["*"],
-            },
-            {
-              event: "diagnostic-alert",
-              bookId: "",
-              timestamp: new Date().toISOString(),
-              data: { title, body: text },
-            },
-          );
-          break;
-        }
-        default:
-          return c.json({ error: `Unsupported channel type: ${type}` }, 400);
-      }
-      return c.json({ ok: true });
-    } catch (e) {
-      if (e instanceof ApiError) throw e;
-      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
-    }
-  });
+  // --- Voice Profiles ---
 
   // --- AIGC Detection ---
 
