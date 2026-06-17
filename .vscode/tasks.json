@@ -14,6 +14,13 @@
 			"command": "git add -A; git commit -m 'chore: final delivery reports and config sync'; git pull --rebase origin master; git push origin master; git push gitee master",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "typecheck-verify",
+			"type": "shell",
+			"command": "pnpm typecheck",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }
