@@ -49,7 +49,8 @@
     "build": "node -e \"const fs=require('fs');fs.rmSync('tsconfig.tsbuildinfo',{force:true});fs.rmSync('dist',{recursive:true,force:true,maxRetries:5,retryDelay:300})\" && tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.67.1",

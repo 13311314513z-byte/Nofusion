@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -41,12 +41,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Sequential: build CLI deps first to avoid dist race conditions
+      - run: pnpm --filter @actalk/inkos-core build && pnpm --filter @actalk/inkos build
       - run: pnpm --filter @actalk/inkos test
 
   test-studio:
@@ -55,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -63,14 +65,28 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @actalk/inkos-studio test
 
-  build:
-    needs: [typecheck, test-core, test-cli, test-studio]
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r lint
+
+  build:
+    needs: [typecheck, test-core, test-cli, test-studio, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22

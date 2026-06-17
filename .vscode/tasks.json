@@ -21,6 +21,20 @@
 			"command": "pnpm typecheck",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "typecheck-verify",
+			"type": "shell",
+			"command": ".\\pnpm.cmd typecheck",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "typecheck-verify",
+			"type": "shell",
+			"command": ".\\pnpm.cmd typecheck",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

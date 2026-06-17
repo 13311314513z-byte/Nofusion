@@ -123,6 +123,12 @@ import { isSafeBookId } from "./safety.js";
 import { ApiError } from "./errors.js";
 import { buildStudioBookConfig, type StudioCreateBookBody } from "./book-create.js";
 
+// Route modules (extracted from this file to reduce file size)
+import { registerEventsRoutes } from "./routes/events.js";
+import { registerDaemonRoutes } from "./routes/daemon.js";
+import { registerCoverRoutes } from "./routes/cover.js";
+import { registerProjectRoutes } from "./routes/project.js";
+
 import {
   PreprocessRequestSchema,
   RelayoutRequestSchema,
@@ -1829,6 +1835,32 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     return clean;
   }
 
+  // ---- Route module context ----
+  // Shared state injected into extracted route modules.
+  // More routes will be extracted in subsequent phases.
+  const routeContext = {
+    app,
+    root,
+    state,
+    broadcast,
+    subscribers,
+    get config() { return cachedConfig; },
+    loadCurrentProjectConfig,
+    foundationPlans,
+    get foundationPlansLoaded() { return foundationPlansLoaded; },
+    schedulerInstance: { current: null as Scheduler | null },
+    buildPipelineConfig,
+    loadRawConfig,
+    saveRawConfig,
+    resolveConfiguredServiceBaseUrl,
+  };
+
+  // Register extracted route modules
+  registerEventsRoutes(routeContext);
+  registerCoverRoutes(routeContext);
+  registerProjectRoutes(routeContext);
+  // daemon needs schedulerInstance ref — wire after declaration below
+
   // --- Books ---
 
   app.get("/api/v1/books", async (c) => {
@@ -3132,29 +3164,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- SSE ---
-
-  app.get("/api/v1/events", (c) => {
-    return streamSSE(c, async (stream) => {
-      const handler: EventHandler = (event, data) => {
-        stream.writeSSE({ event, data: JSON.stringify(data) });
-      };
-      subscribers.add(handler);
-      await stream.writeSSE({ event: "ping", data: "" });
-
-      // Keep alive
-      const keepAlive = setInterval(() => {
-        stream.writeSSE({ event: "ping", data: "" });
-      }, 30000);
-
-      stream.onAbort(() => {
-        subscribers.delete(handler);
-        clearInterval(keepAlive);
-      });
-
-      // Block until aborted
-      await new Promise(() => {});
-    });
-  });
+  // (extracted to routes/events.ts, registered above via registerEventsRoutes)
 
   // --- Model discovery ---
 
@@ -3233,87 +3243,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     return c.json({ ok: true });
   });
 
-  app.get("/api/v1/cover/config", async (c) => {
-    const config = await loadRawConfig(root);
-    const llm = (config.llm as Record<string, unknown> | undefined) ?? {};
-    const cover = normalizeCoverConfig(llm.cover);
-    const secrets = await loadSecrets(root);
-    return c.json({
-      service: cover?.service ?? null,
-      model: cover?.model ?? null,
-      providers: COVER_PROVIDER_PRESETS.map((provider) => ({
-        service: provider.service,
-        label: provider.label,
-        baseUrl: provider.baseUrl,
-        defaultModel: provider.defaultModel,
-        models: provider.models,
-        connected: Boolean(secrets.services[coverSecretKey(provider.service)]?.apiKey || secrets.services[provider.service]?.apiKey),
-      })),
-    });
-  });
-
-  app.put("/api/v1/cover/config", async (c) => {
-    const body = await c.req.json<{ service?: string; model?: string }>();
-    const preset = resolveCoverProviderPreset(body.service);
-    if (!preset) {
-      return c.json({ error: "Unsupported cover service" }, 400);
-    }
-    const model = typeof body.model === "string" && preset.models.includes(body.model)
-      ? body.model
-      : preset.defaultModel;
-
-    const config = await loadRawConfig(root);
-    config.llm = config.llm ?? {};
-    const llm = config.llm as Record<string, unknown>;
-    llm.cover = {
-      service: preset.service,
-      model,
-    };
-    await saveRawConfig(root, config);
-    return c.json({ ok: true, service: preset.service, model });
-  });
-
-  app.get("/api/v1/cover/secret/:service", async (c) => {
-    const service = c.req.param("service");
-    if (!resolveCoverProviderPreset(service)) {
-      return c.json({ error: "Unsupported cover service" }, 400);
-    }
-    const secrets = await loadSecrets(root);
-    const fullKey = secrets.services[coverSecretKey(service)]?.apiKey ?? "";
-    const hasApiKey = fullKey.length > 0;
-    const keyPreview = hasApiKey
-      ? fullKey.length > 8
-        ? fullKey.slice(0, 4) + "..." + fullKey.slice(-4)
-        : fullKey.slice(0, 2) + "..."
-      : "";
-    return c.json({ hasApiKey, keyPreview });
-  });
-
-  app.put("/api/v1/cover/secret/:service", async (c) => {
-    const service = c.req.param("service");
-    if (!resolveCoverProviderPreset(service)) {
-      return c.json({ error: "Unsupported cover service" }, 400);
-    }
-    const body = await c.req.json<{ apiKey?: string; clear?: boolean }>();
-    // Only save if key is provided and non-empty, or clear is explicitly requested
-    const trimmedKey = body.apiKey?.trim() ?? "";
-    if (body.clear === true) {
-      const key = coverSecretKey(service);
-      await setServiceApiKey(root, key, "");
-      return c.json({ ok: true, service, cleared: true });
-    }
-    if (!trimmedKey) {
-      // Empty key with no explicit clear — preserve existing key
-      return c.json({ ok: true, service, preserved: true });
-    }
-    if (!isHeaderSafeApiKey(trimmedKey)) {
-      return c.json({ error: "API Key 包含不能放入 HTTP Authorization header 的字符，请只粘贴原始密钥。" }, 400);
-    }
-
-    const key = coverSecretKey(service);
-    await setServiceApiKey(root, key, trimmedKey);
-    return c.json({ ok: true, service });
-  });
+  // Cover routes extracted to routes/cover.ts (registered above via registerCoverRoutes)
 
   app.delete("/api/v1/services/:service", async (c) => {
     const service = c.req.param("service");
@@ -3537,76 +3467,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Project info ---
-
-  app.get("/api/v1/project", async (c) => {
-    const currentConfig = await loadCurrentProjectConfig({ requireApiKey: false });
-    // Check if language was explicitly set in inkos.json (not just the schema default)
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(await readFile(join(root, "inkos.json"), "utf-8"));
-    } catch {
-      raw = {};
-    }
-    const languageExplicit = typeof raw === "object" && raw !== null && "language" in raw && raw.language !== "";
-
-    return c.json({
-      name: currentConfig.name,
-      language: currentConfig.language,
-      languageExplicit,
-      model: currentConfig.llm.model,
-      provider: currentConfig.llm.provider,
-      baseUrl: currentConfig.llm.baseUrl,
-      stream: currentConfig.llm.stream,
-      temperature: currentConfig.llm.temperature,
-    });
-  });
-
-  app.get("/api/v1/project/files/:file{.+}", async (c) => {
-    const file = resolveProjectImageFile(root, c.req.param("file"));
-
-    try {
-      const content = await readFile(file.resolved);
-      return new Response(content, {
-        headers: {
-          "Content-Type": file.contentType,
-          "Cache-Control": "no-store",
-        },
-      });
-    } catch {
-      return c.notFound();
-    }
-  });
-
-  // --- Config editing ---
-
-  app.put("/api/v1/project", async (c) => {
-    const updates = await c.req.json<Record<string, unknown>>();
-    const configPath = join(root, "inkos.json");
-    try {
-      const raw = await readFile(configPath, "utf-8");
-      if (!raw.trim()) {
-        return c.json({ error: "inkos.json is empty — cannot update" }, 400);
-      }
-      const existing = JSON.parse(raw);
-      // Merge LLM settings
-      if (updates.temperature !== undefined) {
-        existing.llm.temperature = updates.temperature;
-      }
-      if (updates.stream !== undefined) {
-        existing.llm.stream = updates.stream;
-      }
-      if (updates.language === "zh" || updates.language === "en") {
-        existing.language = updates.language;
-      }
-      const tmpPath = configPath + ".tmp." + Date.now().toString(36);
-      const { writeFile: writeFileFs, rename: renameFs } = await import("node:fs/promises");
-      await writeFileFs(tmpPath, JSON.stringify(existing, null, 2), "utf-8");
-      await renameFs(tmpPath, configPath);
-      return c.json({ ok: true });
-    } catch (e) {
-      return c.json({ error: String(e) }, 500);
-    }
-  });
+  // (basic routes extracted to routes/project.ts; language/model-overrides/notify remain below)
 
   // --- Truth files browser ---
 
@@ -3683,62 +3544,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Daemon control ---
 
-  let schedulerInstance: Scheduler | null = null;
-
-  app.get("/api/v1/daemon", (c) => {
-    return c.json({
-      running: schedulerInstance?.isRunning ?? false,
-    });
-  });
-
-  app.post("/api/v1/daemon/start", async (c) => {
-    if (schedulerInstance?.isRunning) {
-      return c.json({ error: "Daemon already running" }, 400);
-    }
-    try {
-      const currentConfig = await loadCurrentProjectConfig();
-      const scheduler = new Scheduler({
-        ...(await buildPipelineConfig()),
-        radarCron: currentConfig.daemon.schedule.radarCron,
-        writeCron: currentConfig.daemon.schedule.writeCron,
-        maxConcurrentBooks: currentConfig.daemon.maxConcurrentBooks,
-        chaptersPerCycle: currentConfig.daemon.chaptersPerCycle,
-        retryDelayMs: currentConfig.daemon.retryDelayMs,
-        cooldownAfterChapterMs: currentConfig.daemon.cooldownAfterChapterMs,
-        maxChaptersPerDay: currentConfig.daemon.maxChaptersPerDay,
-        onChapterComplete: (bookId, chapter, status) => {
-          broadcast("daemon:chapter", { bookId, chapter, status });
-        },
-        onError: (bookId, error) => {
-          broadcast("daemon:error", { bookId, error: error.message });
-        },
-      });
-      schedulerInstance = scheduler;
-      broadcast("daemon:started", {});
-      void scheduler.start().catch((e) => {
-        const error = e instanceof Error ? e : new Error(String(e));
-        if (schedulerInstance === scheduler) {
-          scheduler.stop();
-          schedulerInstance = null;
-          broadcast("daemon:stopped", {});
-        }
-        broadcast("daemon:error", { bookId: "scheduler", error: error.message });
-      });
-      return c.json({ ok: true, running: true });
-    } catch (e) {
-      return c.json({ error: String(e) }, 500);
-    }
-  });
-
-  app.post("/api/v1/daemon/stop", (c) => {
-    if (!schedulerInstance?.isRunning) {
-      return c.json({ error: "Daemon not running" }, 400);
-    }
-    schedulerInstance.stop();
-    schedulerInstance = null;
-    broadcast("daemon:stopped", {});
-    return c.json({ ok: true, running: false });
-  });
+  // Wire daemon routes with the shared scheduler ref
+  registerDaemonRoutes(routeContext);
 
   // --- Logs ---
 

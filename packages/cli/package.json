@@ -44,7 +44,8 @@
     "pretest": "pnpm run build",
     "test": "vitest run --passWithNoTests",
     "pretypecheck": "pnpm run prepare:workspace-core",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@actalk/inkos-core": "workspace:*",

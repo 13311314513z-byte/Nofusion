@@ -577,8 +577,8 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
       await new Promise((r) => setTimeout(r, 80));
     }
     setEditContent((prev) => prev.substring(0, start) + replacement + prev.substring(end));
-    // Refresh style analysis after a short delay
-    setTimeout(() => { if (editing || true) handleStyleAnalysis(); }, 600);
+    // Refresh style analysis after a short delay — only when editing mode is active
+    setTimeout(() => { if (editing) handleStyleAnalysis(); }, 600);
   }, [editing, data]);
 
   /** Apply text replacement to editContent */

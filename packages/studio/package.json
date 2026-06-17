@@ -28,7 +28,8 @@
     "build:verify": "node -e \"const fs=require('fs');['dist/index.html','dist/api/index.js','dist/api/index.d.ts'].forEach(f=>{if(!fs.existsSync(f)){console.error('Missing: '+f);process.exit(1)}});console.log('Build artifacts verified')\"",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@actalk/inkos-core": "workspace:*",
