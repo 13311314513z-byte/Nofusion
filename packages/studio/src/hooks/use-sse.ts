@@ -6,6 +6,7 @@ export interface SSEMessage {
   readonly timestamp: number;
 }
 
+/** Canonical SSE event list — add new events here, both frontend and backend must align. */
 export const STUDIO_SSE_EVENTS = [
   "book:creating",
   "book:created",

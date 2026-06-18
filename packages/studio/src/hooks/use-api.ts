@@ -84,6 +84,23 @@ export function invalidateApiPaths(paths: ReadonlyArray<string>): void {
   }));
 }
 
+// P1-8: Request dedup — cancel in-flight GET requests when same URL is re-requested
+const inFlightGetControllers = new Map<string, AbortController>();
+
+function dedupGetRequest(url: string): AbortSignal | undefined {
+  const existing = inFlightGetControllers.get(url);
+  if (existing) {
+    existing.abort(); // Cancel previous in-flight request
+  }
+  const controller = new AbortController();
+  inFlightGetControllers.set(url, controller);
+  return controller.signal;
+}
+
+function releaseDedupGetRequest(url: string): void {
+  inFlightGetControllers.delete(url);
+}
+
 async function readErrorMessage(res: Response): Promise<string> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {

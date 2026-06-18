@@ -361,8 +361,8 @@ async function handleDraftLifecycleRequest(params: {
     case "develop_book": {
       if (!tools.developBookDraft) {
         throw new Error(localize(language, {
-          zh: "创作草案会话暂未实现。",
-          en: "Book-draft ideation is not implemented yet.",
+          zh: "交互运行时未配置创作草案工具。请通过 Studio 的创作草案功能使用，或为 interaction runtime 注入 developBookDraft 工具。",
+          en: "Book draft tool is not configured. Use Studio's draft creation feature, or inject a developBookDraft tool into the interaction runtime.",
         }));
       }
       if (!request.instruction) {
@@ -428,8 +428,8 @@ async function handleDraftLifecycleRequest(params: {
     case "create_book": {
       if (!tools.createBook) {
         throw new Error(localize(language, {
-          zh: "交互运行时暂未实现创建作品。",
-          en: "Book creation is not implemented in the interaction runtime yet.",
+          zh: "交互运行时未配置建书工具。请通过 Studio 或 CLI 的完整工作流创建作品，或为 interaction runtime 注入 createBook 工具（参考 project-tools.ts）。",
+          en: "Book creation tool is not configured for the interaction runtime. Create books through Studio or CLI workflows, or inject a createBook tool (see project-tools.ts).",
         }));
       }
       const effectiveDraft = session.creationDraft;
@@ -1005,8 +1005,8 @@ export async function runInteractionRequest(params: {
       const bookId = request.bookId ?? session.activeBookId;
       if (!params.tools.exportBook) {
         throw new Error(localize(language, {
-          zh: "交互运行时暂未实现导出作品。",
-          en: "Book export is not implemented in the interaction runtime yet.",
+          zh: "交互运行时未配置导出工具。请通过 Studio 导出作品，或为 interaction runtime 注入 exportBook 工具（参考 project-tools.ts）。",
+          en: "Book export tool is not configured for the interaction runtime. Export through Studio, or inject an exportBook tool (see project-tools.ts).",
         }));
       }
       if (!bookId) {

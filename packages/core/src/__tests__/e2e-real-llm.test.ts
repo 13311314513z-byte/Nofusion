@@ -1,36 +1,19 @@
 /**
  * Real LLM E2E regression test (P2-2).
- * Reads DeepSeek API key from project .env file.
+ * Requires INKOS_LLM_API_KEY and INKOS_LLM_MODEL in environment.
  * 
  * Run: pnpm --filter @actalk/inkos-core test -- src/__tests__/e2e-real-llm.test.ts
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 const TEST_TIMEOUT = 180_000;
 
-async function getApiKey(): Promise<string | undefined> {
-  try {
-    // Walk up from __tests__ to find .env at packages/core/.env
-    const envPath = resolve(import.meta.dirname!, "..", "..", "..", "..", ".env");
-    console.log("[E2E] Looking for .env at:", envPath);
-    const envContent = await readFile(envPath, "utf-8");
-    // Match INKOS_LLM_API_KEY=sk-... (with optional quotes or whitespace)
-    const match = envContent.match(/INKOS_LLM_API_KEY\s*=\s*(.+)/m);
-    if (match) {
-      const key = match[1].trim();
-      console.log("[E2E] Found API key (length:", key.length, ")");
-      return key;
-    }
-    console.warn("[E2E] INKOS_LLM_API_KEY not found in .env");
-    return undefined;
-  } catch (e) { 
-    console.warn("[E2E] Failed to read .env:", e);
-    return undefined; 
-  }
+function getApiKey(): string | undefined {
+  return process.env.INKOS_LLM_API_KEY || undefined;
 }
 
 describe("Real LLM E2E", () => {
@@ -42,12 +25,11 @@ describe("Real LLM E2E", () => {
       console.warn("Skipping real LLM E2E: set INKOS_RUN_REAL_LLM_E2E=1 to enable");
       return;
     }
-    API_KEY = await getApiKey();
+    API_KEY = getApiKey();
     if (!API_KEY) {
-      console.warn("Skipping real LLM E2E: no INKOS_LLM_API_KEY in .env");
+      console.warn("Skipping real LLM E2E: no INKOS_LLM_API_KEY in environment");
       return;
     }
-    console.log("API key loaded from .env");
     root = await mkdtemp(join(tmpdir(), "inkos-e2e-"));
     
     const config = {

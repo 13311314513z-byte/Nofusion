@@ -32,6 +32,7 @@
     "build:openapi": "node scripts/generate-openapi.mjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:ci": "vitest run && pnpm run build:budget",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "lint": "eslint ."
   },

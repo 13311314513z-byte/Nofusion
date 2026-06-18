@@ -383,12 +383,16 @@ export class PipelineRunner {
   private readonly agentClients = new Map<string, { client: LLMClient; cachedAt: number }>();
   private memoryIndexFallbackWarned = false;
 
+  // P1-5: Chapter content cache — avoids repeated readFile across audit/revise stages
+  private readonly chapterContentCache = new Map<string, string>();
+
   /** Dispose of cached LLM clients to prevent memory leaks across long runs. */
   dispose(): void {
     for (const entry of this.agentClients.values()) {
       entry.client.dispose?.();
     }
     this.agentClients.clear();
+    this.chapterContentCache.clear();
   }
 
   private setAgentClient(cacheKey: string, client: LLMClient): void {
@@ -4044,6 +4048,10 @@ ${matrix}`,
   }
 
   private async readChapterContent(bookDir: string, chapterNumber: number): Promise<string> {
+    const cacheKey = `${bookDir}:${chapterNumber}`;
+    const cached = this.chapterContentCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     const chaptersDir = join(bookDir, "chapters");
     const files = await readdir(chaptersDir);
     const paddedNum = String(chapterNumber).padStart(4, "0");
@@ -4055,6 +4063,8 @@ ${matrix}`,
     // Strip the title line
     const lines = raw.split("\n");
     const contentStart = lines.findIndex((l, i) => i > 0 && l.trim().length > 0);
-    return contentStart >= 0 ? lines.slice(contentStart).join("\n") : raw;
+    const content = contentStart >= 0 ? lines.slice(contentStart).join("\n") : raw;
+    this.chapterContentCache.set(cacheKey, content);
+    return content;
   }
 }
