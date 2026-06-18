@@ -829,22 +829,104 @@ function normalizeStudioBookConfig(
 /**
  * 创建 PipelineRunner，在 promise 完成/失败后自动 dispose。
  * 兼容测试环境（MockPipelineRunner 可能无 dispose 或 globalRegistry 被 mock）。
+ *
+ * @param ttlMs 超时毫秒数，超时后自动 dispose pipeline 并抛出错误。0 表示无超时。
  */
 async function withPipeline<T>(
   label: string,
   config: PipelineConfig,
   fn: (pipeline: PipelineRunner) => Promise<T>,
-  _ttlMs = 5 * 60_000,
+  ttlMs = 5 * 60_000,
 ): Promise<T> {
   const pipeline = new PipelineRunner(config);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = ttlMs > 0
+    ? new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Pipeline "${label}" timed out after ${ttlMs}ms`));
+        }, ttlMs);
+      })
+    : undefined;
 
   try {
-    const result = await fn(pipeline);
-    return result;
+    const result = timeoutPromise
+      ? await Promise.race([fn(pipeline), timeoutPromise])
+      : await fn(pipeline);
+    return result as T;
   } finally {
+    if (timer) clearTimeout(timer);
     if (typeof (pipeline as any).dispose === "function") {
       (pipeline as any).dispose();
     }
+  }
+}
+
+// --- Write job tracker (P0-1: fire-and-forget protection) ---
+
+interface WriteJobEntry {
+  status: "running" | "completed" | "failed" | "timed_out";
+  bookId: string;
+  /** "write-next" | "draft" | "rewrite" */
+  operation: string;
+  chapterNumber?: number;
+  error?: string;
+  startedAt: number;
+}
+
+const writeJobs = new Map<string, WriteJobEntry>();
+const WRITE_JOB_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟超时
+const WRITE_JOB_TTL_MS = 2 * 60 * 1000; // 完成后保留 2 分钟供 SSE 重连查询
+
+// 定期清理过期 job 状态
+const writeJobCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, job] of writeJobs) {
+    if (job.status !== "running" && now - job.startedAt > WRITE_JOB_TTL_MS) {
+      writeJobs.delete(key);
+    }
+    if (job.status === "running" && now - job.startedAt > WRITE_JOB_TIMEOUT_MS + 60_000) {
+      writeJobs.delete(key);
+    }
+  }
+}, 30_000);
+process.once("beforeExit", () => clearInterval(writeJobCleanupTimer));
+
+function acquireWriteJob(bookId: string, operation: string): string | null {
+  const key = `${bookId}:${operation}`;
+  // Idempotency: if a job is already running, reject
+  for (const [existingKey, job] of writeJobs) {
+    if (job.bookId === bookId && job.status === "running") {
+      return null; // already writing
+    }
+  }
+  writeJobs.set(key, {
+    status: "running",
+    bookId,
+    operation,
+    startedAt: Date.now(),
+  });
+  return key;
+}
+
+function completeWriteJob(key: string, chapterNumber?: number): void {
+  const job = writeJobs.get(key);
+  if (job) {
+    writeJobs.set(key, { ...job, status: "completed", chapterNumber });
+  }
+}
+
+function failWriteJob(key: string, error: string): void {
+  const job = writeJobs.get(key);
+  if (job) {
+    writeJobs.set(key, { ...job, status: "failed", error });
+  }
+}
+
+function timeoutWriteJob(key: string): void {
+  const job = writeJobs.get(key);
+  if (job) {
+    writeJobs.set(key, { ...job, status: "timed_out", error: "Write operation timed out" });
   }
 }
 
@@ -2277,7 +2359,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       const { join } = await import("node:path");
       const padded = String(chapterNumber).padStart(4, "0");
       const planPath = join(bookDir, "story", "runtime", `chapter-${padded}.plan.md`);
@@ -2293,17 +2375,29 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     await assertBookExists(state, id);
     const body = await c.req.json<{ wordCount?: number }>().catch(() => ({ wordCount: undefined }));
 
+    // P0-1: Idempotency guard — prevent concurrent writes on the same book
+    const jobKey = acquireWriteJob(id, "write-next");
+    if (!jobKey) {
+      return c.json({ error: "A write operation is already in progress for this book. Wait for it to complete or check /api/v1/books/:id/write-status.", code: "WRITE_IN_PROGRESS" }, 409);
+    }
+
     broadcast("write:start", { bookId: id });
 
-    // Fire and forget — progress/completion/errors pushed via SSE
     withPipeline("write-next", await buildPipelineConfig(), async (pipeline) => {
       const result = await pipeline.writeNextChapter(id, body.wordCount);
+      completeWriteJob(jobKey, result.chapterNumber);
       broadcast("write:complete", { bookId: id, chapterNumber: result.chapterNumber, status: result.status, title: result.title, wordCount: result.wordCount });
-    }).catch((e) => {
-      broadcast("write:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    }, WRITE_JOB_TIMEOUT_MS).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("timed out")) {
+        timeoutWriteJob(jobKey);
+      } else {
+        failWriteJob(jobKey, message);
+      }
+      broadcast("write:error", { bookId: id, error: message });
     });
 
-    return c.json({ status: "writing", bookId: id });
+    return c.json({ status: "writing", bookId: id, jobKey });
   });
 
   app.post("/api/v1/books/:id/draft", async (c) => {
@@ -2311,16 +2405,43 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     await assertBookExists(state, id);
     const body = await c.req.json<{ wordCount?: number; context?: string }>().catch(() => ({ wordCount: undefined, context: undefined }));
 
+    // P0-1: Idempotency guard
+    const jobKey = acquireWriteJob(id, "draft");
+    if (!jobKey) {
+      return c.json({ error: "A write operation is already in progress for this book.", code: "WRITE_IN_PROGRESS" }, 409);
+    }
+
     broadcast("draft:start", { bookId: id });
 
     withPipeline("draft", await buildPipelineConfig(), async (pipeline) => {
       const result = await pipeline.writeDraft(id, body.context, body.wordCount);
+      completeWriteJob(jobKey, result.chapterNumber);
       broadcast("draft:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
-    }).catch((e) => {
-      broadcast("draft:error", { bookId: id, error: e instanceof Error ? e.message : String(e) });
+    }, WRITE_JOB_TIMEOUT_MS).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("timed out")) {
+        timeoutWriteJob(jobKey);
+      } else {
+        failWriteJob(jobKey, message);
+      }
+      broadcast("draft:error", { bookId: id, error: message });
     });
 
-    return c.json({ status: "drafting", bookId: id });
+    return c.json({ status: "drafting", bookId: id, jobKey });
+  });
+
+  // --- Write job status (P0-1: query after SSE disconnect) ---
+
+  app.get("/api/v1/books/:id/write-status", async (c) => {
+    const id = c.req.param("id");
+    await assertBookExists(state, id);
+    const activeJobs: WriteJobEntry[] = [];
+    for (const [, job] of writeJobs) {
+      if (job.bookId === id) {
+        activeJobs.push(job);
+      }
+    }
+    return c.json({ bookId: id, jobs: activeJobs });
   });
 
   // --- SSE ---
@@ -3226,6 +3347,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       .json<{ brief?: string }>()
       .catch(() => ({}));
 
+    // P0-1: Idempotency guard
+    const jobKey = acquireWriteJob(id, "rewrite");
+    if (!jobKey) {
+      return c.json({ error: "A write operation is already in progress for this book.", code: "WRITE_IN_PROGRESS" }, 409);
+    }
+
     broadcast("rewrite:start", { bookId: id, chapter: chapterNum });
     try {
       const rollbackTarget = chapterNum - 1;
@@ -3233,12 +3360,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const pipelineConfig = await buildPipelineConfig({ externalContext: body.brief });
       withPipeline("rewrite-next", pipelineConfig, async (pipeline) => {
         const result = await pipeline.writeNextChapter(id);
+        completeWriteJob(jobKey, result.chapterNumber);
         broadcast("rewrite:complete", { bookId: id, chapterNumber: result.chapterNumber, title: result.title, wordCount: result.wordCount });
-      }).catch(
-        (e) => broadcast("rewrite:error", { bookId: id, error: e instanceof Error ? e.message : String(e) }),
+      }, WRITE_JOB_TIMEOUT_MS).catch(
+        (e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          if (message.includes("timed out")) {
+            timeoutWriteJob(jobKey);
+          } else {
+            failWriteJob(jobKey, message);
+          }
+          broadcast("rewrite:error", { bookId: id, error: message });
+        },
       );
-      return c.json({ status: "rewriting", bookId: id, chapter: chapterNum, rolledBackTo: rollbackTarget, discarded });
+      return c.json({ status: "rewriting", bookId: id, chapter: chapterNum, rolledBackTo: rollbackTarget, discarded, jobKey });
     } catch (e) {
+      failWriteJob(jobKey, String(e));
       broadcast("rewrite:error", { bookId: id, error: String(e) });
       return c.json({ error: String(e) }, 500);
     }
@@ -3412,7 +3549,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       const { readFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const path = join(bookDir, "story", "sources", "scene_templates.json");
@@ -3427,7 +3564,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       const { writeFile, mkdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const { SceneTemplateIndexSchema } = await import("@actalk/inkos-core");
@@ -3449,7 +3586,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       const { readFile, readdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const profilesDir = join(bookDir, "story", "voice_profiles");
@@ -3506,7 +3643,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     try {
       // Load the role card for character name
       const { loadRoleCard } = await import("@actalk/inkos-core");
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       let characterName = characterId;
 
       try {
@@ -3581,7 +3718,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
     await assertBookExists(state, id);
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = state.bookDir(id);
       const { readFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const changelogPath = join(bookDir, "story", "state", "state_changelog.jsonl");
@@ -3604,7 +3741,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const id = c.req.param("id");
     await assertBookExists(state, id);
     try {
-      const state = new StateManager(root);
       const bookDir = state.bookDir(id);
       const roles = await listRoleCards(bookDir);
       return c.json({ roles });
@@ -3618,7 +3754,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     await assertBookExists(state, id);
     const roleId = c.req.param("roleId");
     try {
-      const state = new StateManager(root);
       const bookDir = state.bookDir(id);
       const card = await loadRoleCard(bookDir, roleId);
       if (!card) return c.json({ error: "Role not found" }, 404);
@@ -3634,7 +3769,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const body = await c.req.json<{ id: string; name: string; roleTier?: RoleTier }>();
     if (!body.id || !body.name) return c.json({ error: "id and name are required" }, 400);
     try {
-      const state = new StateManager(root);
       const bookDir = state.bookDir(id);
       const card = createRoleCardTemplate(body.id, body.name, body.roleTier ?? "major");
       await saveRoleCard(bookDir, card);
@@ -3650,7 +3784,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     const roleId = c.req.param("roleId");
     const body = await c.req.json<Partial<RoleCard>>();
     try {
-      const state = new StateManager(root);
       const bookDir = state.bookDir(id);
       const existing = await loadRoleCard(bookDir, roleId);
       if (!existing) return c.json({ error: "Role not found" }, 404);
@@ -3671,7 +3804,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     await assertBookExists(state, id);
     const roleId = c.req.param("roleId");
     try {
-      const state = new StateManager(root);
       const bookDir = state.bookDir(id);
       const ok = await deleteRoleCard(bookDir, roleId);
       if (!ok) return c.json({ error: "Role not found" }, 404);

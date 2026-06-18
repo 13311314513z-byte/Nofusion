@@ -1380,7 +1380,8 @@ ${overrides}\n`;
       if (profile.topPatterns?.length > 0) lines.push(`- 高频句式：${profile.topPatterns.join("、")}`);
       if (profile.rhetoricalFeatures?.length > 0) lines.push(`- 修辞特征：${profile.rhetoricalFeatures.join("、")}`);
       return lines.length > 0 ? lines.join("\n") : undefined;
-    } catch {
+    } catch (e) {
+      console.warn(`[writer] Failed to parse style profile JSON (${styleProfileRaw.length} chars): ${e instanceof Error ? e.message : String(e)}`);
       return undefined;
     }
   }

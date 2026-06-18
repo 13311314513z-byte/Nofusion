@@ -786,8 +786,8 @@ ${chapterContent}`;
     if (passedMatch) {
       const issues: AuditIssue[] = [];
       if (issuesMatch) {
-        // Try to parse individual issue objects
-        const issuePattern = /\{[^{}]*"severity"\s*:\s*"[^"]*"[^{}]*\}/g;
+        // P0-7: Use balanced-brace extraction instead of flat regex that can't match nested objects.
+        const issuePattern = /\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g;
         let match: RegExpExecArray | null;
         while ((match = issuePattern.exec(issuesMatch[1]!)) !== null) {
           try {

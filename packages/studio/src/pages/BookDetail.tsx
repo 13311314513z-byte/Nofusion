@@ -1,4 +1,4 @@
-import { fetchJson, useApi, postApi } from "../hooks/use-api";
+import { fetchJson, useApi, postApi, FETCH_TIMEOUT_WRITE_MS } from "../hooks/use-api";
 import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
@@ -355,7 +355,7 @@ export function BookDetail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode, brief: brief.trim() || undefined }),
-      });
+      }, { timeoutMs: FETCH_TIMEOUT_WRITE_MS });
       refetch();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Revision failed");
@@ -378,7 +378,7 @@ export function BookDetail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief: brief.trim() || undefined }),
-      });
+      }, { timeoutMs: FETCH_TIMEOUT_WRITE_MS });
       refetch();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Sync failed");
@@ -1157,7 +1157,7 @@ export function BookDetail({
                           if (pendingChapterActions.includes(ch.number)) return;
                           setPendingChapterActions((prev) => [...prev, ch.number]);
                           try {
-                            const auditResult = await fetchJson<{ passed?: boolean; issues?: unknown[] }>(`/books/${bookId}/audit/${ch.number}`, { method: "POST" });
+                            const auditResult = await fetchJson<{ passed?: boolean; issues?: unknown[] }>(`/books/${bookId}/audit/${ch.number}`, { method: "POST" }, { timeoutMs: FETCH_TIMEOUT_WRITE_MS });
                             alert(auditResult.passed ? "Audit passed" : `Audit failed: ${auditResult.issues?.length ?? 0} issues`);
                             refetch();
                           } catch (e) {

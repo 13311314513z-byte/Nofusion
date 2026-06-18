@@ -707,6 +707,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
     }
   } finally {
     monitor.stop();
+    try { reader.releaseLock(); } catch { /* reader may already be released */ }
   }
 
   if (!content) {
@@ -815,6 +816,7 @@ async function chatCompletionViaCustomOpenAICompatible(
       }
     } finally {
       monitor.stop();
+      try { reader.releaseLock(); } catch { /* reader may already be released */ }
     }
 
     if (!content) {
@@ -928,6 +930,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     }
   } finally {
     monitor.stop();
+    try { reader.releaseLock(); } catch { /* reader may already be released */ }
   }
 
   const finalContent = content || reasoningContent;

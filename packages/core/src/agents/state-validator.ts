@@ -182,11 +182,13 @@ ${chapterContent.slice(0, 6000)}`;
       throw new Error("LLM returned empty response");
     }
 
-    const verdictLine = lines[0]!;
-    if (!/^(PASS|FAIL)$/i.test(verdictLine)) {
+    // P0-7: Search first 5 lines for PASS/FAIL — LLMs may add preamble text
+    const verdictSearch = lines.slice(0, 5).join("\n");
+    const verdictMatch = verdictSearch.match(/^(PASS|FAIL)$/im) ?? verdictSearch.match(/\b(PASS|FAIL)\b/i);
+    if (!verdictMatch) {
       throw new Error("State validator returned invalid response");
     }
-    const passed = /^PASS$/i.test(verdictLine);
+    const passed = /^PASS$/i.test(verdictMatch[1]!);
 
     const warnings: ValidationWarning[] = [];
     for (let i = 1; i < lines.length; i++) {

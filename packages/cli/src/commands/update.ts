@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process/promises";
 import { log, logError } from "../utils.js";
 
 export const updateCommand = new Command("update")
@@ -13,9 +13,10 @@ export const updateCommand = new Command("update")
       log(`Current version: ${currentVersion}`);
       log("Checking npm registry...");
 
-      const remoteVersion = execSync("npm view @actalk/inkos version", {
+      const { stdout: remoteVersionRaw } = await exec("npm view @actalk/inkos version", {
         encoding: "utf-8",
-      }).trim();
+      });
+      const remoteVersion = remoteVersionRaw.trim();
 
       if (currentVersion === remoteVersion) {
         log(`Already up to date (${currentVersion}).`);
@@ -35,7 +36,7 @@ export const updateCommand = new Command("update")
       }
 
       log(`Updating: ${currentVersion} → ${remoteVersion}`);
-      execSync("npm install -g @actalk/inkos@latest", { stdio: "inherit" });
+      await exec("npm install -g @actalk/inkos@latest", { stdio: "inherit" });
       log(`Updated to ${remoteVersion}.`);
     } catch (e) {
       logError(`Update failed: ${e}`);

@@ -110,22 +110,28 @@ async function readErrorMessage(res: Response): Promise<string> {
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
+/** Timeout for long-running AI write endpoints (write-next/draft/rewrite are fire-and-forget, so 30s is fine for those). */
+export const FETCH_TIMEOUT_WRITE_MS = 300_000;
+/** Timeout for import/scan endpoints that may process large inputs. */
+export const FETCH_TIMEOUT_IMPORT_MS = 600_000;
+
 export async function fetchJson<T>(
   path: string,
   init: RequestInit = {},
-  deps?: { readonly fetchImpl?: typeof fetch; readonly signal?: AbortSignal },
+  deps?: { readonly fetchImpl?: typeof fetch; readonly signal?: AbortSignal; readonly timeoutMs?: number },
 ): Promise<T> {
   const url = buildApiUrl(path);
   if (!url) {
     throw new Error("API path is required");
   }
 
-  // Global request timeout (P3 fix — prevents hung requests)
-  const timeoutMs = DEFAULT_FETCH_TIMEOUT_MS;
-  const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const combinedSignal = deps?.signal
-    ? (AbortSignal as any).any?.([deps.signal, timeoutSignal]) ?? deps.signal
-    : timeoutSignal;
+  // Tiered timeout: per-call override > default 30s.  Pass 0 to disable timeout.
+  const timeoutMs = deps?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const timeoutSignal = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
+  const signals = [deps?.signal, timeoutSignal].filter((s): s is AbortSignal => !!s);
+  const combinedSignal = signals.length > 1
+    ? (AbortSignal as any).any?.(signals) ?? signals[0]
+    : signals[0];
 
   const fetchImpl = deps?.fetchImpl ?? fetch;
   const res = await fetchImpl(url, { ...init, signal: combinedSignal });

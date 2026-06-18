@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Theme } from "../../hooks/use-theme";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { useApi, fetchJson } from "../../hooks/use-api";
+import { useApi, fetchJson, FETCH_TIMEOUT_WRITE_MS } from "../../hooks/use-api";
 import {
   ShieldCheck,
   BookOpen,
@@ -277,7 +277,7 @@ export function BookAuditSection({ bookId, nav, t }: BookAuditSectionProps) {
     setActionError(null);
     setAuditingChapters((prev) => [...prev, chapterNumber]);
     try {
-      await fetchJson(`/books/${bookId}/audit/${chapterNumber}`, { method: "POST" });
+      await fetchJson(`/books/${bookId}/audit/${chapterNumber}`, { method: "POST" }, { timeoutMs: FETCH_TIMEOUT_WRITE_MS });
       await refetchSummary();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Audit failed");
@@ -301,7 +301,7 @@ export function BookAuditSection({ bookId, nav, t }: BookAuditSectionProps) {
       for (let i = 0; i < failed.length; i++) {
         const row = failed[i];
         setReauditProgress({ current: i + 1, total: failed.length });
-        await fetchJson(`/books/${bookId}/audit/${row.chapterNumber}`, { method: "POST" });
+        await fetchJson(`/books/${bookId}/audit/${row.chapterNumber}`, { method: "POST" }, { timeoutMs: FETCH_TIMEOUT_WRITE_MS });
       }
       await refetchSummary();
     } catch (e) {

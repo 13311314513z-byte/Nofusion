@@ -2222,8 +2222,11 @@ export class PipelineRunner {
         try {
           let gitCommit = "";
           try {
-            const { execSync } = await import("node:child_process");
-            gitCommit = execSync("git rev-parse HEAD", { timeout: 3000, encoding: "utf-8" }).trim().slice(0, 12);
+            const { exec } = await import("node:child_process");
+            const { promisify } = await import("node:util");
+            const execAsync = promisify(exec);
+            const { stdout } = await execAsync("git rev-parse HEAD", { timeout: 3000, encoding: "utf-8" });
+            gitCommit = (stdout as string).trim().slice(0, 12);
           } catch { /* git not available — leave empty */ }
 
           const { runId } = await persistBetaReaderShadow({

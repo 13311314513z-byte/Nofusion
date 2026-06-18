@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { fetchJson } from "../hooks/use-api";
+import { fetchJson, FETCH_TIMEOUT_IMPORT_MS } from "../hooks/use-api";
 import { TrendingUp, Loader2, Target, Clock } from "lucide-react";
 
 interface Recommendation {
@@ -53,7 +53,7 @@ export function RadarView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
     setError("");
     setResult(null);
     try {
-      const data = await fetchJson<RadarResult>("/radar/scan", { method: "POST" });
+      const data = await fetchJson<RadarResult>("/radar/scan", { method: "POST" }, { timeoutMs: FETCH_TIMEOUT_IMPORT_MS });
       setResult(data);
       await loadHistory();
     } catch (e) {
