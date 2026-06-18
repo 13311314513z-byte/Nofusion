@@ -2338,9 +2338,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Model discovery ---
   // (extracted to routes/services.ts, registered above)
 
-  // --- Project info ---
-
-
   // --- Language setup ---
   // (extracted to routes/language.ts, registered above)
 
