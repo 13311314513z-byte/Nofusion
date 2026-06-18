@@ -718,6 +718,20 @@ export { Scheduler, type SchedulerConfig } from "./pipeline/scheduler.js";
 export { runAgentLoop, AGENT_TOOLS as AGENT_TOOLS, type AgentLoopOptions } from "./pipeline/agent.js";
 export { detectChapter, detectAndRewrite, loadDetectionHistory, type DetectChapterResult, type DetectAndRewriteResult } from "./pipeline/detection-runner.js";
 
+// Pipeline Stages (extracted from PipelineRunner)
+export {
+  runNotificationStage,
+  runPersistenceStage,
+  evaluateNormalizationNeed,
+} from "./pipeline/stages/index.js";
+export type {
+  NotificationInput,
+  PersistenceInput,
+  PersistenceOutput,
+  LengthNormalizeInput,
+  LengthNormalizeOutput,
+} from "./pipeline/stages/index.js";
+
 // State
 export { StateManager } from "./state/manager.js";
 export { bootstrapStructuredStateFromMarkdown } from "./state/state-bootstrap.js";
