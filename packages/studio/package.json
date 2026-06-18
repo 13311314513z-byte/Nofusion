@@ -26,6 +26,8 @@
     "build:client": "vite build",
     "build:server": "node -e \"require('fs').rmSync('tsconfig.server.tsbuildinfo',{force:true});require('fs').rmSync('dist/api',{recursive:true,force:true})\" && tsc -p tsconfig.server.json",
     "build:verify": "node -e \"const fs=require('fs');['dist/index.html','dist/api/index.js','dist/api/index.d.ts'].forEach(f=>{if(!fs.existsSync(f)){console.error('Missing: '+f);process.exit(1)}});console.log('Build artifacts verified')\"",
+    "build:budget": "node scripts/bundle-budget.mjs",
+    "build:openapi": "node scripts/generate-openapi.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
