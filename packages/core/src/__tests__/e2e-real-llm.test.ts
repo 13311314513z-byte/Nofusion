@@ -38,6 +38,10 @@ describe("Real LLM E2E", () => {
   let API_KEY: string | undefined;
 
   beforeAll(async () => {
+    if (process.env.INKOS_RUN_REAL_LLM_E2E !== "1") {
+      console.warn("Skipping real LLM E2E: set INKOS_RUN_REAL_LLM_E2E=1 to enable");
+      return;
+    }
     API_KEY = await getApiKey();
     if (!API_KEY) {
       console.warn("Skipping real LLM E2E: no INKOS_LLM_API_KEY in .env");
