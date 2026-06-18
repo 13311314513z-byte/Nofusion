@@ -2086,9 +2086,9 @@ export class PipelineRunner {
       logStage: (message) => this.logStage(stageLanguage, message),
     });
     totalUsage = reviewResult.totalUsage;
-    let finalContent = reviewResult.finalContent;
+    const finalContent = reviewResult.finalContent;
     let finalWordCount = reviewResult.finalWordCount;
-    let revised = reviewResult.revised;
+    const revised = reviewResult.revised;
     let auditResult = reviewResult.auditResult;
     const postReviseCount = reviewResult.postReviseCount;
     const normalizeApplied = reviewResult.normalizeApplied;
@@ -2336,7 +2336,7 @@ export class PipelineRunner {
       logWarn: (message) => this.logWarn(pipelineLang, message),
       logger: this.config.logger,
     });
-    let chapterStatus: ChapterPipelineResult["status"] | null = truthValidation.chapterStatus;
+    const chapterStatus: ChapterPipelineResult["status"] | null = truthValidation.chapterStatus;
     let degradedIssues: ReadonlyArray<AuditIssue> = truthValidation.degradedIssues;
     persistenceOutput = truthValidation.persistenceOutput;
     auditResult = truthValidation.auditResult;

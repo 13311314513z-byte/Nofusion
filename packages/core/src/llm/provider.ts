@@ -676,7 +676,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
-  let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const monitor = createStreamMonitor(onStreamProgress);
 
   try {

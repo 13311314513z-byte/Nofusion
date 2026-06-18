@@ -45,7 +45,7 @@ export async function acquireLock(key: LockKey): Promise<() => void> {
   locks.set(key, previous.then(() => next));
   await previous;
   return () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+     
     release!();
     if (locks.get(key) === next) locks.delete(key);
   };

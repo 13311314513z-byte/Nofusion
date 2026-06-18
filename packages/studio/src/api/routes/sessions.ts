@@ -8,6 +8,7 @@ import {
   type ResolvedModel, type ProjectConfig,
 } from "@actalk/inkos-core";
 import { ApiError } from "../errors.js";
+import { isSafeBookId } from "../safety.js";
 import type { ServerContext } from "../server-context.js";
 
 // ── Local helpers (moved from core) ──
@@ -26,14 +27,24 @@ const PIPELINE_STAGES: Record<string, string[]> = {
 };
 
 function normalizeApiBookId(value: unknown, fieldName: string): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed === "null") return null;
-  return trimmed;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new ApiError(400, "INVALID_BOOK_ID", `${fieldName} must be a string`);
+  }
+  const bookId = value.trim();
+  if (!bookId) {
+    throw new ApiError(400, "INVALID_BOOK_ID", `${fieldName} cannot be blank`);
+  }
+  if (!isSafeBookId(bookId)) {
+    throw new ApiError(400, "INVALID_BOOK_ID", `Invalid ${fieldName}: "${bookId}"`);
+  }
+  return bookId;
 }
 
 function isWriteNextInstruction(instruction: string): boolean {
-  return /写下一章|write next|继续写|下一章|写第/.test(instruction);
+  const trimmed = instruction.trim();
+  return /^(continue|继续|继续写|写下一章|write next|下一章|再来一章)$/i.test(trimmed)
+    || /(继续写|写下一章|下一章|再来一章|write\s+next)/i.test(trimmed);
 }
 
 function isTextChatModelIdForAgent(id: string): boolean { return isTextChatModelId(id); }

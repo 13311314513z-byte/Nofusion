@@ -65,7 +65,7 @@ async function probeServiceCapabilities(opts: {
     const models = await listModelsForService(
       isCustomServiceId(opts.service) ? "custom" : opts.service,
       opts.apiKey,
-      isCustomServiceId(opts.service) ? opts.baseUrl : undefined,
+      opts.baseUrl,
     );
     return { ok: true, models: models.map(m => ({ id: m.id })), modelsSource: "api", baseUrl: opts.baseUrl };
   } catch (e) {
@@ -251,13 +251,13 @@ export function registerServicesRoutes(ctx: ServerContext): void {
     try { config = await ctx.loadRawConfig(ctx.root); } catch { /* no config */ }
 
     const customs = normalizeServiceConfig((config.llm as Record<string, unknown> | undefined)?.services)
-      .filter((s) => s.service === "custom")
+      .filter((s): s is Record<string, string> => s.service === "custom")
       .map((s) => ({ id: `custom:${s.name ?? "Custom"}`, baseUrl: s.baseUrl ?? "", label: s.name ?? "Custom" }))
-      .filter((s) => s.baseUrl && Boolean(secrets.services[s.id]?.apiKey));
+      .filter((s): s is { id: string; baseUrl: string; label: string } => Boolean(s.baseUrl) && Boolean(secrets.services[s.id]?.apiKey));
 
     const groups = await Promise.all(customs.map(async (s) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const apiKey = String((secrets.services as any)[s.id]?.apiKey ?? "");
+      const apiKey: string = String((secrets.services as any)[s.id]?.apiKey ?? "");
       return {
         service: s.id, label: s.label,
         models: filterTextChatModels(await probeModelsFromUpstream(s.baseUrl, apiKey, 10_000)),

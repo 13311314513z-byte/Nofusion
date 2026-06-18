@@ -319,9 +319,9 @@ function parseDependsOn(cell: string): ReadonlyArray<string> {
   if (lower === "none" || lower === "n/a" || lower === "-" || trimmed === "无") return [];
 
   // Accept [H01, H02] or H01, H02 or H01/H02.
-  const stripped = trimmed.replace(/^[\[\(]\s*/, "").replace(/\s*[\]\)]$/, "");
+  const stripped = trimmed.replace(/^[[(]\s*/, "").replace(/\s*[\])]$/, "");
   return stripped
-    .split(/[,，、\/]+/)
+    .split(/[,，、/]+/)
     .map((item) => normalizeHookId(item))
     .filter((item) => item.length > 0);
 }

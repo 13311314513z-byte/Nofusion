@@ -54,7 +54,7 @@ function formatDialogue(text: string): string {
       continue;
     }
     // Split by Chinese quotes if preceded by dialogue markers
-    const dialoguePattern = /([^。！？\n]*?(?:说|道|问|答|喊|叫|笑|怒|叹)[^。！？\n]*?)([\"\"].*?[\"\"])/g;
+    const dialoguePattern = /([^。！？\n]*?(?:说|道|问|答|喊|叫|笑|怒|叹)[^。！？\n]*?)([""].*?[""])/g;
     let match: RegExpExecArray | null;
     let lastIndex = 0;
     const parts: string[] = [];

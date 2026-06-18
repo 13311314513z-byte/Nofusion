@@ -161,7 +161,7 @@ function normalizeWhitespace(text: string): string {
 function mapNormalizedToOriginal(original: string, normalizedPos: number): number {
   let ni = 0; // position in normalized text
   let inWhitespace = false;
-  let leadingSkipped = false;
+  const leadingSkipped = false;
 
   // Skip leading whitespace in original (matches trim())
   let oi = 0;

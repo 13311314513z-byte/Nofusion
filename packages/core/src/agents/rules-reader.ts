@@ -113,7 +113,7 @@ export async function readBookRules(bookDir: string): Promise<ParsedBookRules | 
       // NOT silently zero out protagonist / prohibitions / genreLock. If the
       // frontmatter is malformed we log and fall through to legacy.
       const parsed = tryParseBookRulesFrontmatter(frontmatterMatch[1], (err) => {
-        // eslint-disable-next-line no-console
+         
         console.warn(
           `[rules-reader] story_frame.md frontmatter is malformed at ${bookDir}/story/outline/story_frame.md — falling back to legacy book_rules.md. Error: ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -134,7 +134,7 @@ export async function readBookRules(bookDir: string): Promise<ParsedBookRules | 
   // is broken AND no legacy rules ever existed.
   const parsed = parseBookRules(legacyRaw);
   if (parsed === null) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[rules-reader] book_rules.md at ${bookDir}/story/book_rules.md is a Phase 5 compat shim with no authoritative rules — returning null instead of silently zeroing out rules. Fix the YAML frontmatter on outline/story_frame.md.`,
     );

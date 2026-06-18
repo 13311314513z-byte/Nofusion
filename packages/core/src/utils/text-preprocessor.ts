@@ -72,8 +72,8 @@ function removeCodeBlocks(text: string): string {
 
 function removeUrls(text: string): string {
   return text
-    .replace(/https?:\/\/[^\s\)\]\>]+/g, "")
-    .replace(/www\.[^\s\)\]\>]+/g, "")
+    .replace(/https?:\/\/[^\s)\]>]+/g, "")
+    .replace(/www\.[^\s)\]>]+/g, "")
     .replace(/[\w.-]+@[\w.-]+\.\w+/g, "");
 }
 
@@ -115,7 +115,7 @@ function removeTimestamps(text: string): string {
       // ISO 8601: 2024-01-15T10:30:00.000Z or 2024-01-15 10:30:00+08:00
       .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})?/g, "")
       // Chinese date: 2024年01月15日 10:30:00
-      .replace(/\d{4}[年/\-]\d{1,2}[月/\-]\d{1,2}[日\sT]?(\d{2}:\d{2}(:\d{2})?)?/g, "")
+      .replace(/\d{4}[年/-]\d{1,2}[月/-]\d{1,2}[日\sT]?(\d{2}:\d{2}(:\d{2})?)?/g, "")
       // Unix epoch timestamps (10-13 digit standalone numbers)
       .replace(/(^|\s)\d{10,13}(\s|$)/g, " ")
   );

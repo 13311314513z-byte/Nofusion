@@ -15,12 +15,12 @@ describe("style:analyze", () => {
   ).join("\n");
 
   bench("analyzeStyle (10K chars)", async () => {
-    const { analyzeStyle } = await import("../src/agents/style-analyzer.js");
+    const { analyzeStyle } = await import("../agents/style-analyzer.js");
     analyzeStyle(sampleText, "benchmark-sample");
   });
 
   bench("analyzeAITells (10K chars)", async () => {
-    const { analyzeAITells } = await import("../src/agents/ai-tells.js");
+    const { analyzeAITells } = await import("../agents/ai-tells.js");
     analyzeAITells(sampleText, "zh");
   });
 });
@@ -33,9 +33,9 @@ describe("length-metrics", () => {
   ).join("");
 
   bench("countChapterLength (zh)", async () => {
-    const { countChapterLength, resolveLengthCountingMode } = await import("../src/utils/length-metrics.js");
-    const mode = resolveLengthCountingMode("tomato", "zh");
-    countChapterLength(chapterText, mode, "zh");
+    const { countChapterLength, resolveLengthCountingMode } = await import("../utils/length-metrics.js");
+    const mode = resolveLengthCountingMode("zh");
+    countChapterLength(chapterText, mode);
   });
 });
 
@@ -46,8 +46,8 @@ describe("context-filter", () => {
     `## Hook ${i + 1}\n状态：pending\n描述：角色需要完成一个重要任务。\n关联章节：${i}`
   ).join("\n\n");
 
-  bench("filterHooks (50 hooks)", async () => {
-    const { filterHooks } = await import("../src/utils/context-filter.js");
-    filterHooks(hooks, 8000);
+  bench("capContextBlock (50 hooks / 8K budget)", async () => {
+    const { capContextBlock } = await import("../utils/context-filter.js");
+    capContextBlock(hooks, { label: "hooks", maxChars: 8000 });
   });
 });
