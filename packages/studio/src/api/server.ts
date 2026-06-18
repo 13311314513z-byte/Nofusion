@@ -140,6 +140,7 @@ import { registerHooksRoutes } from "./routes/hooks.js";
 import { registerBooksRoutes } from "./routes/books.js";
 import { registerChaptersRoutes } from "./routes/chapters.js";
 import { registerServicesRoutes } from "./routes/services.js";
+import { registerSessionsRoutes } from "./routes/sessions.js";
 
 import {
   PreprocessRequestSchema,
@@ -1884,6 +1885,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   registerBooksRoutes(routeContext);
   registerServicesRoutes(routeContext);
   registerChaptersRoutes(routeContext);
+  registerSessionsRoutes(routeContext);
   // daemon needs schedulerInstance ref — wire after declaration below
 
   // --- Books ---
@@ -2323,12 +2325,10 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Project info ---
 
 
-  /** @deprecated Use /api/v1/sessions endpoints instead. Kept for backward compatibility. */
-  app.get("/api/v1/interaction/session", async (c) => {
-    const config = await loadRawConfig(root);
-    const llm = (config.llm as Record<string, unknown> | undefined) ?? {};
-    const services = normalizeServiceConfig(llm.services);
-    const envConfig = await readEnvConfigStatus(root);
+  // --- Language setup ---
+  // (extracted to routes/language.ts, registered above)
+
+  // --- Audit ---
     return c.json({
       services,
       service: typeof llm.service === "string" ? llm.service : null,
@@ -2354,9 +2354,9 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // (extracted to routes/logs.ts, registered above)
 
   // --- Agent chat ---
+  // (extracted to routes/sessions.ts, registered above)
 
-  /** @deprecated Use /api/v1/sessions endpoints instead. Kept for backward compatibility. */
-  app.get("/api/v1/interaction/session", async (c) => {
+  // --- Language setup ---
     const session = await loadProjectSession(root);
     const activeBookId = await resolveSessionActiveBook(root, session);
     return c.json({
