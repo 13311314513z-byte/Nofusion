@@ -25,8 +25,17 @@ export interface StateValidationAuthorityContext {
  *   Remaining lines: free-form warnings (one per line, optional category prefix)
  */
 export class StateValidatorAgent extends BaseAgent {
+  // P1-14: Configurable truncation limit (was hardcoded 6000)
+  private maxChapterChars = 12000;
+
   get name(): string {
     return "state-validator";
+  }
+
+  /** P1-14: Allow callers to override chapter content truncation limit */
+  setMaxChapterChars(limit: number): this {
+    this.maxChapterChars = limit;
+    return this;
   }
 
   async validate(
@@ -97,7 +106,7 @@ ${stateDiff || "(no changes)"}
 ${hooksDiff || "(no changes)"}
 
 ## Chapter Text (for reference)
-${chapterContent.slice(0, 6000)}`;
+${chapterContent.slice(0, this.maxChapterChars)}`;
 
     try {
       const response = await this.chat(
@@ -121,8 +130,12 @@ ${chapterContent.slice(0, 6000)}`;
     const oldLines = oldText.split("\n").filter((l) => l.trim());
     const newLines = newText.split("\n").filter((l) => l.trim());
 
-    const added = newLines.filter((l) => !oldLines.includes(l));
-    const removed = oldLines.filter((l) => !newLines.includes(l));
+    // P1-11: Use Set for O(1) lookup instead of Array.includes O(n)
+    const oldSet = new Set(oldLines);
+    const newSet = new Set(newLines);
+
+    const added = newLines.filter((l) => !oldSet.has(l));
+    const removed = oldLines.filter((l) => !newSet.has(l));
 
     if (added.length === 0 && removed.length === 0) return null;
 

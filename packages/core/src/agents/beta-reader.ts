@@ -63,9 +63,13 @@ export class BetaReader extends BaseAgent {
 
     logPromptManifest(this.name, messages, this.ctx.model, this.log);
 
+    // P1-13: Configurable LLM params via AgentContext, with sensible defaults
+    const temperature = this.ctx.temperature ?? 0.3;
+    const maxTokens = this.ctx.maxTokens ?? 1500;
+
     const response = await this.chat(messages, {
-      temperature: 0.3, // Low temperature for consistent rating
-      maxTokens: 1500,
+      temperature,
+      maxTokens,
     });
 
     const observations = this.parseObservations(response.content);

@@ -10,6 +10,10 @@ export interface AgentContext {
   readonly bookId?: string;
   readonly logger?: Logger;
   readonly onStreamProgress?: OnStreamProgress;
+  /** P1-13: Per-agent temperature override (falls back to client default) */
+  readonly temperature?: number;
+  /** P1-13: Per-agent maxTokens override (falls back to model default) */
+  readonly maxTokens?: number;
 }
 
 export abstract class BaseAgent {

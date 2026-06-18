@@ -1,7 +1,8 @@
 import { join, isAbsolute } from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import type { ServerContext } from "../server-context.js";
 import { ApiError } from "../errors.js";
+import { createHash } from "node:crypto";
 
 function resolveProjectImageFile(root: string, rawPath: string): { readonly resolved: string; readonly contentType: string } {
   let relPath: string;
@@ -49,15 +50,19 @@ export function registerProjectRoutes(ctx: ServerContext): void {
     const currentConfig = await ctx.loadCurrentProjectConfig({ requireApiKey: false });
     // Check if language was explicitly set in inkos.json (not just the schema default)
     let raw: Record<string, unknown>;
+    let configMtime = 0;
     try {
-      raw = JSON.parse(await readFile(join(ctx.root, "inkos.json"), "utf-8"));
+      const configPath = join(ctx.root, "inkos.json");
+      const st = await stat(configPath);
+      configMtime = st.mtimeMs;
+      raw = JSON.parse(await readFile(configPath, "utf-8"));
     } catch {
       raw = {};
     }
     const languageExplicit =
       typeof raw === "object" && raw !== null && "language" in raw && raw.language !== "";
 
-    return c.json({
+    const body = {
       name: currentConfig.name,
       language: currentConfig.language,
       languageExplicit,
@@ -66,7 +71,16 @@ export function registerProjectRoutes(ctx: ServerContext): void {
       baseUrl: currentConfig.llm.baseUrl,
       stream: currentConfig.llm.stream,
       temperature: currentConfig.llm.temperature,
-    });
+    };
+
+    // P1-7: ETag based on config mtime — enables 304 Not Modified
+    const etag = `"${createHash("sha256").update(JSON.stringify(body)).update(String(configMtime)).digest("hex").slice(0, 16)}"`;
+    const ifNoneMatch = c.req.header("if-none-match");
+    if (ifNoneMatch === etag) {
+      return new Response(null, { status: 304 });
+    }
+    c.header("ETag", etag);
+    return c.json(body);
   });
 
   ctx.app.get("/api/v1/project/files/:file{.+}", async (c) => {
