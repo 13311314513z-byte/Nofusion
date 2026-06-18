@@ -106,9 +106,23 @@ export function registerNotifyRoutes(ctx: ServerContext): void {
           break;
         }
         case "webhook": {
+          const url = String(channel.url ?? "");
+          // Security: reject private/local webhook URLs
+          if (!url.startsWith("https://")) {
+            return c.json({ error: { code: "INVALID_NOTIFY_WEBHOOK_URL", message: "Webhook URL must use HTTPS" } }, 400);
+          }
+          try {
+            const parsed = new URL(url);
+            const blockedHosts = ["localhost", "127.0.0.1", "::1", "0.0.0.0", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168."];
+            if (blockedHosts.some(h => parsed.hostname === h || parsed.hostname.startsWith(h))) {
+              return c.json({ error: { code: "INVALID_NOTIFY_WEBHOOK_URL", message: "Private or local webhook URLs are not allowed" } }, 400);
+            }
+          } catch {
+            return c.json({ error: { code: "INVALID_NOTIFY_WEBHOOK_URL", message: "Invalid webhook URL" } }, 400);
+          }
           const { sendWebhook } = await import("@actalk/inkos-core");
           await sendWebhook(
-            { url: String(channel.url ?? ""), secret: String(channel.secret ?? ""), events: Array.isArray(channel.events) ? channel.events.map(String) : ["*"] },
+            { url, secret: String(channel.secret ?? ""), events: Array.isArray(channel.events) ? channel.events.map(String) : ["*"] },
             { event: "diagnostic-alert", bookId: "", timestamp: new Date().toISOString(), data: { title, body: text } },
           );
           break;
