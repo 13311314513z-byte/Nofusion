@@ -78,6 +78,12 @@ import {
 } from "./chapter-state-recovery.js";
 import { persistChapterArtifacts } from "./chapter-persistence.js";
 import { runChapterReviewCycle } from "./chapter-review-cycle.js";
+import {
+  stripAuditDriftCorrectionBlock,
+  restoreLostAuditIssues,
+  restoreActionableAuditIfLost,
+  type MergedAuditEvaluation,
+} from "./audit-helpers.js";
 import { validateChapterTruthPersistence } from "./chapter-truth-validation.js";
 import { loadPersistedPlan, relativeToBookDir, savePersistedPlan } from "./persisted-governed-plan.js";
 
@@ -341,14 +347,6 @@ export interface BookStatusInfo {
   readonly totalWords: number;
   readonly nextChapter: number;
   readonly chapters: ReadonlyArray<ChapterMeta>;
-}
-
-interface MergedAuditEvaluation {
-  readonly auditResult: AuditResult;
-  readonly aiTellCount: number;
-  readonly blockingCount: number;
-  readonly criticalCount: number;
-  readonly revisionBlockingIssues: ReadonlyArray<AuditIssue>;
 }
 
 export interface ImportChaptersInput {
@@ -1715,7 +1713,7 @@ export class PipelineRunner {
               },
             },
       });
-      const effectivePostRevision = this.restoreActionableAuditIfLost(
+      const effectivePostRevision = restoreActionableAuditIfLost(
         preRevision,
         postRevision,
       );
@@ -3842,7 +3840,7 @@ ${matrix}`,
     const driftPath = join(storyDir, "audit_drift.md");
     const statePath = join(storyDir, "current_state.md");
     const currentState = await readFile(statePath, "utf-8").catch(() => "");
-    const sanitizedState = this.stripAuditDriftCorrectionBlock(currentState).trimEnd();
+    const sanitizedState = stripAuditDriftCorrectionBlock(currentState).trimEnd();
 
     if (sanitizedState !== currentState) {
       await writeFile(statePath, sanitizedState, "utf-8");
@@ -3875,75 +3873,10 @@ ${matrix}`,
     await writeFile(driftPath, block, "utf-8");
   }
 
-  private stripAuditDriftCorrectionBlock(currentState: string): string {
-    const headers = [
-      "## 审计纠偏（自动生成，下一章写作前参照）",
-      "## Audit Drift Correction",
-      "# 审计纠偏",
-      "# Audit Drift",
-    ];
-
-    let cutIndex = -1;
-    for (const header of headers) {
-      const index = currentState.indexOf(header);
-      if (index >= 0 && (cutIndex < 0 || index < cutIndex)) {
-        cutIndex = index;
-      }
-    }
-
-    if (cutIndex < 0) {
-      return currentState;
-    }
-
-    return currentState.slice(0, cutIndex).trimEnd();
-  }
-
   private logLengthWarnings(lengthWarnings: ReadonlyArray<string>): void {
     for (const warning of lengthWarnings) {
       this.config.logger?.warn(warning);
     }
-  }
-
-  private restoreLostAuditIssues(previous: AuditResult, next: AuditResult): AuditResult {
-    if (next.passed || next.issues.length > 0 || previous.issues.length === 0) {
-      return next;
-    }
-
-    return {
-      ...next,
-      issues: previous.issues,
-      summary: next.summary || previous.summary,
-    };
-  }
-
-  private restoreActionableAuditIfLost(
-    previous: {
-      auditResult: AuditResult;
-      aiTellCount: number;
-      blockingCount: number;
-      criticalCount: number;
-      revisionBlockingIssues: ReadonlyArray<AuditIssue>;
-    },
-    next: {
-      auditResult: AuditResult;
-      aiTellCount: number;
-      blockingCount: number;
-      criticalCount: number;
-      revisionBlockingIssues: ReadonlyArray<AuditIssue>;
-    },
-  ): MergedAuditEvaluation {
-    const auditResult = this.restoreLostAuditIssues(previous.auditResult, next.auditResult);
-    if (auditResult === next.auditResult) {
-      return next;
-    }
-
-    return {
-      ...next,
-      auditResult,
-      revisionBlockingIssues: previous.revisionBlockingIssues,
-      blockingCount: previous.blockingCount,
-      criticalCount: previous.criticalCount,
-    };
   }
 
   private async evaluateMergedAudit(params: {
