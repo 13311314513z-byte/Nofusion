@@ -447,7 +447,7 @@ function extractBoundarySentence(content: string, boundary: "opening" | "ending"
     .join(" ");
 
   const sentences = flattened
-    .split(/(?<=[。！？!?\.])\s+/)
+    .split(/(?<=[。！？!?.])\s+/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 0);
 

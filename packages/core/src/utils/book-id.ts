@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-control-regex
 const UNSAFE_BOOK_ID_RE = /[\u0000-\u001f\u007f/\\:*?"'`{}<>|]/u;
 
 export function deriveBookIdFromTitle(title: string): string {

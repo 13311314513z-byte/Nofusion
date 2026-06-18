@@ -176,7 +176,7 @@ function looksLikeTimestamp(s: string): boolean {
   // Unix timestamp (10-13 digits)
   if (/^\d{10,13}$/.test(s)) return true;
   // Chinese date: 2024年01月15日, 2024/01/15
-  if (/^\d{4}[年/\-]\d{1,2}[月/\-]\d{1,2}[日\sT]?/.test(s)) return true;
+  if (/^\d{4}[年/-]\d{1,2}[月/-]\d{1,2}[日\sT]?/.test(s)) return true;
   return false;
 }
 
@@ -219,7 +219,7 @@ function looksLikePathOrFilename(s: string): boolean {
 
 function looksLikeStructuredFragment(s: string): boolean {
   const trimmed = s.trim();
-  if (/^[\[{].*[\]}]$/.test(trimmed) && trimmed.length < 120) return true;
+  if (/^[[{].*[\]}]$/.test(trimmed) && trimmed.length < 120) return true;
   if (/^["']?[\w.-]+["']?\s*[:=]\s*["']?[\w.-]*["']?,?$/.test(trimmed)) return true;
   if (/^[-_*~=]{3,}$/.test(trimmed)) return true;
   return false;
@@ -229,6 +229,7 @@ function normalizeJsonCandidateText(s: string): string {
   return s
     .replace(NOISE_MARKER_RE, "")
     .replace(/\bcell(?:undefined|null|nan|none)\b/gi, "")
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\uFFFD]/g, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -552,7 +553,9 @@ function validateExtractedText(text: string, fileType: string): string[] {
     warnings.push(`文本过短（${text.length} 字），分析结果可能不稳定`);
   }
 
+  // eslint-disable-next-line no-control-regex
   const garbledRatio =
+  // eslint-disable-next-line no-control-regex
     (text.match(/[\uFFFD\u0000-\u0008\u000B-\u000C\u000E-\u001F]/g) ?? []).length /
     text.length;
   if (garbledRatio > 0.05) {

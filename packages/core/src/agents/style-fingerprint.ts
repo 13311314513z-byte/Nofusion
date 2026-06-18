@@ -142,9 +142,9 @@ function punctuationCounts(text: string) {
   return {
     comma: (text.match(/，/g) ?? []).length,
     period: (text.match(/[。]/g) ?? []).length,
-    question: (text.match(/[？\?]/g) ?? []).length,
-    exclamation: (text.match(/[！\!]/g) ?? []).length,
-    ellipsis: (text.match(/[…\.]{2,}/g) ?? []).length,
+    question: (text.match(/[？?]/g) ?? []).length,
+    exclamation: (text.match(/[！!]/g) ?? []).length,
+    ellipsis: (text.match(/[….]{2,}/g) ?? []).length,
     semicolon: (text.match(/[；;]/g) ?? []).length,
     total: text.length,
   };
@@ -214,8 +214,8 @@ export function analyzeStyleFingerprint(text: string): StyleFingerprint {
 
   const particleCount = countMatches(text, COLLOQUIAL_PARTICLES);
   const shortSentences = sentences.filter((s) => s.length < 10).length;
-  const questionSentences = (text.match(/[？\?]/g) ?? []).length;
-  const exclamationSentences = (text.match(/[！\!]/g) ?? []).length;
+  const questionSentences = (text.match(/[？?]/g) ?? []).length;
+  const exclamationSentences = (text.match(/[！!]/g) ?? []).length;
   const colloquialScore = Math.min(
     Math.round(
       (particleCount / sentenceCount * 2 +

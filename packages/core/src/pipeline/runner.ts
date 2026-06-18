@@ -3549,6 +3549,7 @@ ${matrix}`,
             await this.rebuildCurrentStateFactHistory(bookDir, uptoChapter);
             return;
           } catch (retryError) {
+            // eslint-disable-next-line no-ex-assign
             error = retryError;
           }
         } else {
@@ -3599,6 +3600,7 @@ ${matrix}`,
             await this.rebuildNarrativeMemoryIndex(bookDir);
             return;
           } catch (retryError) {
+            // eslint-disable-next-line no-ex-assign
             error = retryError;
           }
         } else {

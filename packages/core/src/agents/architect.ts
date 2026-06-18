@@ -1269,9 +1269,9 @@ ${trimmed}\n`;
     if (!trimmed) return [];
     const lower = trimmed.toLowerCase();
     if (lower === "none" || lower === "n/a" || lower === "-" || trimmed === "无") return [];
-    const stripped = trimmed.replace(/^[\[\(]\s*/, "").replace(/\s*[\]\)]$/, "");
+    const stripped = trimmed.replace(/^[[(]\s*/, "").replace(/\s*[\])]$/, "");
     return stripped
-      .split(/[,，、\/]+/)
+      .split(/[,，、/]+/)
       .map((item) => item.trim().replace(/^\*\*(.+)\*\*$/, "$1").trim())
       .filter((item) => item.length > 0);
   }
