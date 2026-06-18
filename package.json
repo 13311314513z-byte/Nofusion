@@ -24,6 +24,8 @@
     "build": "pnpm --filter @actalk/inkos-core build && pnpm --filter @actalk/inkos-studio build && pnpm --filter @actalk/inkos build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm build && pnpm -r --workspace-concurrency=1 test",
+    "test:ci": "pnpm typecheck && pnpm lint && pnpm build && pnpm -r --workspace-concurrency=1 test",
+    "test:real-e2e": "INKOS_RUN_REAL_LLM_E2E=1 pnpm --filter @actalk/inkos-core test -- src/__tests__/e2e-real-llm.test.ts",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "verify:publish-manifests": "node scripts/verify-no-workspace-protocol.mjs packages/core packages/cli packages/studio",

@@ -2093,16 +2093,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   });
 
   // --- Analytics ---
-
-  app.get("/api/v1/books/:id/analytics", async (c) => {
-    const id = c.req.param("id");
-    try {
-      const chapters = await state.loadChapterIndexStrict(id);
-      return c.json(computeAnalytics(id, chapters));
-    } catch {
-      return c.json({ error: `Book "${id}" not found` }, 404);
-    }
-  });
+  // (handled by routes/analytics.ts registered above)
 
   // --- Sources ---
   // (extracted to routes/sources.ts, registered above)
@@ -2355,8 +2346,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Logs ---
   // (extracted to routes/logs.ts, registered above)
 
-  // --- Agent chat ---
-  // (extracted to routes/sessions.ts, registered above)
+  // --- Agent chat & sessions ---
+  // Kept inline in server.ts (sole implementation)
 
   // -- Per-book session endpoints --
 
