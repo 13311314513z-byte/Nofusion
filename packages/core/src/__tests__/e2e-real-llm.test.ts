@@ -85,7 +85,7 @@ describe("Real LLM E2E", () => {
     const { loadProjectConfig } = await import("../index.js");
     const { PipelineRunner } = await import("../pipeline/runner.js");
 
-    const config = await loadProjectConfig(root, { consumer: "cli", requireApiKey: false });
+    const config = await loadProjectConfig(root!, { consumer: "cli", requireApiKey: false });
     const pipeline = new PipelineRunner(config);
 
     try {
