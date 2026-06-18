@@ -13,7 +13,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { createHash } from "node:crypto";
 
-const DIST = join(import.meta.dirname, "dist");
+const DIST = join(import.meta.dirname, "..", "dist");
 const LIMITS = {
   maxTotalJS: 800_000,
   maxTotalCSS: 200_000,
@@ -21,15 +21,9 @@ const LIMITS = {
   maxTotalDist: 2_000_000,
 };
 
-interface FileInfo {
-  path: string;
-  size: number;
-  ext: string;
-}
-
-async function collectFiles(dir: string): Promise<FileInfo[]> {
+async function collectFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
-  const results: FileInfo[] = [];
+  const results = [];
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -42,7 +36,7 @@ async function collectFiles(dir: string): Promise<FileInfo[]> {
   return results;
 }
 
-async function main(): Promise<void> {
+async function main() {
   const files = await collectFiles(DIST);
 
   const jsFiles = files.filter((f) => f.ext === ".js");
@@ -52,7 +46,7 @@ async function main(): Promise<void> {
   const totalDist = files.reduce((sum, f) => sum + f.size, 0);
   const maxChunk = Math.max(...files.map((f) => f.size));
 
-  const errors: string[] = [];
+  const errors = [];
 
   if (totalJS > LIMITS.maxTotalJS) {
     errors.push(`Total JS ${(totalJS / 1000).toFixed(1)}KB exceeds limit ${(LIMITS.maxTotalJS / 1000).toFixed(1)}KB`);
