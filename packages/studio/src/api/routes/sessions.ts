@@ -5,10 +5,17 @@ import {
   runAgentSession, buildAgentSystemPrompt, createLLMClient,
   PipelineRunner, chatCompletion, appendManualSessionMessages,
   loadSecrets, listModelsForService, resolveServiceModel,
-  isTextChatModelId, type ResolvedModel, type ProjectConfig,
+  type ResolvedModel, type ProjectConfig,
 } from "@actalk/inkos-core";
 import { ApiError } from "../errors.js";
 import type { ServerContext } from "../server-context.js";
+
+// ── Local helpers (moved from core) ──
+
+/** Filter out non-text models (embedding, image, audio, moderation, etc.) */
+function isTextChatModelId(id: string): boolean {
+  return !/embed|dall-e|whisper|tts|moderation|speech|image|audio|video/i.test(id);
+}
 
 // Reused pipeline stage definitions
 const PIPELINE_STAGES: Record<string, string[]> = {
@@ -32,7 +39,7 @@ function isWriteNextInstruction(instruction: string): boolean {
 function isTextChatModelIdForAgent(id: string): boolean { return isTextChatModelId(id); }
 function nonTextModelMessage(model: string): string { return `模型 ${model} 不是文本对话模型，请选择 chat 模型。`; }
 
-function filterTextChatModels(models: Array<{ id: string; name?: string; maxOutput?: number; contextWindow?: number }>): Array<{ id: string; name: string; maxOutput?: number; contextWindow?: number }> {
+function filterTextChatModels(models: ReadonlyArray<{ id: string; name?: string; maxOutput?: number; contextWindow?: number }>): Array<{ id: string; name: string; maxOutput?: number; contextWindow?: number }> {
   return models.filter((m) => isTextChatModelId(m.id)).map((m) => ({
     id: m.id, name: m.name ?? m.id,
     ...(m.maxOutput !== undefined ? { maxOutput: m.maxOutput } : {}),
@@ -248,7 +255,7 @@ export function registerSessionsRoutes(ctx: ServerContext): void {
         try {
           const configuredEntry = await resolveConfiguredServiceEntry(ctx.root, reqService);
           const resolved = await resolveServiceModel(reqService, reqModel, ctx.root,
-            await resolveConfiguredServiceBaseUrl(ctx.root, reqService), configuredEntry?.apiFormat);
+            await resolveConfiguredServiceBaseUrl(ctx.root, reqService), configuredEntry?.apiFormat as "chat" | "responses" | undefined);
           resolvedModel = resolved.model; resolvedApiKey = resolved.apiKey;
         } catch (e: any) {
           if (/API key/i.test(e?.message ?? "")) {
@@ -266,7 +273,7 @@ export function registerSessionsRoutes(ctx: ServerContext): void {
         if (firstService?.service && defaultModel && isTextChatModelIdForAgent(defaultModel)) {
           try {
             const resolved = await resolveServiceModel(serviceConfigKey(firstService), defaultModel, ctx.root,
-              firstService.baseUrl as string | undefined, firstService.apiFormat as string | undefined);
+              firstService.baseUrl as string | undefined, firstService.apiFormat as "chat" | "responses" | undefined);
             resolvedModel = resolved.model; resolvedApiKey = resolved.apiKey;
           } catch { /* fall through */ }
         }
@@ -282,7 +289,7 @@ export function registerSessionsRoutes(ctx: ServerContext): void {
               if (textModels.length > 0) {
                 const configuredEntry = await resolveConfiguredServiceEntry(ctx.root, svcName);
                 const resolved = await resolveServiceModel(svcName, textModels[0].id, ctx.root,
-                  await resolveConfiguredServiceBaseUrl(ctx.root, svcName), configuredEntry?.apiFormat);
+                  await resolveConfiguredServiceBaseUrl(ctx.root, svcName), configuredEntry?.apiFormat as "chat" | "responses" | undefined);
                 resolvedModel = resolved.model; resolvedApiKey = resolved.apiKey;
                 break;
               }
@@ -327,7 +334,7 @@ export function registerSessionsRoutes(ctx: ServerContext): void {
                 title: writeResult.title, wordCount: writeResult.wordCount, status: writeResult.status }, isError: false });
             await appendManualSessionMessages(ctx.root, bookSession.sessionId, [{
               role: "assistant", content: [{ type: "text", text: responseText }], api: "anthropic-messages",
-              provider: configuredEntry?.service ?? reqService ?? config.llm.provider, model: reqModel ?? config.llm.model,
+              provider: String(configuredEntry?.service ?? reqService ?? config.llm.provider ?? ""), model: reqModel ?? config.llm.model,
               usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
                 cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
               stopReason: "toolUse", timestamp: Date.now() }], instruction);
@@ -430,7 +437,7 @@ export function registerSessionsRoutes(ctx: ServerContext): void {
               if (actionError) return c.json({ error: { code: "AGENT_ACTION_NOT_EXECUTED", message: actionError }, response: actionError }, 502);
               await appendManualSessionMessages(ctx.root, bookSession.sessionId, [{
                 role: "assistant", content: [{ type: "text", text: fallback.content }], api: "anthropic-messages",
-                provider: configuredEntry?.service ?? reqService ?? config.llm.provider, model: reqModel ?? config.llm.model,
+                provider: String(configuredEntry?.service ?? reqService ?? config.llm.provider ?? ""), model: reqModel ?? config.llm.model,
                 usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
                   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
                 stopReason: "stop", timestamp: Date.now() }], instruction);

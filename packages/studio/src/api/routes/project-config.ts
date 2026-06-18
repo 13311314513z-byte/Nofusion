@@ -83,24 +83,25 @@ export function registerNotifyRoutes(ctx: ServerContext): void {
         case "telegram": {
           const { sendTelegram } = await import("@actalk/inkos-core");
           await sendTelegram(
-            { botToken: String(channel.botToken ?? ""), chatId: String(channel.chatId ?? ""), events: [] },
-            { event: "diagnostic-alert", bookId: "", timestamp: new Date().toISOString(), data: { title, body: text } },
+            { botToken: String(channel.botToken ?? ""), chatId: String(channel.chatId ?? "") },
+            `[${title}] ${text}`,
           );
           break;
         }
         case "feishu": {
           const { sendFeishu } = await import("@actalk/inkos-core");
           await sendFeishu(
-            { webhookUrl: String(channel.webhookUrl ?? ""), secret: String(channel.secret ?? ""), events: [] },
-            { event: "diagnostic-alert", bookId: "", timestamp: new Date().toISOString(), data: { title, body: text } },
+            { webhookUrl: String(channel.webhookUrl ?? "") },
+            title,
+            text,
           );
           break;
         }
         case "wechatWork": {
           const { sendWechatWork } = await import("@actalk/inkos-core");
           await sendWechatWork(
-            { webhookUrl: String(channel.webhookUrl ?? ""), events: [] },
-            { event: "diagnostic-alert", bookId: "", timestamp: new Date().toISOString(), data: { title, body: text } },
+            { webhookUrl: String(channel.webhookUrl ?? "") },
+            `[${title}] ${text}`,
           );
           break;
         }

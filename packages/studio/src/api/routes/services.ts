@@ -3,9 +3,16 @@ import {
   isApiKeyOptionalForEndpoint, resolveServiceProviderFamily,
   resolveServiceModelsBaseUrl, resolveServiceModel,
   listModelsForService, probeModelsFromUpstream,
-  isTextChatModelId, type ResolvedModel,
+  type ResolvedModel,
 } from "@actalk/inkos-core";
 import type { ServerContext } from "../server-context.js";
+
+// ── Local helpers (moved from core) ──
+
+/** Filter out non-text models (embedding, image, audio, moderation, etc.) */
+function isTextChatModelId(id: string): boolean {
+  return !/embed|dall-e|whisper|tts|moderation|speech|image|audio|video/i.test(id);
+}
 
 // Reused from server.ts — model list cache & helpers
 const modelListCache = new Map<string, { models: Array<{ id: string; name: string; maxOutput?: number; contextWindow?: number }>; at: number }>();
@@ -16,7 +23,7 @@ function serviceConfigKey(entry: Record<string, unknown>): string {
 }
 function isHeaderSafeApiKey(key: string): boolean { return /^[\x20-\x7E]+$/.test(key); }
 
-function filterTextChatModels(models: Array<{ id: string; name?: string; maxOutput?: number; contextWindow?: number }>): Array<{ id: string; name: string; maxOutput?: number; contextWindow?: number }> {
+function filterTextChatModels(models: ReadonlyArray<{ id: string; name?: string; maxOutput?: number; contextWindow?: number }>): Array<{ id: string; name: string; maxOutput?: number; contextWindow?: number }> {
   return models
     .filter((m) => isTextChatModelId(m.id))
     .map((m) => ({
@@ -97,7 +104,7 @@ export function registerServicesRoutes(ctx: ServerContext): void {
         if (svc.service === "custom") {
           const secretKey = `custom:${svc.name}`;
           services.push({
-            service: secretKey, label: svc.name ?? "Custom", group: undefined,
+            service: secretKey, label: String(svc.name ?? "Custom"), group: undefined,
             connected: Boolean(secrets.services[secretKey]?.apiKey),
           });
         }
@@ -248,10 +255,14 @@ export function registerServicesRoutes(ctx: ServerContext): void {
       .map((s) => ({ id: `custom:${s.name ?? "Custom"}`, baseUrl: s.baseUrl ?? "", label: s.name ?? "Custom" }))
       .filter((s) => s.baseUrl && Boolean(secrets.services[s.id]?.apiKey));
 
-    const groups = await Promise.all(customs.map(async (s) => ({
-      service: s.id, label: s.label,
-      models: filterTextChatModels(await probeModelsFromUpstream(s.baseUrl, secrets.services[s.id].apiKey, 10_000)),
-    })));
+    const groups = await Promise.all(customs.map(async (s) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const apiKey = String((secrets.services as any)[s.id]?.apiKey ?? "");
+      return {
+        service: s.id, label: s.label,
+        models: filterTextChatModels(await probeModelsFromUpstream(s.baseUrl, apiKey, 10_000)),
+      };
+    }));
     return c.json({ groups });
   });
 

@@ -2,10 +2,17 @@ import { join } from "node:path";
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import {
   getAllEndpoints, loadSecrets, saveSecrets, loadProjectConfig,
-  createLLMClient, resolveServiceProviderFamily, isTextChatModelId,
+  createLLMClient, resolveServiceProviderFamily,
   type AuditIssue,
 } from "@actalk/inkos-core";
 import type { ServerContext } from "../server-context.js";
+
+// ── Local helpers (moved from core) ──
+
+/** Filter out non-text models (embedding, image, audio, moderation, etc.) */
+function isTextChatModelId(id: string): boolean {
+  return !/embed|dall-e|whisper|tts|moderation|speech|image|audio|video/i.test(id);
+}
 
 function isCustomServiceId(service: string): boolean { return service.startsWith("custom:"); }
 function serviceConfigKey(entry: Record<string, unknown>): string {
@@ -171,7 +178,7 @@ export function registerAuditRoutes(ctx: ServerContext): void {
         const id = serviceConfigKey(svc);
         const af = normalizeAuditApiFormat(id, svc.apiFormat as "chat" | "responses" | undefined);
         const api = customAuditApiProtocol(af);
-        endpoints.push({ service: id, label: svc.name ?? "Custom", baseUrl: svc.baseUrl ?? "", api, apiLabel: auditApiLabel(api), apiFormat: af, models: [], connected: Boolean(secrets.services[`audit:${id}`]?.apiKey), writingConnected: Boolean(secrets.services[id]?.apiKey) });
+        endpoints.push({ service: id, label: String(svc.name ?? "Custom"), baseUrl: String(svc.baseUrl ?? ""), api, apiLabel: auditApiLabel(api), apiFormat: af, models: [], connected: Boolean(secrets.services[`audit:${id}`]?.apiKey), writingConnected: Boolean(secrets.services[id]?.apiKey) });
       }
     } catch { /* no custom services */ }
     return endpoints;

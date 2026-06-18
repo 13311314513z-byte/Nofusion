@@ -44,7 +44,8 @@ async function loadStudioBookListSummary(state: StateManager, bookId: string): P
 function withPipeline(
   label: string,
   pipelineConfig: Record<string, unknown>,
-  fn: (pipeline: unknown) => Promise<void>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (pipeline: any) => Promise<void>,
 ): Promise<void> {
   return fn(pipelineConfig).catch((e: unknown) => {
     console.error(`[studio] ${label} pipeline error:`, e);
@@ -301,7 +302,8 @@ export function registerBooksRoutes(ctx: ServerContext): void {
         ...(cleanStringArray(body.genreTags) !== undefined ? { genreTags: cleanStringArray(body.genreTags) } : {}),
         ...(cleanStringArray(body.contentWarnings) !== undefined ? { contentWarnings: cleanStringArray(body.contentWarnings) } : {}),
       };
-      await ctx.state.saveBookConfig(id, updated);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await ctx.state.saveBookConfig(id, updated as any);
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "Failed to update config" }, 500);
