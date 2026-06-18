@@ -1190,14 +1190,30 @@ function syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
   }
 }
 
+// P1-2: mtime-based config cache — avoids re-reading inkos.json on every service probe
+const rawConfigCache = new Map<string, { mtimeMs: number; config: Record<string, unknown> }>();
+const RAW_CONFIG_CACHE_MAX = 10;
+
 async function loadRawConfig(root: string): Promise<Record<string, unknown>> {
   const configPath = join(root, "inkos.json");
   try {
+    const fileStat = await stat(configPath);
+    const cached = rawConfigCache.get(root);
+    if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+      return cached.config;
+    }
+
     const raw = await readFile(configPath, "utf-8");
     if (!raw.trim()) {
       throw new SyntaxError("inkos.json is empty");
     }
-    return JSON.parse(raw) as Record<string, unknown>;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    if (rawConfigCache.size >= RAW_CONFIG_CACHE_MAX && !rawConfigCache.has(root)) {
+      rawConfigCache.delete(rawConfigCache.keys().next().value!);
+    }
+    rawConfigCache.set(root, { mtimeMs: fileStat.mtimeMs, config: parsed });
+    return parsed;
   } catch (e) {
     if (e instanceof SyntaxError) {
       throw new ApiError(400, "INVALID_CONFIG", `inkos.json parse error: ${e.message}. Check the file at ${configPath} for syntax issues.`);
