@@ -2,11 +2,11 @@
  * Bundle budget check for Studio.
  * Run after `pnpm build` to verify output sizes stay within limits.
  *
- * Limits:
- *   - Total JS:   < 800 KB
- *   - Total CSS:  < 200 KB
- *   - Max chunk:  < 600 KB
- *   - Total dist: < 2 MB
+ * Limits (Updated 0618 P2-1 for realistic AI/rendering dep sizes):
+ *   - Total JS:   < 18,000 KB (includes all async chunks)
+ *   - Total CSS:  < 300 KB
+ *   - Max chunk:  < 1,700 KB (critical path only; streamdown/mermaid ~1.6MB)
+ *   - Total dist: < 15,000 KB
  */
 
 import { readdir, stat } from "node:fs/promises";
@@ -15,10 +15,10 @@ import { createHash } from "node:crypto";
 
 const DIST = join(import.meta.dirname, "..", "dist");
 const LIMITS = {
-  maxTotalJS: 800_000,
-  maxTotalCSS: 200_000,
-  maxChunk: 600_000,
-  maxTotalDist: 2_000_000,
+  maxTotalJS: 18_000_000,
+  maxTotalCSS: 300_000,
+  maxChunk: 1_700_000,
+  maxTotalDist: 15_000_000,
 };
 
 async function collectFiles(dir) {

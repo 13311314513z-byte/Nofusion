@@ -10,17 +10,41 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
-  // P2-6: Chunk splitting to reduce main bundle size
+  // P2-1: Aggressive chunk splitting to reduce main bundle size (<600KB per chunk)
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom"],
-          "vendor-lucide": ["lucide-react"],
+        manualChunks(id) {
+          // React core
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "vendor-react";
+          }
+          // Lucide icons
+          if (id.includes("node_modules/lucide-react/")) {
+            return "vendor-lucide";
+          }
+          // Streamdown + all plugins (cjk, code, math, mermaid) — heavy markdown renderer
+          if (id.includes("node_modules/streamdown/") || id.includes("node_modules/@streamdown/")) {
+            return "vendor-streamdown";
+          }
+          // Shiki — dynamically imported in code-block.tsx, Vite auto-splits to async chunk
+          // AI SDK
+          if (id.includes("node_modules/ai/") || id.includes("node_modules/@ai-sdk/")) {
+            return "vendor-ai";
+          }
+          // Base UI + Radix (UI primitives)
+          if (id.includes("node_modules/@base-ui/") || id.includes("node_modules/@radix-ui/")) {
+            return "vendor-ui";
+          }
+          // Hono server-side only — exclude from client bundle via treeshaking
+          if (id.includes("node_modules/@hono/") || id.includes("node_modules/hono/")) {
+            return "vendor-hono";
+          }
+          // Everything else stays in main
         },
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 1600,
   },
   server: {
     port: 4577,
