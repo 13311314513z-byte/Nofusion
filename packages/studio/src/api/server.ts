@@ -581,19 +581,31 @@ function resolveExternalChatEditPath(root: string, requestedPath: string): { pat
  * - 「对话内容」 preceded by character name mentions
  * - 角色名 followed by dialogue-like text
  */
+
+// P1-12: Cache compiled regex patterns keyed by escaped name
+const dialogueRegexCache = new Map<string, ReadonlyArray<RegExp>>();
+function getCachedDialogueRegex(escaped: string): ReadonlyArray<RegExp> {
+  const cached = dialogueRegexCache.get(escaped);
+  if (cached) return cached;
+  const patterns = [
+    new RegExp(`${escaped}[：:"：]\\s*["「](.+?)["」]`, "g"),
+    new RegExp(`["「]${escaped}(.+?)["」]`, "g"),
+    new RegExp(`${escaped}[说问道喊叫嚷叹答]\\s*[：:"：]\\s*(.+?)(?:[。！？!?]|$)`, "g"),
+  ];
+  // Limit cache size
+  if (dialogueRegexCache.size > 100) {
+    dialogueRegexCache.delete(dialogueRegexCache.keys().next().value!);
+  }
+  dialogueRegexCache.set(escaped, patterns);
+  return patterns;
+}
+
 function extractCharacterDialogue(content: string, characterId: string, characterName: string): string[] {
   const lines: string[] = [];
   const names = [characterName, characterId].filter(Boolean);
-  // Build a regex that matches lines starting with or containing the character name + colon
-  // Chinese dialogue patterns: 角色名："...", 角色名：「...」, "角色名...", 「角色名...」
   for (const name of names) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const patterns = [
-      new RegExp(`${escaped}[：:"：]\\s*["「](.+?)["」]`, "g"),
-      new RegExp(`["「]${escaped}(.+?)["」]`, "g"),
-      new RegExp(`${escaped}[说问道喊叫嚷叹答]\\s*[：:"：]\\s*(.+?)(?:[。！？!?]|$)`, "g"),
-    ];
-    for (const regex of patterns) {
+    for (const regex of getCachedDialogueRegex(escaped)) {
       let match: RegExpExecArray | null;
       while ((match = regex.exec(content)) !== null) {
         const dialogue = match[1]!.trim();
@@ -3412,14 +3424,21 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       const mdFiles = files.filter((f) => f.endsWith(".md") && /^\d{4}/.test(f)).sort();
       const { analyzeAITells } = await import("@actalk/inkos-core");
 
-      const results = await Promise.all(
-        mdFiles.map(async (f) => {
-          const num = parseInt(f.slice(0, 4), 10);
-          const content = await readFile(join(chaptersDir, f), "utf-8");
-          const result = analyzeAITells(content);
-          return { chapterNumber: num, filename: f, ...result };
-        }),
-      );
+      // P1-6: Batch chapters to avoid OOM from Promise.all on large books
+      const BATCH_SIZE = 10;
+      const results: Array<{ chapterNumber: number; filename: string; flagCount?: number; flags?: unknown[] }> = [];
+      for (let i = 0; i < mdFiles.length; i += BATCH_SIZE) {
+        const batch = mdFiles.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (f) => {
+            const num = parseInt(f.slice(0, 4), 10);
+            const content = await readFile(join(chaptersDir, f), "utf-8");
+            const result = analyzeAITells(content);
+            return { chapterNumber: num, filename: f, ...result };
+          }),
+        );
+        results.push(...batchResults);
+      }
       return c.json({ bookId: id, results });
     } catch (e) {
       return c.json({ error: String(e) }, 500);

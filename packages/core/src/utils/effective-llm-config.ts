@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { ProjectConfigSchema, type LLMConfig, type ProjectConfig } from "../models/project.js";
 import { loadSecrets } from "../llm/secrets.js";
@@ -118,21 +118,38 @@ export async function resolveEffectiveLLMConfig(
   };
 }
 
+// P1-2: mtime-based config cache — avoids re-reading inkos.json from disk on every request
+const configCache = new Map<string, { mtimeMs: number; config: Record<string, unknown> }>();
+const CONFIG_CACHE_MAX_SIZE = 10;
+
 async function readProjectConfig(root: string): Promise<Record<string, unknown>> {
   const configPath = join(root, "inkos.json");
   try {
-    await access(configPath);
-  } catch {
+    const fileStat = await stat(configPath);
+    const cached = configCache.get(root);
+    if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+      return cached.config;
+    }
+
+    const raw = await readFile(configPath, "utf-8");
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      throw new Error(`inkos.json in ${root} is not valid JSON. Check the file for syntax errors.`);
+    }
+
+    // Evict oldest if at capacity
+    if (configCache.size >= CONFIG_CACHE_MAX_SIZE && !configCache.has(root)) {
+      configCache.delete(configCache.keys().next().value!);
+    }
+    configCache.set(root, { mtimeMs: fileStat.mtimeMs, config: parsed });
+    return parsed;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("not valid JSON")) throw e;
     throw new Error(
       `inkos.json not found in ${root}.\nMake sure you are inside an InkOS project directory (cd into the project created by 'inkos init').`,
     );
-  }
-
-  const raw = await readFile(configPath, "utf-8");
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new Error(`inkos.json in ${root} is not valid JSON. Check the file for syntax errors.`);
   }
 }
 

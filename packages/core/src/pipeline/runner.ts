@@ -380,30 +380,42 @@ export interface InitBookOptions {
 export class PipelineRunner {
   private readonly state: StateManager;
   private readonly config: PipelineConfig;
-  private readonly agentClients = new Map<string, LLMClient>();
+  private readonly agentClients = new Map<string, { client: LLMClient; cachedAt: number }>();
   private memoryIndexFallbackWarned = false;
 
   /** Dispose of cached LLM clients to prevent memory leaks across long runs. */
   dispose(): void {
-    for (const client of this.agentClients.values()) {
-      client.dispose?.();
+    for (const entry of this.agentClients.values()) {
+      entry.client.dispose?.();
     }
     this.agentClients.clear();
   }
 
   private setAgentClient(cacheKey: string, client: LLMClient): void {
     const MAX_CACHED_CLIENTS = 20;
+    const AGENT_CLIENT_TTL_MS = 30 * 60 * 1000; // P1-1: expire entries after 30 min
+    const now = Date.now();
+
+    // Evict expired entries first
+    for (const [key, entry] of this.agentClients) {
+      if (now - entry.cachedAt > AGENT_CLIENT_TTL_MS) {
+        entry.client.dispose?.();
+        this.agentClients.delete(key);
+      }
+    }
+
     if (this.agentClients.size >= MAX_CACHED_CLIENTS && !this.agentClients.has(cacheKey)) {
+      // Evict oldest (by insertion order)
       const firstKey = this.agentClients.keys().next().value;
       if (firstKey !== undefined) {
         const evicted = this.agentClients.get(firstKey);
         if (evicted) {
-          evicted.dispose?.();
+          evicted.client.dispose?.();
         }
         this.agentClients.delete(firstKey);
       }
     }
-    this.agentClients.set(cacheKey, client);
+    this.agentClients.set(cacheKey, { client, cachedAt: now });
   }
 
   constructor(config: PipelineConfig) {
@@ -609,7 +621,7 @@ export class PipelineRunner {
       `stream:${stream}`,
       `format:${apiFormat}`,
     ].join("|");
-    let client = this.agentClients.get(cacheKey);
+    let client = this.agentClients.get(cacheKey)?.client;
     if (!client) {
       const apiKey = override.apiKeyEnv
         ? process.env[override.apiKeyEnv] ?? ""
@@ -1105,20 +1117,18 @@ export class PipelineRunner {
       join(storyDir, "roles", "core"),
       join(storyDir, "roles", "functional"),
     ];
-    const names: string[] = [];
-    for (const dir of rolesDirs) {
-      try {
-        const entries = await readdir(dir);
-        for (const entry of entries) {
-          if (entry.endsWith(".md")) {
-            names.push(entry.replace(/\.md$/, ""));
-          }
+    // P1-9: parallelize directory reads
+    const results = await Promise.all(
+      rolesDirs.map(async (dir) => {
+        try {
+          const entries = await readdir(dir);
+          return entries.filter((e) => e.endsWith(".md")).map((e) => e.replace(/\.md$/, ""));
+        } catch {
+          return [] as string[];
         }
-      } catch {
-        // Directory doesn't exist yet
-      }
-    }
-    return names;
+      }),
+    );
+    return results.flat();
   }
 
   /** Compute role changes between existing and proposed */

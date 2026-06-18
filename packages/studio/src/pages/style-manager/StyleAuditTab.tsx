@@ -267,7 +267,7 @@ export function StyleAuditTab({
           </div>
           <div className={`border ${c.cardStatic} rounded-lg p-5 space-y-4`}>
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("style.compareWithAuthor")}</h3>
-            <AuthorStyleComparison text={text} onComparisonResult={(result) => { console.log("[StyleManager] Comparison result:", result); }} t={t as unknown as (key: string) => string} />
+            <AuthorStyleComparison text={text} onComparisonResult={() => {}} t={t as unknown as (key: string) => string} />
           </div>
         </div>
       )}

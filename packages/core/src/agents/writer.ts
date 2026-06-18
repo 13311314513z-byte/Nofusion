@@ -1401,8 +1401,10 @@ ${overrides}\n`;
 
     const characterDialogues = new Map<string, string[]>();
     let match: RegExpExecArray | null;
+    let loopCount = 0;
+    const MAX_LOOPS = 10_000; // P1-10: guard against catastrophic backtracking
 
-    while ((match = dialogueRegex.exec(recentChapters)) !== null) {
+    while ((match = dialogueRegex.exec(recentChapters)) !== null && loopCount++ < MAX_LOOPS) {
       const speaker = match[1]?.trim();
       const line = match[2] ?? match[3] ?? "";
       if (speaker && line.length > 1) {
