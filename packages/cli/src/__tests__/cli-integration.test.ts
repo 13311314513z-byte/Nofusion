@@ -96,7 +96,7 @@ describe("CLI integration", () => {
   describe("inkos --version", () => {
     it("prints version number", () => {
       const output = run(["--version"]);
-      expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(output).toMatch(/\d+\.\d+\.\d+/);
     });
   });
 

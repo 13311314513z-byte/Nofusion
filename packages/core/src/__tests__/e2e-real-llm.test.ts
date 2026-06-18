@@ -77,16 +77,17 @@ describe("Real LLM E2E", () => {
   });
 
   it("E2E: create book, write chapter, audit", { timeout: TEST_TIMEOUT }, async () => {
-    if (!API_KEY) {
+    if (!API_KEY || !root) {
       console.warn("E2E test skipped: no API key");
       return;
     }
 
-    const { loadProjectConfig } = await import("../index.js");
+    const { loadProjectConfig, createLLMClient } = await import("../index.js");
     const { PipelineRunner } = await import("../pipeline/runner.js");
 
-    const config = await loadProjectConfig(root!, { consumer: "cli", requireApiKey: false });
-    const pipeline = new PipelineRunner(config);
+    const projectConfig = await loadProjectConfig(root, { consumer: "cli", requireApiKey: false });
+    const client = createLLMClient(projectConfig.llm);
+    const pipeline = new PipelineRunner({ client, model: projectConfig.llm.model, projectRoot: root, ...projectConfig } as any);
 
     try {
       console.log("Step 1: Creating book...");

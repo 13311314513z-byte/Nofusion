@@ -41,7 +41,7 @@
     "prebuild": "pnpm run prepare:workspace-core",
     "build": "node -e \"const fs=require('fs');fs.rmSync('tsconfig.tsbuildinfo',{force:true});fs.rmSync('dist',{recursive:true,force:true})\" && tsc",
     "dev": "tsc --watch",
-    "pretest": "pnpm run build",
+    "pretest": "pnpm run build && pnpm install",
     "test": "vitest run --passWithNoTests",
     "pretypecheck": "pnpm run prepare:workspace-core",
     "typecheck": "tsc --noEmit",
