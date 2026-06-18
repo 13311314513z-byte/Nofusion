@@ -1,8 +1,8 @@
 import { join } from "node:path";
-import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import {
   getAllEndpoints, loadSecrets, saveSecrets, loadProjectConfig,
-  createLLMClient, resolveServiceProviderFamily,
+  createLLMClient, resolveServiceProviderFamily, resolveServicePreset, resolveServiceModelsBaseUrl,
   type AuditIssue,
 } from "@actalk/inkos-core";
 import type { ServerContext } from "../server-context.js";
@@ -104,7 +104,7 @@ function defaultAuditModelForEndpoint(endpoint: ReturnType<typeof getAllEndpoint
 
 async function resolveConfiguredServiceBaseUrl(root: string, serviceId: string, inlineBaseUrl?: string): Promise<string | undefined> {
   if (inlineBaseUrl) return inlineBaseUrl;
-  return undefined;
+  return resolveServicePreset(serviceId)?.baseUrl ?? resolveServiceModelsBaseUrl(serviceId);
 }
 
 async function probeServiceCapabilities(opts: { root: string; service: string; apiKey: string; baseUrl: string; preferredApiFormat?: string }): Promise<{ ok: boolean; models: Array<{ id: string }>; selectedModel?: string; apiFormat?: string; stream?: boolean; baseUrl?: string; modelsSource?: string; error?: string }> {
@@ -121,13 +121,20 @@ async function loadAuditHistory(bookDir: string): Promise<Array<{ chapterNumber:
 }
 
 async function appendAuditHistory(bookDir: string, chapterNumber: number, auditResult: { passed: boolean; issues: ReadonlyArray<AuditIssue>; summary: string; overallScore?: number }, _retries: number): Promise<void> {
-  const history = await loadAuditHistory(bookDir);
-  history.push({ chapterNumber, timestamp: new Date().toISOString(), passed: auditResult.passed, overallScore: auditResult.overallScore, issueCount: auditResult.issues.length, criticalCount: auditResult.issues.filter((i) => i.severity === "critical").length, warningCount: auditResult.issues.filter((i) => i.severity === "warning").length, infoCount: auditResult.issues.filter((i) => i.severity === "info").length });
-  const { writeFile, mkdir } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const dir = join(bookDir, ".inkos");
+  const dir = join(bookDir, "story");
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "audit-history.json"), JSON.stringify(history, null, 2), "utf-8");
+  const entry = {
+    chapterNumber,
+    timestamp: new Date().toISOString(),
+    passed: auditResult.passed,
+    summary: auditResult.summary,
+    overallScore: auditResult.overallScore,
+    issueCount: auditResult.issues.length,
+    criticalCount: auditResult.issues.filter((i) => i.severity === "critical").length,
+    warningCount: auditResult.issues.filter((i) => i.severity === "warning").length,
+    infoCount: auditResult.issues.filter((i) => i.severity === "info").length,
+  };
+  await appendFile(join(dir, "audit_history.jsonl"), `${JSON.stringify(entry)}\n`, "utf-8");
 }
 
 /**

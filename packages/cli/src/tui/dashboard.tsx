@@ -209,14 +209,16 @@ export function InkTuiApp(props: InkTuiAppProps): React.JSX.Element {
     });
   }
 
-  props.chatStreamBridge && (props.chatStreamBridge.onTextDelta = (text: string) => {
-    const timestamp = assistantDraftTimestampRef.current;
-    if (timestamp === null) {
-      return;
-    }
+  if (props.chatStreamBridge) {
+    props.chatStreamBridge.onTextDelta = (text: string) => {
+      const timestamp = assistantDraftTimestampRef.current;
+      if (timestamp === null) {
+        return;
+      }
 
-    setSession((current) => appendStreamingAssistantChunk(current, text, timestamp));
-  });
+      setSession((current) => appendStreamingAssistantChunk(current, text, timestamp));
+    };
+  }
 
   useInput((_input, key) => {
     if (key.escape) {

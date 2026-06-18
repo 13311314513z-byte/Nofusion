@@ -16,12 +16,14 @@
     "directory": "packages/studio"
   },
   "scripts": {
+    "prepare:workspace-core": "pnpm --filter @actalk/inkos-core build",
     "prepack": "npm run build && node ../../scripts/prepare-package-for-publish.mjs",
     "postpack": "node ../../scripts/restore-package-json.mjs",
     "prepublishOnly": "node ../../scripts/verify-no-workspace-protocol.mjs .",
     "dev": "node scripts/dev.mjs",
     "dev:client": "vite --host --port 4577",
     "dev:server": "node scripts/dev-server.mjs",
+    "prebuild": "pnpm run prepare:workspace-core",
     "build": "npm run build:client && npm run build:server && npm run build:verify",
     "build:client": "vite build",
     "build:server": "node -e \"require('fs').rmSync('tsconfig.server.tsbuildinfo',{force:true});require('fs').rmSync('dist/api',{recursive:true,force:true})\" && tsc -p tsconfig.server.json",

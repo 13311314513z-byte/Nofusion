@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 import {
   StateManager,
+  PipelineRunner,
   buildFoundationSourceBundle,
   persistFoundationSourceBundle,
   createInteractionToolsFromDeps,
@@ -27,16 +28,22 @@ interface BookCreateJob {
 const bookCreateStatus = new Map<string, BookCreateJob>();
 
 function normalizeStudioBookConfig(bookId: string, raw: Record<string, unknown>): Record<string, unknown> {
-  return { id: bookId, ...raw };
+  return {
+    ...raw,
+    id: bookId,
+    ...(typeof raw.genre === "string" ? { genre: raw.genre } : {}),
+    ...(typeof raw.genre !== "string" && typeof raw.genreProfileId === "string" ? { genre: raw.genreProfileId } : {}),
+  };
 }
 
 async function loadStudioBookListSummary(state: StateManager, bookId: string): Promise<Record<string, unknown>> {
-  const book = await state.loadBookConfig(bookId);
-  const chapters = await state.loadChapterIndex(bookId);
+  const book = normalizeStudioBookConfig(bookId, await state.loadBookConfig(bookId) as Record<string, unknown>);
+  const nextChapter = await state.getNextChapterNumber(bookId);
   return {
+    ...book,
     id: bookId,
     title: (book as Record<string, unknown>).title ?? bookId,
-    chapters: chapters.length,
+    chaptersWritten: nextChapter - 1,
     status: (book as Record<string, unknown>).status ?? "draft",
   };
 }
@@ -47,8 +54,12 @@ function withPipeline(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fn: (pipeline: any) => Promise<void>,
 ): Promise<void> {
-  return fn(pipelineConfig).catch((e: unknown) => {
+  const pipeline = new PipelineRunner(pipelineConfig as never);
+  return fn(pipeline).catch((e: unknown) => {
     console.error(`[studio] ${label} pipeline error:`, e);
+  }).finally(async () => {
+    const maybeDisposable = pipeline as { dispose?: () => void | Promise<void> };
+    await maybeDisposable.dispose?.();
   });
 }
 

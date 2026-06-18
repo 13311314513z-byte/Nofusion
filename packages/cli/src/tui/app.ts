@@ -100,12 +100,13 @@ export async function launchTui(
   const originalEmitWarning = process.emitWarning;
   process.emitWarning = (() => {}) as typeof process.emitWarning;
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  const writeStderr = originalStderrWrite as (chunk: string | Uint8Array, ...args: unknown[]) => boolean;
   process.stderr.write = (chunk: string | Uint8Array, ...args: unknown[]) => {
     const text = typeof chunk === "string" ? chunk : chunk.toString();
     if (text.includes("ExperimentalWarning") || text.includes("--trace-warnings")) {
       return true;
     }
-    return (originalStderrWrite as Function)(chunk, ...args);
+    return writeStderr(chunk, ...args);
   };
 
   try {

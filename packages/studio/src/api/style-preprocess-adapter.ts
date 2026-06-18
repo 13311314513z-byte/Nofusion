@@ -193,6 +193,7 @@ export function inspectText(text: string, checks?: InspectionCode[]): Inspection
 
   // --- Possible garbled text ---
   if (shouldCheck("possible-garbled-text")) {
+    // eslint-disable-next-line no-control-regex
     const garbledRatio = (text.match(/[\uFFFD\u0000-\u0008\u000B-\u000C\u000E-\u001F]/g) ?? []).length / text.length;
     if (garbledRatio > 0.05) {
       findings.push({

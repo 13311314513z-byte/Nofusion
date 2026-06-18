@@ -9,5 +9,5 @@ export const chatSelectors = {
   isActiveSessionStreaming: (s: ChatState) => Boolean(s.activeSessionId && s.sessions[s.activeSessionId]?.isStreaming),
   isEmpty: (s: ChatState) =>
     ((s.activeSessionId ? s.sessions[s.activeSessionId]?.messages.length : 0) ?? 0) === 0
-    && !Boolean(s.activeSessionId && s.sessions[s.activeSessionId]?.isStreaming),
+    && !(s.activeSessionId && s.sessions[s.activeSessionId]?.isStreaming),
 };

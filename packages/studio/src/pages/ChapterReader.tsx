@@ -495,7 +495,7 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   const saveToReplacementLib = useCallback((original: string, replacement: string) => {
     setReplacementLib((prev) => {
       const next = { ...prev, [original]: replacement };
-      try { sessionStorage.setItem("style-replacement-lib", JSON.stringify(next)); } catch {}
+      try { sessionStorage.setItem("style-replacement-lib", JSON.stringify(next)); } catch { /* ignore storage errors */ }
       return next;
     });
   }, []);

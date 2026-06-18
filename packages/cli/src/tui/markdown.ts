@@ -34,6 +34,7 @@ function stripAnsi(text: string): string {
  */
 function postProcess(text: string): string {
   return text
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[0m/g, "")
     .replace(/^(\s*)\* /gm, "$1· ")
     .replace(/\*\*(.+?)\*\*/g, `${BOLD_ON}$1${BOLD_OFF}`);

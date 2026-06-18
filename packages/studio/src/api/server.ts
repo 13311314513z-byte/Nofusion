@@ -140,7 +140,6 @@ import { registerHooksRoutes } from "./routes/hooks.js";
 import { registerBooksRoutes } from "./routes/books.js";
 import { registerChaptersRoutes } from "./routes/chapters.js";
 import { registerServicesRoutes } from "./routes/services.js";
-import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerStyleRoutes } from "./routes/style.js";
 
@@ -1891,8 +1890,18 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   registerServicesRoutes(routeContext);
   registerChaptersRoutes(routeContext);
   registerAuditRoutes(routeContext);
-  registerSessionsRoutes(routeContext);
   registerStyleRoutes(routeContext);
+
+  app.get("/api/v1/interaction/session", async (c) => {
+    const session = await loadProjectSession(root);
+    const activeBookId = await resolveSessionActiveBook(root, session);
+    return c.json({
+      session: activeBookId && session.activeBookId !== activeBookId
+        ? { ...session, activeBookId }
+        : session,
+      activeBookId,
+    });
+  });
   // daemon needs schedulerInstance ref — wire after declaration below
 
   // --- Books ---

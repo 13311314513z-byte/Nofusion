@@ -32,7 +32,7 @@ function resolveProjectImageFile(root: string, rawPath: string): { readonly reso
   };
   const contentType = contentTypes[ext];
   if (!contentType) {
-    throw new ApiError(400, "INVALID_PROJECT_FILE_PATH", "Unsupported image format");
+    throw new ApiError(415, "UNSUPPORTED_PROJECT_FILE_TYPE", "Unsupported image format");
   }
 
   return { resolved: join(root, relPath), contentType };

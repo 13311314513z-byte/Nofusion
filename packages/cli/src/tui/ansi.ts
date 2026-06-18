@@ -45,6 +45,7 @@ export function termWidth(): number {
 }
 
 export function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
 

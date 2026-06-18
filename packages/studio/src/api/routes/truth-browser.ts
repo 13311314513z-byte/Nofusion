@@ -1,16 +1,16 @@
+import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readFile, readdir } from "node:fs/promises";
 import type { ServerContext } from "../server-context.js";
 
-// Files that are shims when the book uses the new layout
 const LEGACY_SHIM_FILES = new Set([
   "story_bible.md",
   "character_bible.md",
   "world_bible.md",
+  "book_rules.md",
 ]);
 
 /**
- * Truth files browser — list and browse story/ directory files for a book.
+ * Truth files browser - list story/ files for a book.
  */
 export function registerTruthBrowserRoutes(ctx: ServerContext): void {
   ctx.app.get("/api/v1/books/:id/truth", async (c) => {
@@ -39,10 +39,14 @@ export function registerTruthBrowserRoutes(ctx: ServerContext): void {
     } | null> {
       try {
         const content = await readFile(join(storyDir, relPath), "utf-8");
-        const isShim = LEGACY_SHIM_FILES.has(relPath) && newLayout;
-        return isShim
-          ? { name: relPath, size: content.length, preview: content.slice(0, 200), legacy: true }
-          : { name: relPath, size: content.length, preview: content.slice(0, 200) };
+        const base = {
+          name: relPath,
+          size: content.length,
+          preview: content.slice(0, 200),
+        };
+        return LEGACY_SHIM_FILES.has(relPath) && newLayout
+          ? { ...base, legacy: true }
+          : base;
       } catch {
         return null;
       }
@@ -66,8 +70,15 @@ export function registerTruthBrowserRoutes(ctx: ServerContext): void {
       const all = [
         ...flatFiles,
         ...outlineFiles,
-        ...coreRolesZh, ...majorRolesZh, ...importantRolesZh, ...minorRolesZh, ...functionalRolesZh,
-        ...coreRolesEn, ...majorRolesEn, ...minorRolesEn, ...functionalRolesEn,
+        ...coreRolesZh,
+        ...majorRolesZh,
+        ...importantRolesZh,
+        ...minorRolesZh,
+        ...functionalRolesZh,
+        ...coreRolesEn,
+        ...majorRolesEn,
+        ...minorRolesEn,
+        ...functionalRolesEn,
       ];
       const described = await Promise.all(all.map(describe));
       const result = described.filter((x): x is NonNullable<typeof x> => x !== null);
@@ -81,7 +92,7 @@ export function registerTruthBrowserRoutes(ctx: ServerContext): void {
 async function assertBookDirectoryExists(state: ServerContext["state"], bookId: string): Promise<void> {
   const { ApiError } = await import("../errors.js");
   try {
-    await state.loadBookConfig(bookId);
+    await access(state.bookDir(bookId));
   } catch {
     throw new ApiError(404, "BOOK_NOT_FOUND", `Book "${bookId}" not found`);
   }
