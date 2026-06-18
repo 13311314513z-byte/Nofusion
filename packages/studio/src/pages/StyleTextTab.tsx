@@ -1,8 +1,9 @@
-import { type ChangeEvent, type RefObject } from "react";
+import { type ChangeEvent, type RefObject, useState } from "react";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import { Upload, BarChart3, Stethoscope, Link, User, BookOpen } from "lucide-react";
+import { Upload, BarChart3, Stethoscope, Link, User, BookOpen, Highlighter } from "lucide-react";
 import { StyleDiagnosticsPanel } from "../components/style/StyleDiagnosticsPanel.js";
 import { AuthorStyleComparison } from "./style-manager/AuthorStyleComparison.js";
+import { RhetoricHighlightEditor } from "../components/style/RhetoricHighlightEditor.js";
 import type { CoreStyleProfile, AuthorIndexItem, BookSummary } from "./style-types.js";
 
 interface Props {
@@ -43,6 +44,7 @@ export function StyleTextTab({
   renderProfileCard,
   importBookId, chapterIndex, importChapterNumber, handleSelectBook, onSelectChapter,
 }: Props) {
+  const [showRhetoricEditor, setShowRhetoricEditor] = useState(false);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left column: input + adjustments */}
@@ -156,7 +158,20 @@ export function StyleTextTab({
             <Stethoscope size={14} />
             {loadingDiagnostics ? "诊断中…" : "文风诊断"}
           </button>
+          <button
+            onClick={() => setShowRhetoricEditor(!showRhetoricEditor)}
+            disabled={!text.trim()}
+            className={`px-4 py-2 text-sm rounded-lg ${showRhetoricEditor ? c.btnPrimary : c.btnSecondary} disabled:opacity-30 flex items-center gap-2`}
+          >
+            <Highlighter size={14} />
+            {showRhetoricEditor ? "关闭修辞" : "修辞检测"}
+          </button>
         </div>
+        {showRhetoricEditor && (
+          <div className="mt-3 border border-border rounded-lg p-3">
+            <RhetoricHighlightEditor text={text} onTextChange={setText} />
+          </div>
+        )}
       </div>
 
       {/* Right column: results */}

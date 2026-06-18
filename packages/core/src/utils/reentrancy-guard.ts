@@ -30,6 +30,12 @@ const locks = new Map<LockKey, Promise<void>>();
  * Acquire an exclusive lock for the given resource key.
  * Returns a release function. Always release in a finally block.
  *
+ * Thread-safety note: Uses Promise-chain queuing (not check-then-act).
+ * Each lock is a chained .then() on the previous holder — no TOCTOU window
+ * because the "check" (locks.get) and "act" (locks.set) are a single atomic
+ * Map operation. The old process.kill(pid,0)-based acquireBookLock has been
+ * fully replaced by this in-memory guard (0618 P1 fix).
+ *
  * @example
  * const release = await acquireLock("book:demo:chapter:3");
  * try {
@@ -45,7 +51,6 @@ export async function acquireLock(key: LockKey): Promise<() => void> {
   locks.set(key, previous.then(() => next));
   await previous;
   return () => {
-     
     release!();
     if (locks.get(key) === next) locks.delete(key);
   };

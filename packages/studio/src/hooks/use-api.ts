@@ -108,6 +108,8 @@ async function readErrorMessage(res: Response): Promise<string> {
   return localizeKnownRuntimeMessage(`${res.status} ${res.statusText}`.trim());
 }
 
+const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+
 export async function fetchJson<T>(
   path: string,
   init: RequestInit = {},
@@ -118,8 +120,15 @@ export async function fetchJson<T>(
     throw new Error("API path is required");
   }
 
+  // Global request timeout (P3 fix — prevents hung requests)
+  const timeoutMs = DEFAULT_FETCH_TIMEOUT_MS;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const combinedSignal = deps?.signal
+    ? (AbortSignal as any).any?.([deps.signal, timeoutSignal]) ?? deps.signal
+    : timeoutSignal;
+
   const fetchImpl = deps?.fetchImpl ?? fetch;
-  const res = await fetchImpl(url, { ...init, signal: deps?.signal ?? init.signal });
+  const res = await fetchImpl(url, { ...init, signal: combinedSignal });
 
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));

@@ -55,6 +55,9 @@ export const STUDIO_SSE_EVENTS = [
   "tool:end",
   "log",
   "llm:progress",
+  "thinking:start",
+  "thinking:end",
+  "thinking:delta",
   "ping",
 ] as const;
 
