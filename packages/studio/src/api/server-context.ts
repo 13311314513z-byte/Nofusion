@@ -1,16 +1,9 @@
 import type { Hono } from "hono";
-import type { ProjectConfig, Scheduler } from "@actalk/inkos-core";
+import type { ProjectConfig, Scheduler, PipelineConfig } from "@actalk/inkos-core";
 import { StateManager } from "@actalk/inkos-core";
-import type { EventHandler } from "../sse-events.js";
 
-/** Persisted foundation plan entry (defined locally, not exported from core). */
-export interface FoundationPlanEntry {
-  planId: string;
-  bookTitle: string;
-  createdAt: number;
-  expiresAt: number;
-  data: unknown;
-}
+/** SSE event handler function type */
+export type EventHandler = (event: string, data: unknown) => void;
 
 /**
  * Shared context passed to all route modules.
@@ -32,19 +25,20 @@ export interface ServerContext {
   /** Reload project config from disk */
   loadCurrentProjectConfig: (options?: { readonly requireApiKey?: boolean }) => Promise<ProjectConfig>;
   /** Persisted foundation plans, lazily loaded */
-  foundationPlans: Map<string, FoundationPlanEntry>;
+  foundationPlans: Map<string, unknown>;
+  /** Promise that resolves when foundation plans are loaded */
+  foundationPlansPromise: Promise<void>;
+  /** Persist a foundation plan to disk */
+  persistFoundationPlan: (root: string, planId: string, entry: Record<string, unknown>) => Promise<void>;
+  /** Remove a persisted foundation plan from disk */
+  removePersistedFoundationPlan: (root: string, planId: string) => Promise<void>;
   /** Whether foundation plans have finished loading */
   foundationPlansLoaded: boolean;
   /** Daemon scheduler singleton */
   schedulerInstance: { current: Scheduler | null };
   /** Build a pipeline config for the current project */
-  buildPipelineConfig: (overrides?: {
-    readonly externalContext?: unknown;
-    readonly client?: unknown;
-    readonly model?: string;
-    readonly currentConfig?: ProjectConfig;
-    readonly sessionIdForSSE?: string;
-  }) => Promise<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buildPipelineConfig: (overrides?: Record<string, unknown>) => Promise<any>;
   /** Resolve service base URL from config */
   resolveConfiguredServiceBaseUrl: (root: string, service: string, baseUrl?: string) => Promise<string | undefined>;
   /** Load raw inkos.json config */

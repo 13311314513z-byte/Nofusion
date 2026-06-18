@@ -6,6 +6,7 @@ import type { SSEMessage } from "../hooks/use-sse";
 import { useColors } from "../hooks/use-colors";
 import { deriveBookActivity, shouldRefetchBookView } from "../hooks/use-book-activity";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { ChapterMetadataEditor } from "./ChapterMetadataEditor";
 import {
   ChevronLeft,
   Zap,
@@ -36,7 +37,7 @@ import {
   Users,
 } from "lucide-react";
 
-interface ChapterMeta {
+export interface ChapterMeta {
   readonly number: number;
   readonly title: string;
   readonly status: string;
@@ -1255,41 +1256,13 @@ export function BookDetail({
         onCancel={() => setConfirmDeleteOpen(false)}
       />
       {metadataEditorChapter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-background shadow-2xl">
-            <div className="border-b border-border/50 px-6 py-4">
-              <h2 className="text-lg font-semibold">{t("book.editMetadata")}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {String(metadataEditorChapter.number).padStart(2, "0")} · {metadataEditorChapter.title || t("chapter.label").replace("{n}", String(metadataEditorChapter.number))}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 py-5">
-              <MetadataField label={t("book.tags")} value={metadataTags} onChange={setMetadataTags} placeholder={t("book.tagsPlaceholder")} />
-              <MetadataField label={t("book.povCharacter")} value={metadataPov} onChange={setMetadataPov} />
-              <MetadataField label={t("book.location")} value={metadataLocation} onChange={setMetadataLocation} />
-              <MetadataField label={t("book.chapterType")} value={metadataChapterType} onChange={setMetadataChapterType} />
-              <MetadataField label={t("book.timeOfDay")} value={metadataTimeOfDay} onChange={setMetadataTimeOfDay} />
-              <MetadataField label={t("book.moodScore")} value={metadataMoodScore} onChange={setMetadataMoodScore} type="number" placeholder="-10 ~ 10" />
-              <MetadataField label={t("book.wordCountTarget")} value={metadataWordCountTarget} onChange={setMetadataWordCountTarget} type="number" />
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border/50 px-6 py-4">
-              <button
-                onClick={() => setMetadataEditorChapter(null)}
-                disabled={savingMetadata}
-                className="px-4 py-2 text-sm font-bold rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleSaveMetadata}
-                disabled={savingMetadata}
-                className="px-4 py-2 text-sm font-bold rounded-lg bg-primary text-primary-foreground hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-              >
-                {savingMetadata ? t("book.saving") : t("book.save")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ChapterMetadataEditor
+          chapter={metadataEditorChapter}
+          bookId={bookId}
+          t={t}
+          onClose={() => setMetadataEditorChapter(null)}
+          onSaved={refetch}
+        />
       )}
     </div>
   );

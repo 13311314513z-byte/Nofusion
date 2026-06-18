@@ -1,6 +1,5 @@
 import { streamSSE } from "hono/streaming";
-import type { ServerContext } from "../server-context.js";
-import type { EventHandler } from "../sse-events.js";
+import type { ServerContext, EventHandler } from "../server-context.js";
 
 /**
  * SSE event stream route.

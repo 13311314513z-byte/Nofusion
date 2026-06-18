@@ -1859,9 +1859,12 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     state,
     broadcast,
     subscribers,
-    get config() { return cachedConfig; },
+    getConfig: () => cachedConfig,
     loadCurrentProjectConfig,
     foundationPlans,
+    foundationPlansPromise,
+    persistFoundationPlan: (root: string, planId: string, entry: Record<string, unknown>) => persistFoundationPlan(root, planId, entry as unknown as FoundationPlanEntry),
+    removePersistedFoundationPlan,
     get foundationPlansLoaded() { return foundationPlansLoaded; },
     schedulerInstance: { current: null as Scheduler | null },
     buildPipelineConfig,
@@ -2332,17 +2335,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // --- Language setup ---
   // (extracted to routes/language.ts, registered above)
 
-  // --- Audit ---
-    return c.json({
-      services,
-      service: typeof llm.service === "string" ? llm.service : null,
-      defaultModel: llm.defaultModel ?? null,
-      configSource: "studio" satisfies LLMConfigSource,
-      storedConfigSource: normalizeConfigSource(llm.configSource),
-      envConfig,
-    });
-  });
-
   // --- Project info ---
   // (basic routes extracted to routes/project.ts; language/model-overrides/notify remain below)
 
@@ -2359,17 +2351,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   // --- Agent chat ---
   // (extracted to routes/sessions.ts, registered above)
-
-  // --- Language setup ---
-    const session = await loadProjectSession(root);
-    const activeBookId = await resolveSessionActiveBook(root, session);
-    return c.json({
-      session: activeBookId && session.activeBookId !== activeBookId
-        ? { ...session, activeBookId }
-        : session,
-      activeBookId,
-    });
-  });
 
   // -- Per-book session endpoints --
 
