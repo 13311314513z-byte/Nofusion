@@ -139,6 +139,7 @@ import { registerSourcesRoutes } from "./routes/sources.js";
 import { registerHooksRoutes } from "./routes/hooks.js";
 import { registerBooksRoutes } from "./routes/books.js";
 import { registerChaptersRoutes } from "./routes/chapters.js";
+import { registerServicesRoutes } from "./routes/services.js";
 
 import {
   PreprocessRequestSchema,
@@ -1881,6 +1882,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   registerSourcesRoutes(routeContext);
   registerHooksRoutes(routeContext);
   registerBooksRoutes(routeContext);
+  registerServicesRoutes(routeContext);
   registerChaptersRoutes(routeContext);
   // daemon needs schedulerInstance ref — wire after declaration below
 
@@ -2316,39 +2318,13 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // (extracted to routes/events.ts, registered above via registerEventsRoutes)
 
   // --- Model discovery ---
+  // (extracted to routes/services.ts, registered above)
 
-  app.get("/api/v1/services", async (c) => {
-    const secrets = await loadSecrets(root);
-    const endpoints = getAllEndpoints().filter((ep) => ep.id !== "custom");
+  // --- Project info ---
 
-    // Fast: only check connection status from secrets, no external API calls.
-    const services = endpoints.map((ep) => ({
-      service: ep.id,
-      label: ep.label,
-      group: ep.group,
-      connected: Boolean(secrets.services[ep.id]?.apiKey),
-    })).sort(compareServiceListItems);
 
-    // Add custom services from inkos.json
-    try {
-      const config = await loadRawConfig(root);
-      for (const svc of normalizeServiceConfig((config.llm as Record<string, unknown> | undefined)?.services)) {
-        if (svc.service === "custom") {
-          const secretKey = `custom:${svc.name}`;
-          services.push({
-            service: secretKey,
-            label: svc.name ?? "Custom",
-            group: undefined,
-            connected: Boolean(secrets.services[secretKey]?.apiKey),
-          });
-        }
-      }
-    } catch { /* no config file */ }
-
-    return c.json({ services });
-  });
-
-  app.get("/api/v1/services/config", async (c) => {
+  /** @deprecated Use /api/v1/sessions endpoints instead. Kept for backward compatibility. */
+  app.get("/api/v1/interaction/session", async (c) => {
     const config = await loadRawConfig(root);
     const llm = (config.llm as Record<string, unknown> | undefined) ?? {};
     const services = normalizeServiceConfig(llm.services);
