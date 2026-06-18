@@ -1815,6 +1815,30 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   const allowedOrigin = process.env.STUDIO_ORIGIN || "http://localhost:4577";
   app.use("/*", cors({ origin: allowedOrigin, credentials: true }));
 
+  // P2-6: Request body size limit — prevent malicious large JSON payloads from OOM
+  const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+  app.use("/*", async (c, next) => {
+    const contentLength = c.req.header("content-length");
+    if (contentLength) {
+      const len = Number(contentLength);
+      if (Number.isFinite(len) && len > MAX_BODY_BYTES) {
+        return c.json({ error: { code: "PAYLOAD_TOO_LARGE", message: `Request body exceeds ${MAX_BODY_BYTES / 1024 / 1024}MB limit` } }, 413);
+      }
+    }
+    await next();
+  });
+
+  // P2-10: API response time monitoring — logs requests exceeding threshold
+  const SLOW_REQUEST_THRESHOLD_MS = 2000;
+  app.use("/*", async (c, next) => {
+    const start = Date.now();
+    await next();
+    const elapsed = Date.now() - start;
+    if (elapsed > SLOW_REQUEST_THRESHOLD_MS) {
+      console.warn(`[perf] ${c.req.method} ${c.req.path} took ${elapsed}ms`);
+    }
+  });
+
   // Structured error handler — ApiError returns typed JSON, others return 500
   app.onError((error, c) => {
     if (error instanceof ApiError) {
@@ -2486,8 +2510,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
 
   app.get("/api/v1/sessions", async (c) => {
     const bookId = c.req.query("bookId");
+    const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
+    const offset = Math.max(Number(c.req.query("offset")) || 0, 0);
     const sessions = await listBookSessions(root, bookId === undefined ? null : bookId === "null" ? null : bookId);
-    return c.json({ sessions });
+    const page = sessions.slice(offset, offset + limit);
+    return c.json({ sessions: page, total: sessions.length, offset, limit });
   });
 
   app.get("/api/v1/sessions/:sessionId", async (c) => {
