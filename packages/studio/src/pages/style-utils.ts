@@ -1,4 +1,9 @@
-import type { StyleStatusNotice } from "../pages/StyleManager.js";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface StyleStatusNotice {
+  readonly tone: "error" | "success" | "info";
+  readonly message: string;
+}
 
 // ─── File type helpers ────────────────────────────────────────────────────────
 

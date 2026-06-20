@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchJson } from "../../hooks/use-api";
-import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, ArrowRight, RotateCcw, FileText, Coins } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, ArrowRight, FileText, Coins } from "lucide-react";
 import type { StyleRewritePreview, AdjustmentPlan } from "@actalk/inkos-core";
 
 interface Props {

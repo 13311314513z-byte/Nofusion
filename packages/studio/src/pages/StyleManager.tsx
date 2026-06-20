@@ -12,7 +12,7 @@ import { StyleAuditTab } from "./style-manager/StyleAuditTab.js";
 import { StyleImportTab } from "./style-manager/StyleImportTab.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, InspectionResult } from "./style-preprocess-state.js";
-import { PRESETS, computeRemovalStats, requiresConfirmation } from "./style-preprocess-state.js";
+import { computeRemovalStats, requiresConfirmation } from "./style-preprocess-state.js";
 import type { CoreStyleProfile, AuthorIndexItem, ExtractedDoc, BookSummary } from "./style-types.js";
 import { StyleDriftScoreSection } from "../components/style/StyleDriftScoreSection.js";
 import {
@@ -21,131 +21,15 @@ import {
   buildLocalStyleSourceId,
   readLocalTextFile,
   type LocalStyleFileType,
+  type StyleStatusNotice,
 } from "./style-utils.js";
+
+// Re-export for backward compat (consumed by StyleAuditTab, tests, etc.)
+export { buildStyleStatusNotice, inferLocalStyleFileType, buildLocalStyleSourceId, readLocalTextFile };
 
 type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
 
 interface Nav { toDashboard: () => void }
-
-export interface StyleStatusNotice {
-  readonly tone: "error" | "success" | "info";
-  readonly message: string;
-}
-
-export function buildStyleStatusNotice(analyzeStatus: string, importStatus: string): StyleStatusNotice | null {
-  const message = analyzeStatus.trim() || importStatus.trim();
-  if (!message) return null;
-  if (message.startsWith("Error:")) {
-    return { tone: "error", message };
-  }
-  if (message.endsWith("...")) {
-    return { tone: "info", message };
-  }
-  return { tone: "success", message };
-}
-
-export function inferLocalStyleFileType(fileName: string): LocalStyleFileType | null {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".jsonl.md") || lower.endsWith(".jsonl.markdown")) return "jsonl";
-  if (lower.endsWith(".json.md") || lower.endsWith(".json.markdown")) return "json";
-  if (lower.endsWith(".txt")) return "txt";
-  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "md";
-  if (lower.endsWith(".jsonl")) return "jsonl";
-  if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".ts")) return "ts";
-  if (lower.endsWith(".js")) return "js";
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
-  if (lower.endsWith(".css")) return "css";
-  return null;
-}
-
-export function buildLocalStyleSourceId(fileName: string, seed: number, index = 0): string {
-  const localName = fileName.split(/[/\\]/).pop() ?? fileName;
-  const baseName = localName.replace(/\.[^.]+$/, "").trim();
-  const safeBase = baseName.replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-  return `${seed}-${index}-${safeBase || "sample"}`;
-}
-
-export function readLocalTextFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read local file"));
-    reader.readAsText(file, "utf-8");
-  });
-}
-
-/** Style drift score display — compares current text against book's style profile. */
-function StyleDriftScoreSection({ bookId, chapterNumber, t }: { bookId: string; chapterNumber?: number; t: (key: string) => string }) {
-  const [scoreData, setScoreData] = useState<{ score: number | null; chapterFingerprint?: unknown; profileFingerprint?: unknown } | null>(null);
-  const [loadingScore, setLoadingScore] = useState(false);
-  const [scoreError, setScoreError] = useState<string | null>(null);
-  const { data: booksData } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");
-  const bookTitle = booksData?.books.find((b) => b.id === bookId)?.title ?? bookId;
-  const chNum = chapterNumber ?? 1;
-
-  const handleFetchScore = async () => {
-    setLoadingScore(true);
-    setScoreError(null);
-    try {
-      const data = await fetchJson<{ score: number | null; message?: string }>(`/books/${bookId}/chapters/${chNum}/style-score`, {
-        method: "POST",
-      });
-      setScoreData(data);
-    } catch (e) {
-      setScoreError(e instanceof Error ? e.message : String(e));
-    }
-    setLoadingScore(false);
-  };
-
-  return (
-    <div className="border border-border/40 rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold flex items-center gap-2">
-          <BarChart3 size={14} />
-          风格漂移评分 — {bookTitle} 第 {chNum} 章
-        </h4>
-        <button
-          onClick={handleFetchScore}
-          disabled={loadingScore}
-          className="px-3 py-1 text-xs rounded-lg bg-secondary/30 hover:bg-secondary/50 border border-border disabled:opacity-30"
-        >
-          {loadingScore ? "计算中..." : "计算评分"}
-        </button>
-      </div>
-      {scoreError && (
-        <div className="text-xs text-destructive">{scoreError}</div>
-      )}
-      {scoreData && (
-        <div className="flex items-center gap-3">
-          <div className={`text-2xl font-bold font-mono ${
-            scoreData.score === null
-              ? "text-muted-foreground"
-              : scoreData.score >= 80
-                ? "text-emerald-500"
-                : scoreData.score >= 60
-                  ? "text-amber-500"
-                  : "text-destructive"
-          }`}>
-            {scoreData.score !== null ? `${scoreData.score}%` : "N/A"}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {scoreData.score === null
-              ? "该书暂无风格档案，请先导入文风指南"
-              : scoreData.score >= 80
-                ? "与全书风格高度一致"
-                : scoreData.score >= 60
-                  ? "有轻微风格漂移，建议检查"
-                  : "存在明显风格漂移，建议调整"}
-          </div>
-        </div>
-      )}
-      {scoreData === null && !loadingScore && (
-        <div className="text-xs text-muted-foreground">点击「计算评分」以比较当前文本与全书风格档案</div>
-      )}
-    </div>
-  );
-}
 
 export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunction }) {
   const c = useColors(theme);

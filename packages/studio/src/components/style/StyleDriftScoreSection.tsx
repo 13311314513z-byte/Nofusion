@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchJson, useApi } from "../../hooks/use-api";
 import { BarChart3 } from "lucide-react";
-import type { BookSummary } from "../style-types.js";
+import type { BookSummary } from "../../pages/style-types.js";
 
 interface Props {
   bookId: string;

@@ -259,6 +259,16 @@ export function buildImportFoundationSource(
 
 export type { PipelineConfig } from "./context.js";
 export { PipelineContext } from "./context.js";
+import {
+  initBook as foundationInitBook,
+  reviseFoundation as foundationReviseFoundation,
+  generateAndReviewFoundation,
+  buildFoundationReviewFeedback,
+  assertValidArchitectOutput,
+  getFoundationRevision,
+  copyDirShallow,
+  copyDirRecursive,
+} from "./pipeline-foundation.js";
 
 export interface TokenUsageSummary {
   readonly promptTokens: number;
@@ -368,6 +378,11 @@ export class PipelineRunner {
   readonly ctx: PipelineContext;
 
   constructor(config: PipelineConfig, ctx?: PipelineContext) {
+    if (ctx && ctx.config.projectRoot !== config.projectRoot) {
+      throw new Error(
+        `PipelineRunner: injected context projectRoot (${ctx.config.projectRoot}) does not match config projectRoot (${config.projectRoot})`,
+      );
+    }
     this.ctx = ctx ?? new PipelineContext(config);
   }
 
@@ -446,186 +461,22 @@ export class PipelineRunner {
     }
   }
 
-  private async generateAndReviewFoundation(params: {
-    readonly generate: (reviewFeedback?: string) => Promise<ArchitectOutput>;
-    readonly reviewer: FoundationReviewerAgent;
-    readonly mode: "original" | "fanfic" | "series";
-    readonly sourceCanon?: string;
-    readonly styleGuide?: string;
-    readonly language: "zh" | "en";
-    readonly stageLanguage: LengthLanguage;
-    readonly maxRetries?: number;
-  }): Promise<ArchitectOutput> {
-    const maxRetries = params.maxRetries ?? this.config.foundationReviewRetries ?? 2;
-    let foundation = await params.generate();
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      this.logStage(params.stageLanguage, {
-        zh: `审核基础设定（第${attempt + 1}轮）`,
-        en: `reviewing foundation (round ${attempt + 1})`,
-      });
-
-      const review = await params.reviewer.review({
-        foundation,
-        mode: params.mode,
-        sourceCanon: params.sourceCanon,
-        styleGuide: params.styleGuide,
-        language: params.language,
-      });
-
-      this.config.logger?.info(
-        `Foundation review: ${review.totalScore}/100 ${review.passed ? "PASSED" : "REJECTED"}`,
-      );
-      for (const dim of review.dimensions) {
-        this.config.logger?.info(`  [${dim.score}] ${dim.name.slice(0, 40)}`);
-      }
-
-      if (review.passed) {
-        return foundation;
-      }
-
-      this.logWarn(params.stageLanguage, {
-        zh: `基础设定未通过审核（${review.totalScore}分），正在重新生成...`,
-        en: `Foundation rejected (${review.totalScore}/100), regenerating...`,
-      });
-
-      foundation = await params.generate(this.buildFoundationReviewFeedback(review, params.language));
-    }
-
-    // Final review
-    const finalReview = await params.reviewer.review({
-      foundation,
-      mode: params.mode,
-      sourceCanon: params.sourceCanon,
-      styleGuide: params.styleGuide,
-      language: params.language,
-    });
-    this.config.logger?.info(
-      `Foundation final review: ${finalReview.totalScore}/100 ${finalReview.passed ? "PASSED" : "ACCEPTED (max retries)"}`,
-    );
-
-    return foundation;
+  private async generateAndReviewFoundation(params: Parameters<typeof generateAndReviewFoundation>[4]): Promise<ArchitectOutput> {
+    return generateAndReviewFoundation(this.ctx, this.resolveBookLanguage.bind(this), this.logStage.bind(this), this.logWarn.bind(this), params);
   }
 
   private buildFoundationReviewFeedback(
-    review: {
-      readonly dimensions: ReadonlyArray<{
-        readonly name: string;
-        readonly score: number;
-        readonly feedback: string;
-      }>;
-      readonly overallFeedback: string;
-    },
-    language: "zh" | "en",
+    review: Parameters<typeof buildFoundationReviewFeedback>[0],
+    language: Parameters<typeof buildFoundationReviewFeedback>[1],
   ): string {
-    const dimensionLines = review.dimensions
-      .map((dimension) => (
-        language === "en"
-          ? `- ${dimension.name} [${dimension.score}]: ${dimension.feedback}`
-          : `- ${dimension.name}（${dimension.score}分）：${dimension.feedback}`
-      ))
-      .join("\n");
-
-    return language === "en"
-      ? [
-          "## Overall Feedback",
-          review.overallFeedback,
-          "",
-          "## Dimension Notes",
-          dimensionLines || "- none",
-        ].join("\n")
-      : [
-          "## 总评",
-          review.overallFeedback,
-          "",
-          "## 分项问题",
-          dimensionLines || "- 无",
-        ].join("\n");
+    return buildFoundationReviewFeedback(review, language);
   }
 
-  private agentCtx(bookId?: string): AgentContext {
-    return {
-      client: this.config.client,
-      model: this.config.model,
-      projectRoot: this.config.projectRoot,
-      bookId,
-      logger: this.config.logger,
-      onStreamProgress: this.config.onStreamProgress,
-    };
-  }
-
-  private resolveOverride(agentName: string): { model: string; client: LLMClient } {
-    const override = this.config.modelOverrides?.[agentName];
-    if (!override) {
-      return { model: this.config.model, client: this.config.client };
-    }
-    if (typeof override === "string") {
-      return { model: override, client: this.config.client };
-    }
-    // Full override — needs its own client if baseUrl differs
-    if (!override.baseUrl) {
-      return { model: override.model, client: this.config.client };
-    }
-    const base = this.config.defaultLLMConfig;
-    const provider = override.provider ?? base?.provider ?? "custom";
-    const apiKeySource = override.apiKeyEnv
-      ? `env:${override.apiKeyEnv}`
-      : `base:${base?.apiKey ?? ""}`;
-    const stream = override.stream ?? base?.stream ?? true;
-    const apiFormat = base?.apiFormat ?? "chat";
-    const cacheKey = [
-      provider,
-      override.baseUrl,
-      apiKeySource,
-      `stream:${stream}`,
-      `format:${apiFormat}`,
-    ].join("|");
-    let client = this.agentClients.get(cacheKey)?.client;
-    if (!client) {
-      const apiKey = override.apiKeyEnv
-        ? process.env[override.apiKeyEnv] ?? ""
-        : base?.apiKey ?? "";
-      client = createLLMClient({
-        provider,
-        service: base?.service ?? "custom",
-        configSource: base?.configSource ?? "env",
-        baseUrl: override.baseUrl,
-        apiKey,
-        model: override.model,
-        temperature: base?.temperature ?? 0.7,
-        thinkingBudget: base?.thinkingBudget ?? 0,
-        apiFormat,
-        stream,
-      });
-      this.setAgentClient(cacheKey, client);
-    }
-    return { model: override.model, client };
-  }
-
-  private agentCtxFor(agent: string, bookId?: string): AgentContext {
-    const { model, client } = this.resolveOverride(agent);
-    return {
-      client,
-      model,
-      projectRoot: this.config.projectRoot,
-      bookId,
-      logger: this.config.logger?.child(agent),
-      onStreamProgress: this.config.onStreamProgress,
-    };
-  }
-
-  public createAgentContext(agent: string, bookId?: string): AgentContext {
-    return this.agentCtxFor(agent, bookId);
-  }
-
-  private async pathExists(path: string): Promise<boolean> {
-    try {
-      await stat(path);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  private agentCtx(bookId?: string): AgentContext { return this.ctx.agentCtx(bookId); }
+  private resolveOverride(agentName: string): { model: string; client: LLMClient } { return this.ctx.resolveOverride(agentName); }
+  private agentCtxFor(agent: string, bookId?: string): AgentContext { return this.ctx.agentCtxFor(agent, bookId); }
+  public createAgentContext(agent: string, bookId?: string): AgentContext { return this.ctx.agentCtxFor(agent, bookId); }
+  private async pathExists(path: string): Promise<boolean> { return this.ctx.pathExists(path); }
 
   private async loadGenreProfile(genre: string): Promise<{ profile: GenreProfile }> {
     const parsed = await readGenreProfile(this.config.projectRoot, genre);
@@ -642,93 +493,7 @@ export class PipelineRunner {
   }
 
   async initBook(book: BookConfig, options: InitBookOptions = {}): Promise<void> {
-    const architect = new ArchitectAgent(this.agentCtxFor("architect", book.id));
-    const bookDir = this.state.bookDir(book.id);
-    const stagingBookDir = join(
-      this.state.booksDir,
-      `.tmp-book-create-${book.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    const stageLanguage = await this.resolveBookLanguage(book);
-    const baseExternalContext = options.externalContext ?? this.config.externalContext;
-    const sourceBundleContext = options.sourceBundle?.contextBlock.trim();
-    if (options.sourceBundle && !sourceBundleContext) {
-      this.config.logger?.warn("sourceBundle provided but contextBlock is empty after trim; it will be skipped");
-    }
-    const effectiveExternalContext = [
-      baseExternalContext?.trim(),
-      sourceBundleContext,
-    ].filter(Boolean).join("\n\n") || undefined;
-
-    this.logStage(stageLanguage, { zh: "生成基础设定", en: "generating foundation" });
-    const { profile: gp } = await this.loadGenreProfile(book.genre);
-    const reviewer = new FoundationReviewerAgent(this.agentCtxFor("foundation-reviewer", book.id));
-    const resolvedLanguage = (book.language ?? gp.language) === "en" ? "en" as const : "zh" as const;
-    const foundation = await this.generateAndReviewFoundation({
-      generate: (reviewFeedback) => architect.generateFoundation(
-        book,
-        effectiveExternalContext,
-        reviewFeedback,
-      ),
-      reviewer,
-      mode: "original",
-      language: resolvedLanguage,
-      stageLanguage,
-    });
-    try {
-      this.logStage(stageLanguage, { zh: "保存书籍配置", en: "saving book config" });
-      await this.state.saveBookConfigAt(stagingBookDir, book);
-
-      this.logStage(stageLanguage, { zh: "写入基础设定文件", en: "writing foundation files" });
-      await architect.writeFoundationFiles(
-        stagingBookDir,
-        foundation,
-        gp.numericalSystem,
-        book.language ?? gp.language,
-      );
-
-      if (effectiveExternalContext && effectiveExternalContext.trim().length > 0) {
-        const storyDir = join(stagingBookDir, "story");
-        await mkdir(storyDir, { recursive: true });
-        await writeFile(join(storyDir, "brief.md"), effectiveExternalContext, "utf-8");
-      }
-      if (options.sourceBundle) {
-        await persistFoundationSourceBundle(stagingBookDir, options.sourceBundle, "create");
-      }
-
-      this.logStage(stageLanguage, { zh: "初始化控制文档", en: "initializing control documents" });
-      await this.state.ensureControlDocumentsAt(
-        stagingBookDir,
-        book.language ?? gp.language,
-        options.authorIntent ?? effectiveExternalContext,
-      );
-      if (options.currentFocus?.trim()) {
-        await writeFile(
-          join(stagingBookDir, "story", "current_focus.md"),
-          options.currentFocus.trimEnd() + "\n",
-          "utf-8",
-        );
-      }
-
-      await this.state.saveChapterIndexAt(stagingBookDir, []);
-
-      this.logStage(stageLanguage, { zh: "创建初始快照", en: "creating initial snapshot" });
-      await this.state.snapshotStateAt(stagingBookDir, 0);
-
-      if (await this.pathExists(bookDir)) {
-        if (await this.state.isCompleteBookDirectory(bookDir)) {
-          throw new Error(`Book "${book.id}" already exists at books/${book.id}/. Use a different title or delete the existing book first.`);
-        }
-        // Move incomplete directory to backup instead of deleting
-        const backupDir = bookDir + ".backup." + Date.now().toString(36);
-        await rename(bookDir, backupDir);
-        this.config.logger?.warn(`Moved incomplete book directory to ${backupDir} for safety`);
-      }
-
-      await rename(stagingBookDir, bookDir);
-    } catch (error) {
-      await rm(stagingBookDir, { recursive: true, force: true }).catch(() => undefined);
-      throw error;
-    }
+    return foundationInitBook(this.ctx, this.resolveBookLanguage.bind(this), this.logStage.bind(this), book, options);
   }
 
   /**
@@ -739,136 +504,11 @@ export class PipelineRunner {
    * shims, otherwise large role/story details can be lost during rewrite.
    */
   async reviseFoundation(bookId: string, feedback: string): Promise<void> {
-    const bookDir = this.state.bookDir(bookId);
-    const storyDir = join(bookDir, "story");
-    const isPhase5 = await isNewLayoutBook(bookDir);
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupTag = isPhase5 ? "phase5" : "phase4";
-    const backupDir = join(storyDir, `.backup-${backupTag}-${timestamp}`);
-    await mkdir(backupDir, { recursive: true });
-
-    const flatFiles = ["story_bible.md", "volume_outline.md", "book_rules.md", "character_matrix.md"];
-    for (const fileName of flatFiles) {
-      try {
-        const content = await readFile(join(storyDir, fileName), "utf-8");
-        await writeFile(join(backupDir, fileName), content, "utf-8");
-      } catch {
-        // Missing legacy shim files are fine for partially migrated books.
-      }
-    }
-
-    if (isPhase5) {
-      await this.copyDirShallow(join(storyDir, "outline"), join(backupDir, "outline"));
-      await this.copyDirRecursive(join(storyDir, "roles"), join(backupDir, "roles"));
-    }
-
-    const book = await this.state.loadBookConfig(bookId);
-    let oldStoryBible: string;
-    let oldVolumeOutline: string;
-    let oldBookRules: string;
-    let oldCharacterMatrix: string;
-
-    if (isPhase5) {
-      [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
-        readStoryFrame(bookDir),
-        readVolumeMap(bookDir),
-        readCharacterContext(bookDir),
-      ]);
-      oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
-    } else {
-      [oldStoryBible, oldVolumeOutline, oldBookRules, oldCharacterMatrix] = await Promise.all([
-        readFile(join(storyDir, "story_bible.md"), "utf-8").catch(() => ""),
-        readFile(join(storyDir, "volume_outline.md"), "utf-8").catch(() => ""),
-        readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => ""),
-        readFile(join(storyDir, "character_matrix.md"), "utf-8").catch(() => ""),
-      ]);
-    }
-
-    const architect = new ArchitectAgent(this.agentCtxFor("architect", bookId));
-    const foundation = await architect.generateFoundation(book, undefined, undefined, {
-      reviseFrom: {
-        storyBible: oldStoryBible,
-        volumeOutline: oldVolumeOutline,
-        bookRules: oldBookRules,
-        characterMatrix: oldCharacterMatrix,
-        userFeedback: feedback,
-      },
-    });
-
-    const reviewer = new FoundationReviewerAgent(this.agentCtxFor("foundation-reviewer", bookId));
-    const resolvedLanguage = (book.language ?? "zh") === "en" ? "en" as const : "zh" as const;
-    try {
-      const review = await reviewer.review({
-        foundation,
-        mode: "original",
-        language: resolvedLanguage,
-      } as Parameters<FoundationReviewerAgent["review"]>[0]);
-      if (!review.passed) {
-        this.config.logger?.warn?.(
-          `[reviseFoundation] Foundation review did not pass; accepting rewrite. Feedback: ${review.overallFeedback ?? ""}`,
-        );
-      }
-    } catch (error) {
-      this.config.logger?.warn?.(
-        `[reviseFoundation] Foundation review failed and was skipped: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-
-    const outlineDir = join(storyDir, "outline");
-    await mkdir(outlineDir, { recursive: true });
-    await mkdir(join(storyDir, "roles", "主要角色"), { recursive: true });
-    await mkdir(join(storyDir, "roles", "次要角色"), { recursive: true });
-
-    const { profile: gp } = await this.loadGenreProfile(book.genre);
-    await architect.writeFoundationFiles(
-      bookDir,
-      foundation,
-      gp.numericalSystem,
-      book.language ?? gp.language,
-      "revise",
-    );
+    return foundationReviseFoundation(this.ctx, bookId, feedback);
   }
 
-  private async copyDirShallow(src: string, dest: string): Promise<void> {
-    try {
-      await mkdir(dest, { recursive: true });
-      const entries = await readdir(src);
-      await Promise.all(entries.map(async (entry) => {
-        try {
-          const content = await readFile(join(src, entry), "utf-8");
-          await writeFile(join(dest, entry), content, "utf-8");
-        } catch {
-          // Skip unreadable files.
-        }
-      }));
-    } catch {
-      // Source directory does not exist.
-    }
-  }
-
-  private async copyDirRecursive(src: string, dest: string): Promise<void> {
-    try {
-      await mkdir(dest, { recursive: true });
-      const entries = await readdir(src, { withFileTypes: true });
-      for (const entry of entries) {
-        const srcPath = join(src, entry.name);
-        const destPath = join(dest, entry.name);
-        if (entry.isDirectory()) {
-          await this.copyDirRecursive(srcPath, destPath);
-        } else if (entry.isFile()) {
-          try {
-            const content = await readFile(srcPath, "utf-8");
-            await writeFile(destPath, content, "utf-8");
-          } catch {
-            // Skip unreadable files.
-          }
-        }
-      }
-    } catch {
-      // Source directory does not exist.
-    }
-  }
+  private async copyDirShallow(src: string, dest: string): Promise<void> { return copyDirShallow(src, dest); }
+  private async copyDirRecursive(src: string, dest: string): Promise<void> { return copyDirRecursive(src, dest); }
 
   /** Import external source material and generate fanfic_canon.md */
   async importFanficCanon(
@@ -1109,73 +749,11 @@ export class PipelineRunner {
   }
 
   async getFoundationRevision(bookId: string): Promise<string> {
-    const bookDir = this.state.bookDir(bookId);
-    const storyDir = join(bookDir, "story");
-    const files = [
-      join(storyDir, "outline", "story_frame.md"),
-      join(storyDir, "outline", "volume_map.md"),
-      join(storyDir, "story_bible.md"),
-      join(storyDir, "volume_outline.md"),
-      join(storyDir, "book_rules.md"),
-      join(storyDir, "character_matrix.md"),
-    ];
-    const roleDirs = [
-      "主要角色", "次要角色", "核心角色", "功能角色", "重要角色",
-      "major", "minor", "core", "functional",
-    ];
-    for (const dirName of roleDirs) {
-      const dir = join(storyDir, "roles", dirName);
-      const entries = await readdir(dir).catch(() => []);
-      for (const entry of entries.filter((name) => name.endsWith(".md")).sort()) {
-        files.push(join(dir, entry));
-      }
-    }
-
-    const hash = createHash("sha256");
-    for (const file of [...new Set(files)].sort()) {
-      const content = await readFile(file, "utf-8").catch(() => "");
-      hash.update(file.slice(bookDir.length));
-      hash.update("\0");
-      hash.update(content);
-      hash.update("\0");
-    }
-    return hash.digest("hex").slice(0, 24);
+    return getFoundationRevision(this.ctx, bookId);
   }
 
   private assertValidArchitectOutput(output: ArchitectOutput): void {
-    const required = [
-      ["storyBible", output.storyBible],
-      ["volumeOutline", output.volumeOutline],
-      ["bookRules", output.bookRules],
-      ["currentState", output.currentState],
-      ["pendingHooks", output.pendingHooks],
-      ["storyFrame", output.storyFrame],
-      ["volumeMap", output.volumeMap],
-    ] as const;
-    for (const [field, value] of required) {
-      if (typeof value !== "string") {
-        throw new Error(`无效的架构预览：${field} 必须是字符串`);
-      }
-    }
-    if (!output.storyFrame?.trim() || !output.volumeMap?.trim()) {
-      throw new Error("无效的架构预览：缺少 Phase 5 storyFrame 或 volumeMap");
-    }
-    if (output.roles !== undefined) {
-      if (!Array.isArray(output.roles)) {
-        throw new Error("无效的架构预览：roles 必须是数组");
-      }
-      for (const role of output.roles) {
-        if (
-          !role
-          || (role.tier !== "major" && role.tier !== "minor")
-          || typeof role.name !== "string"
-          || !role.name.trim()
-          || typeof role.content !== "string"
-        ) {
-          throw new Error("无效的架构预览：角色数据格式错误");
-        }
-      }
-    }
+    return assertValidArchitectOutput(output);
   }
 
   /** One-step fanfic book creation: create book + import canon + generate foundation */

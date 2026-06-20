@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchJson, useApi } from "../../hooks/use-api";
-import { Lightbulb, AlertTriangle, ShieldCheck, Shield, ShieldAlert, RotateCcw, CheckCircle, XCircle, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Lightbulb, AlertTriangle, ShieldCheck, Shield, ShieldAlert, RotateCcw, CheckCircle, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import type { AdjustmentPlan, AdjustmentSuggestion } from "@actalk/inkos-core";
 import type { AdjustmentState } from "./style-adjustment-state";
 import { createAdjustmentReducer, createInitialAdjustmentState } from "./style-adjustment-state";

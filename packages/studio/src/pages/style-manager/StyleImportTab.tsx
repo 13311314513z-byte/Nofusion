@@ -4,7 +4,7 @@ import type { TFunction } from "../../hooks/use-i18n";
 import type { CoreStyleProfile, ExtractedDoc, BookSummary } from "../style-types.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { InspectionResult } from "../style-preprocess-state.js";
-import { computeRemovalStats, requiresConfirmation } from "../style-preprocess-state.js";
+import { computeRemovalStats } from "../style-preprocess-state.js";
 
 interface StyleImportTabProps {
   // Shared text state
