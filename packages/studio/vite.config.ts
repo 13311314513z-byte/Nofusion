@@ -27,7 +27,11 @@ export default defineConfig({
           if (id.includes("node_modules/streamdown/") || id.includes("node_modules/@streamdown/")) {
             return "vendor-streamdown";
           }
-          // Shiki — dynamically imported in code-block.tsx, Vite auto-splits to async chunk
+          // Shiki — dynamically imported in code-block.tsx, Vite auto-splits to async chunk.
+          // Force large language packs into a separate lazy chunk to reduce main bundle pressure.
+          if (id.includes("node_modules/shiki/") && !id.includes("node_modules/shiki/dist/")) {
+            return "vendor-shiki-langs";
+          }
           // AI SDK
           if (id.includes("node_modules/ai/") || id.includes("node_modules/@ai-sdk/")) {
             return "vendor-ai";

@@ -1,6 +1,9 @@
 import { Command } from "commander";
-import { exec } from "node:child_process/promises";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { log, logError } from "../utils.js";
+
+const execAsync = promisify(exec);
 
 export const updateCommand = new Command("update")
   .description("Update InkOS to the latest version")
@@ -13,10 +16,8 @@ export const updateCommand = new Command("update")
       log(`Current version: ${currentVersion}`);
       log("Checking npm registry...");
 
-      const { stdout: remoteVersionRaw } = await exec("npm view @actalk/inkos version", {
-        encoding: "utf-8",
-      });
-      const remoteVersion = remoteVersionRaw.trim();
+      const { stdout } = await execAsync("npm view @actalk/inkos version", { encoding: "utf-8" }) as { stdout: string; stderr: string };
+      const remoteVersion = stdout.trim();
 
       if (currentVersion === remoteVersion) {
         log(`Already up to date (${currentVersion}).`);
@@ -36,7 +37,7 @@ export const updateCommand = new Command("update")
       }
 
       log(`Updating: ${currentVersion} → ${remoteVersion}`);
-      await exec("npm install -g @actalk/inkos@latest", { stdio: "inherit" });
+      await execAsync("npm install -g @actalk/inkos@latest");
       log(`Updated to ${remoteVersion}.`);
     } catch (e) {
       logError(`Update failed: ${e}`);
