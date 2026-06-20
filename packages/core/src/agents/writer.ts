@@ -1391,20 +1391,20 @@ ${overrides}\n`;
    * Extract dialogue fingerprints from recent chapters.
    * For each character with multiple dialogue lines, compute speaking style markers.
    */
+  // P1-12: Module-level regex cache — avoids recompilation on every call
+  private static readonly DIALOGUE_REGEX =
+    /(?:(.{1,6})(?:说道|道|喝道|冷声道|笑道|怒道|低声道|大声道|喝骂道|冷笑道|沉声道|喊道|叫道|问道|答道)\s*[：:]\s*["""「]([^"""」]+)["""」])|["""「]([^"""」]{2,})["""」]|"([^"]{2,})"/g;
+
   private extractDialogueFingerprints(recentChapters: string, _storyBible: string): string {
     if (!recentChapters) return "";
-
-    // Match dialogue patterns:
-    // Chinese: "speaker说道：" or dialogue in ""「」
-    // English: "dialogue," speaker said. or "dialogue."
-    const dialogueRegex = /(?:(.{1,6})(?:说道|道|喝道|冷声道|笑道|怒道|低声道|大声道|喝骂道|冷笑道|沉声道|喊道|叫道|问道|答道)\s*[：:]\s*["""「]([^"""」]+)["""」])|["""「]([^"""」]{2,})["""」]|"([^"]{2,})"/g;
 
     const characterDialogues = new Map<string, string[]>();
     let match: RegExpExecArray | null;
     let loopCount = 0;
     const MAX_LOOPS = 10_000; // P1-10: guard against catastrophic backtracking
 
-    while ((match = dialogueRegex.exec(recentChapters)) !== null && loopCount++ < MAX_LOOPS) {
+    WriterAgent.DIALOGUE_REGEX.lastIndex = 0;
+    while ((match = WriterAgent.DIALOGUE_REGEX.exec(recentChapters)) !== null && loopCount++ < MAX_LOOPS) {
       const speaker = match[1]?.trim();
       const line = match[2] ?? match[3] ?? "";
       if (speaker && line.length > 1) {

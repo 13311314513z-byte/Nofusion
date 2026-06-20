@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { localizeKnownRuntimeMessage } from "../lib/error-copy";
 
 const BASE = "/api/v1";
@@ -87,7 +87,7 @@ export function invalidateApiPaths(paths: ReadonlyArray<string>): void {
 // P1-8: Request dedup — cancel in-flight GET requests when same URL is re-requested
 const inFlightGetControllers = new Map<string, AbortController>();
 
-function dedupGetRequest(url: string): AbortSignal | undefined {
+function dedupGetRequest(url: string): AbortSignal {
   const existing = inFlightGetControllers.get(url);
   if (existing) {
     existing.abort(); // Cancel previous in-flight request
@@ -185,8 +185,6 @@ export function useApi<T>(path: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const abortRef = useRef<AbortController | null>(null);
-
   const refetch = useCallback(async () => {
     if (!path) {
       setData(null);
@@ -202,34 +200,28 @@ export function useApi<T>(path: string | null) {
       return;
     }
 
-    // Cancel any in-flight request
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    // P1-8: Cancel in-flight GET request for the same URL
+    const dedupSignal = dedupGetRequest(url);
 
     setLoading(true);
     setError(null);
     try {
-      const json = await fetchJson<T>(url, {}, { signal: controller.signal });
+      const json = await fetchJson<T>(url, {}, { signal: dedupSignal });
       // Only update state if the request wasn't aborted
-      if (!controller.signal.aborted) {
+      if (!dedupSignal.aborted) {
         setData(json);
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
+      releaseDedupGetRequest(url);
+      setLoading(false);
     }
   }, [path]);
 
   useEffect(() => {
     refetch();
-    return () => {
-      abortRef.current?.abort();
-    };
   }, [refetch]);
 
   useEffect(() => {

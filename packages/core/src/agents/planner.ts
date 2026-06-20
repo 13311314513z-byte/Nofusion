@@ -440,7 +440,7 @@ export class PlannerAgent extends BaseAgent {
       // Log the manifest for traceability
       logPromptManifest(this.name, messages, this.ctx.model, this.log);
 
-      const response = await this.chat(messages, { temperature: 0.7 });
+      const response = await this.chat(messages, { temperature: this.ctx.temperature ?? 0.7 });
 
       try {
         return parseMemo(response.content, input.chapterNumber, input.isGoldenOpening);
@@ -1028,7 +1028,7 @@ export class PlannerAgent extends BaseAgent {
           { role: "user", content: userMessage },
         ];
 
-        const response = await this.chat(messages, { temperature: 0.85 });
+        const response = await this.chat(messages, { temperature: this.ctx.temperature ?? 0.85 });
 
         const parsed = parseMemo(response.content, chapterNumber, false);
         variants.push({

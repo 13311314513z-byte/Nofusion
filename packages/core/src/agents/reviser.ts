@@ -292,7 +292,7 @@ ${chapterContent}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { temperature: 0.3 },
+      { temperature: this.ctx.temperature ?? 0.3 },
     );
 
     const output = this.parseOutput(

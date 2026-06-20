@@ -2,7 +2,6 @@ import { join, resolve, sep } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
-  StateManager,
   PipelineRunner,
   createLLMClient,
   loadProjectConfig,
@@ -1413,8 +1412,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
     const id = c.req.param("id");
     await assertBookExists(ctx.state, id);
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterGoals(bookDir);
       return c.json(index);
     } catch (e) {
@@ -1431,8 +1429,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
     }
     const body = await c.req.json<Partial<ChapterGoalCard>>();
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterGoals(bookDir);
       const goal: ChapterGoalCard = {
         chapterNumber,
@@ -1455,8 +1452,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterGoals(bookDir);
       const next = removeChapterGoal(index.goals, chapterNumber);
       await saveChapterGoals(bookDir, next);
@@ -1472,8 +1468,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
     const id = c.req.param("id");
     await assertBookExists(ctx.state, id);
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterIntents(bookDir);
       return c.json(index);
     } catch (e) {
@@ -1490,8 +1485,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
     }
     const body = await c.req.json<Partial<AuthorChapterIntent>>();
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterIntents(bookDir);
       const existing = getChapterIntent(index.intents, chapterNumber);
       const parsedIntent = AuthorChapterIntentSchema.safeParse({
@@ -1531,8 +1525,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const index = await loadChapterIntents(bookDir);
       const next = removeChapterIntent(index.intents, chapterNumber);
       await saveChapterIntents(bookDir, next);
@@ -1552,8 +1545,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const state = new StateManager(root);
-      const bookDir = state.bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const suggestions = await generateSuggestions(bookDir, chapterNumber);
       return c.json({ suggestions });
     } catch (e) {
@@ -1573,7 +1565,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const { readFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
 
@@ -1675,7 +1667,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = stateManager.bookDir(id);
 
       // Load existing intent to skip already-answered questions
       const intentsIdx = await loadChapterIntents(bookDir).catch(() => ({ intents: [] as ReadonlyArray<AuthorChapterIntent> }));
@@ -1832,7 +1824,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core");
       const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
       const latest = await readLatestArtifact(artifactDir, "event-chain");
@@ -1854,7 +1846,7 @@ export function registerStyleRoutes(ctx: ServerContext): void {
       return c.json({ error: "Invalid chapter number" }, 400);
     }
     try {
-      const bookDir = new StateManager(root).bookDir(id);
+      const bookDir = stateManager.bookDir(id);
       const { readFile, readdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const { saveArtifactAutoVersion, EventChainExtractor } = await import("@actalk/inkos-core");

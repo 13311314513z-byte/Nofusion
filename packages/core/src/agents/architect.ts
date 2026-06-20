@@ -152,7 +152,7 @@ export class ArchitectAgent extends BaseAgent {
     const response = await this.chat([
       { role: "system", content: langPrefix + systemPrompt + revisePrompt },
       { role: "user", content: userMessage },
-    ], { temperature: 0.8 });
+    ], { temperature: this.ctx.temperature ?? 0.8 });
 
     if (response.stopReason === "length") {
       this.log?.warn(
@@ -1042,7 +1042,7 @@ ${continuationDirective}
     const response = await this.chat([
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
-    ], { temperature: 0.5 });
+    ], { temperature: this.ctx.temperature ?? 0.5 });
 
     return this.parseSections(response.content, resolvedLanguage);
   }
@@ -1099,7 +1099,7 @@ ${genreBody}
         role: "user",
         content: `请为标题为"${book.title}"的${fanficMode}模式同人小说生成基础设定。目标${book.targetChapters}章，每章${book.chapterWordCount}字。`,
       },
-    ], { temperature: 0.7 });
+    ], { temperature: this.ctx.temperature ?? 0.7 });
 
     return this.parseSections(response.content, book.language ?? "zh");
   }
