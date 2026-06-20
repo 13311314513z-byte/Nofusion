@@ -48,6 +48,10 @@ import {
   persistBetaReaderShadow,
 } from "../utils/beta-reader-runtime.js";
 import { StateManager } from "../state/manager.js";
+import {
+  PipelineContext,
+  type PipelineConfig,
+} from "./context.js";
 import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
 import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
 import { logPlanGenerated, logChapterWritten, logAuditCompleted } from "../utils/state-logger.js";
@@ -253,26 +257,8 @@ export function buildImportFoundationSource(
   ].join("\n");
 }
 
-export interface PipelineConfig {
-  readonly client: LLMClient;
-  readonly model: string;
-  readonly projectRoot: string;
-  readonly defaultLLMConfig?: LLMConfig;
-  readonly foundationReviewRetries?: number;
-  readonly writingReviewRetries?: number;
-  readonly qualityBudget?: "economy" | "normal" | "premium";
-  readonly strictInterview?: boolean;
-  readonly betaReaderMode?: BetaReaderMode;
-  /** Expected model family for Beta Reader — used to warn when Writer and Reader share the same model family. */
-  readonly betaReaderModelFamily?: string;
-  readonly notifyChannels?: ReadonlyArray<NotifyChannel>;
-  readonly radarSources?: ReadonlyArray<RadarSource>;
-  readonly externalContext?: string;
-  readonly modelOverrides?: Record<string, string | AgentLLMOverride>;
-  readonly inputGovernanceMode?: InputGovernanceMode;
-  readonly logger?: Logger;
-  readonly onStreamProgress?: OnStreamProgress;
-}
+export type { PipelineConfig } from "./context.js";
+export { PipelineContext } from "./context.js";
 
 export interface TokenUsageSummary {
   readonly promptTokens: number;
@@ -378,54 +364,23 @@ export interface InitBookOptions {
 }
 
 export class PipelineRunner {
-  private readonly state: StateManager;
-  private readonly config: PipelineConfig;
-  private readonly agentClients = new Map<string, { client: LLMClient; cachedAt: number }>();
-  private memoryIndexFallbackWarned = false;
+  /** Shared pipeline context — can be injected for testability or shared across runners. */
+  readonly ctx: PipelineContext;
 
-  // P1-5: Chapter content cache — avoids repeated readFile across audit/revise stages
-  private readonly chapterContentCache = new Map<string, string>();
-
-  /** Dispose of cached LLM clients to prevent memory leaks across long runs. */
-  dispose(): void {
-    for (const entry of this.agentClients.values()) {
-      entry.client.dispose?.();
-    }
-    this.agentClients.clear();
-    this.chapterContentCache.clear();
+  constructor(config: PipelineConfig, ctx?: PipelineContext) {
+    this.ctx = ctx ?? new PipelineContext(config);
   }
 
-  private setAgentClient(cacheKey: string, client: LLMClient): void {
-    const MAX_CACHED_CLIENTS = 20;
-    const AGENT_CLIENT_TTL_MS = 30 * 60 * 1000; // P1-1: expire entries after 30 min
-    const now = Date.now();
+  // ─── Delegated properties (backward compat) ────────────────────────────────
+  private get state(): StateManager { return this.ctx.state; }
+  private get config(): PipelineConfig { return this.ctx.config; }
+  private get agentClients(): Map<string, { client: LLMClient; cachedAt: number }> { return this.ctx.agentClients; }
+  private get chapterContentCache(): Map<string, string> { return this.ctx.chapterContentCache; }
+  private get memoryIndexFallbackWarned(): boolean { return this.ctx.memoryIndexFallbackWarned; }
+  private set memoryIndexFallbackWarned(v: boolean) { this.ctx.memoryIndexFallbackWarned = v; }
 
-    // Evict expired entries first
-    for (const [key, entry] of this.agentClients) {
-      if (now - entry.cachedAt > AGENT_CLIENT_TTL_MS) {
-        entry.client.dispose?.();
-        this.agentClients.delete(key);
-      }
-    }
-
-    if (this.agentClients.size >= MAX_CACHED_CLIENTS && !this.agentClients.has(cacheKey)) {
-      // Evict oldest (by insertion order)
-      const firstKey = this.agentClients.keys().next().value;
-      if (firstKey !== undefined) {
-        const evicted = this.agentClients.get(firstKey);
-        if (evicted) {
-          evicted.client.dispose?.();
-        }
-        this.agentClients.delete(firstKey);
-      }
-    }
-    this.agentClients.set(cacheKey, { client, cachedAt: now });
-  }
-
-  constructor(config: PipelineConfig) {
-    this.config = config;
-    this.state = new StateManager(config.projectRoot);
-  }
+  dispose(): void { this.ctx.dispose(); }
+  private setAgentClient(k: string, c: LLMClient): void { this.ctx.setAgentClient(k, c); }
 
   private localize(language: LengthLanguage, messages: { zh: string; en: string }): string {
     return language === "en" ? messages.en : messages.zh;

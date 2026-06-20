@@ -45,4 +45,7 @@ export interface ServerContext {
   loadRawConfig: (root: string) => Promise<Record<string, unknown>>;
   /** Save raw inkos.json config */
   saveRawConfig: (root: string, config: Record<string, unknown>) => Promise<void>;
+  /** Probe LLM service capabilities (doctor check) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  probeServiceCapabilities: (args: Record<string, unknown>) => Promise<any>;
 }

@@ -3,7 +3,7 @@ import { fetchJson, useApi, postApi } from "../hooks/use-api";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
-import { BarChart3, Library, Plus, Upload, Wand2 } from "lucide-react";
+import { Library, Plus, Upload, Wand2 } from "lucide-react";
 import { DistillationPage } from "./DistillationPage";
 import { StyleAiDetectTab } from "./style-manager/StyleAiDetectTab.js";
 import { StyleDiagnoseTab } from "./style-manager/StyleDiagnoseTab.js";
@@ -14,9 +14,16 @@ import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, InspectionResult } from "./style-preprocess-state.js";
 import { PRESETS, computeRemovalStats, requiresConfirmation } from "./style-preprocess-state.js";
 import type { CoreStyleProfile, AuthorIndexItem, ExtractedDoc, BookSummary } from "./style-types.js";
+import { StyleDriftScoreSection } from "../components/style/StyleDriftScoreSection.js";
+import {
+  buildStyleStatusNotice,
+  inferLocalStyleFileType,
+  buildLocalStyleSourceId,
+  readLocalTextFile,
+  type LocalStyleFileType,
+} from "./style-utils.js";
 
 type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
-type LocalStyleFileType = "txt" | "md" | "jsonl" | "json" | "ts" | "js" | "html" | "css";
 
 interface Nav { toDashboard: () => void }
 
