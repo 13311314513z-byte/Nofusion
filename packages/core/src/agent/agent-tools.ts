@@ -9,7 +9,7 @@ import { assertSafeTruthFileName, createInteractionToolsFromDeps } from "../inte
 import { writeExportArtifact } from "../interaction/export-artifact.js";
 import { assertSafeBookId, deriveBookIdFromTitle } from "../utils/book-id.js";
 import { safeChildPath } from "../utils/path-safety.js";
-import { normalizePlatformId, normalizePlatformOrOther } from "../models/book.js";
+import { normalizePlatformId, normalizePlatformOrOther, type BookStatus } from "../models/book.js";
 import { generateShortFictionCover, runShortFictionProduction } from "../pipeline/short-fiction-runner.js";
 
 // ---------------------------------------------------------------------------
@@ -188,8 +188,8 @@ export function createSubAgentTool(
                 title: resolvedTitle,
                 genre: genre ?? "general",
                 platform: normalizePlatformOrOther(platform),
-                language: (language ?? "zh") as any,
-                status: "outlining" as any,
+                language: (language ?? "zh") as "zh" | "en",
+                status: "outlining" as BookStatus,
                 targetChapters: targetChapters ?? 200,
                 chapterWordCount: chapterWordCount ?? 3000,
                 createdAt: now,
@@ -211,14 +211,14 @@ export function createSubAgentTool(
             progress(`Writer finished chapter for "${targetBookId}".`);
             return textResult(
               `Chapter written for "${targetBookId}". ` +
-              `Word count: ${(result as any).wordCount ?? "unknown"}.`,
+              `Word count: ${result.wordCount ?? "unknown"}.`,
               {
                 kind: "chapter_written",
                 bookId: targetBookId,
-                chapterNumber: (result as any).chapterNumber,
-                title: (result as any).title,
-                wordCount: (result as any).wordCount,
-                status: (result as any).status,
+                chapterNumber: result.chapterNumber,
+                title: result.title,
+                wordCount: result.wordCount,
+                status: result.status,
               },
             );
           }
@@ -229,7 +229,7 @@ export function createSubAgentTool(
             const audit = await pipeline.auditDraft(targetBookId, chapterNumber);
             progress(`Audit complete for "${targetBookId}".`);
             const issueLines = (audit.issues ?? [])
-              .map((i: any) => `[${i.severity}] ${i.description}`)
+              .map((i) => `[${i.severity}] ${i.description}`)
               .join("\n");
             return textResult(
               `Audit chapter ${audit.chapterNumber}: ${audit.passed ? "PASSED" : "FAILED"}, ${(audit.issues ?? []).length} issue(s).` +
@@ -268,7 +268,7 @@ export function createSubAgentTool(
           default:
             return textResult(`Unknown agent: ${agent}`);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(`[sub_agent] "${agent}" failed:`, err);
         throw err;
       }
@@ -503,8 +503,8 @@ export function createWriteTruthFileTool(
         const fileName = assertSafeTruthFileName(params.fileName);
         await tools.writeTruthFile(bookId, fileName, params.content);
         return textResult(`Updated "${fileName}" for "${bookId}".`);
-      } catch (err: any) {
-        return textResult(`write_truth_file failed: ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`write_truth_file failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };
@@ -616,8 +616,8 @@ export function createReadTool(
           content = content.slice(0, 10_000) + "\n\n... [truncated at 10 000 chars]";
         }
         return textResult(content);
-      } catch (err: any) {
-        return textResult(`Failed to read "${params.path}": ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`Failed to read "${params.path}": ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };
@@ -662,8 +662,8 @@ export function createEditTool(projectRoot: string): AgentTool<typeof EditParams
         const updated = content.slice(0, idx) + params.new_string + content.slice(idx + params.old_string.length);
         await writeFile(filePath, updated, "utf-8");
         return textResult(`File "${params.path}" updated successfully.`);
-      } catch (err: any) {
-        return textResult(`Failed to edit "${params.path}": ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`Failed to edit "${params.path}": ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };
@@ -701,8 +701,8 @@ export function createWriteFileTool(projectRoot: string): AgentTool<typeof Write
         await mkdir(parentDir, { recursive: true });
         await writeFile(filePath, params.content, "utf-8");
         return textResult(`File "${params.path}" written successfully.`);
-      } catch (err: any) {
-        return textResult(`Failed to write "${params.path}": ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`Failed to write "${params.path}": ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };
@@ -774,8 +774,8 @@ export function createGrepTool(projectRoot: string): AgentTool<typeof GrepParams
           : results.join("\n");
 
         return textResult(truncated);
-      } catch (err: any) {
-        return textResult(`Grep failed: ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`Grep failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };
@@ -827,8 +827,8 @@ export function createLsTool(projectRoot: string): AgentTool<typeof LsParams> {
         }
 
         return textResult(details.join("\n"));
-      } catch (err: any) {
-        return textResult(`Failed to list "${params.bookId}/${params.subdir ?? ""}": ${err?.message ?? String(err)}`);
+      } catch (err) {
+        return textResult(`Failed to list "${params.bookId}/${params.subdir ?? ""}": ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   };

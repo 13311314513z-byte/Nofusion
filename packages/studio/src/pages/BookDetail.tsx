@@ -1,4 +1,5 @@
 import { fetchJson, useApi, postApi, FETCH_TIMEOUT_WRITE_MS } from "../hooks/use-api";
+import { useWriteStatus } from "../hooks/useWriteStatus";
 import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
@@ -158,6 +159,7 @@ export function BookDetail({
   const { data: rolesData, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useApi<RolesData>(`/books/${bookId}/roles`);
   const [writeRequestPending, setWriteRequestPending] = useState(false);
   const [draftRequestPending, setDraftRequestPending] = useState(false);
+  const { status: writeStatus } = useWriteStatus(bookId);
   const [deleting, setDeleting] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [rewritingChapters, setRewritingChapters] = useState<ReadonlyArray<number>>([]);

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import type { ServerContext } from "../server-context.js";
 import { ApiError } from "../errors.js";
 import { analyzeStyleFingerprint, type StyleFingerprint } from "@actalk/inkos-core";
@@ -22,6 +23,29 @@ async function findChapterFile(root: string, bookId: string, chapterNumber: numb
   return match ? join(chaptersDir, match) : null;
 }
 
+// P1-4: Style-score cache — avoids redundant computation for same chapter content
+const styleScoreCache = new Map<string, { score: number; chapterFp: StyleFingerprint; profileFp: StyleFingerprint; cachedAt: number }>();
+const STYLE_SCORE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function contentHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
+}
+
+function getCachedStyleScore(key: string) {
+  const entry = styleScoreCache.get(key);
+  if (entry && Date.now() - entry.cachedAt < STYLE_SCORE_CACHE_TTL_MS) return entry;
+  styleScoreCache.delete(key);
+  return undefined;
+}
+
+export function invalidateStyleScore(bookId: string, chapterNum: number): void {
+  // Invalidate all cache entries for this chapter (content-hash-based keys are self-invalidating;
+  // this is a preemptive cleanup for the old key format)
+  for (const key of styleScoreCache.keys()) {
+    if (key.startsWith(`${bookId}:${chapterNum}:`)) styleScoreCache.delete(key);
+  }
+}
+
 // ─── Route Registration ──────────────────────────────────────────────────────
 
 export function registerDetectRoutes(ctx: ServerContext): void {
@@ -38,6 +62,15 @@ export function registerDetectRoutes(ctx: ServerContext): void {
 
     try {
       const content = await readFile(chapterPath, "utf-8");
+      const hash = contentHash(content);
+      const cacheKey = `${id}:${num}:${hash}`;
+
+      // P1-4: Check cache before computing
+      const cached = getCachedStyleScore(cacheKey);
+      if (cached) {
+        return c.json({ score: cached.score, chapterFingerprint: cached.chapterFp, profileFingerprint: cached.profileFp, cached: true });
+      }
+
       const chapterFp = analyzeStyleFingerprint(content);
 
       const bookDir = state.bookDir(id);
@@ -86,6 +119,13 @@ export function registerDetectRoutes(ctx: ServerContext): void {
 
       const avgDiff = dims.reduce((a, b) => a + b, 0) / dims.length;
       const score = Math.round(Math.max(0, 1 - avgDiff) * 100);
+
+      // P1-4: Cache the result
+      styleScoreCache.set(cacheKey, { score, chapterFp, profileFp, cachedAt: Date.now() });
+      if (styleScoreCache.size > 200) {
+        const firstKey = styleScoreCache.keys().next().value;
+        if (firstKey) styleScoreCache.delete(firstKey);
+      }
 
       return c.json({ score, chapterFingerprint: chapterFp, profileFingerprint: profileFp });
     } catch (e) {

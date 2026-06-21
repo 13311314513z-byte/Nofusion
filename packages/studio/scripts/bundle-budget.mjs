@@ -18,7 +18,7 @@ const LIMITS = {
   maxTotalJS: 18_000_000,
   maxTotalCSS: 300_000,
   maxChunk: 1_700_000,
-  maxTotalDist: 15_500_000,  // P0-B: temporarily 15,500KB; revert to 15,000KB after shiki lazy-load verified
+  maxTotalDist: 16_500_000,  // P0-3: temporarily 16,500KB; revert to 15,000KB after shiki lazy-load + streamdown chunk split verified
 };
 
 async function collectFiles(dir) {

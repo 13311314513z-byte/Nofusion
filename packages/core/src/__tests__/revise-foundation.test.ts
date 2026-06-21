@@ -160,9 +160,9 @@ describe("pipeline.reviseFoundation", () => {
       await expect(access(join(bookDir, "story", "outline", "story_frame.md"))).resolves.not.toThrow();
       await expect(access(join(bookDir, "story", "outline", "volume_map.md"))).resolves.not.toThrow();
       await expect(access(join(bookDir, "story", "roles", "主要角色", "林辞.md"))).resolves.not.toThrow();
-      // Backup exists
+      // Backup exists — C6 (P2-16): always Phase 5 backup dir
       const storyEntries = await readdir(join(bookDir, "story"));
-      const backupDir = storyEntries.find((e) => e.startsWith(".backup-phase4-"));
+      const backupDir = storyEntries.find((e) => e.startsWith(".backup-phase5-"));
       expect(backupDir).toBeDefined();
       await expect(access(join(bookDir, "story", backupDir!, "story_bible.md"))).resolves.not.toThrow();
     } finally {

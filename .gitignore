@@ -9,4 +9,5 @@ dist/
 coverage/
 *.tsbuildinfo
 *.log
+*log*.txt
 **/test-results.txt

@@ -52,6 +52,16 @@ export class PipelineContext {
     this.chapterContentCache.clear();
   }
 
+  /**
+   * Reset transient per-write state so the runner can be reused.
+   * Preserves agentClients (for LLM connection reuse) and config.
+   * C7 (P2-7): Called by PipelinePool.release().
+   */
+  resetForReuse(): void {
+    this.chapterContentCache.clear();
+    this.memoryIndexFallbackWarned = false;
+  }
+
   // ─── Agent client management ─────────────────────────────────────────────
 
   setAgentClient(cacheKey: string, client: LLMClient): void {

@@ -20,10 +20,9 @@ export function registerDaemonRoutes(ctx: ServerContext): void {
     }
     try {
       const currentConfig = await ctx.loadCurrentProjectConfig();
-      const pipelineConfig = await ctx.buildPipelineConfig() as Record<string, unknown>;
+      const pipelineConfig = await ctx.buildPipelineConfig();
       const scheduler = new Scheduler({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(pipelineConfig as any),
+        ...pipelineConfig,
         radarCron: currentConfig.daemon.schedule.radarCron,
         writeCron: currentConfig.daemon.schedule.writeCron,
         maxConcurrentBooks: currentConfig.daemon.maxConcurrentBooks,

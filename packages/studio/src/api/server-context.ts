@@ -5,6 +5,18 @@ import { StateManager } from "@actalk/inkos-core";
 /** SSE event handler function type */
 export type EventHandler = (event: string, data: unknown) => void;
 
+/** Result of a service capability probe (used by /api/v1/doctor). */
+export interface ServiceProbeResult {
+  ok: boolean;
+  models: Array<{ id: string; name: string }>;
+  selectedModel?: string;
+  apiFormat?: "chat" | "responses";
+  stream?: boolean;
+  baseUrl?: string;
+  modelsSource?: "api" | "fallback";
+  error?: string;
+}
+
 /**
  * Shared context passed to all route modules.
  * Extracted from createStudioServer() to enable route splitting.
@@ -37,8 +49,7 @@ export interface ServerContext {
   /** Daemon scheduler singleton */
   schedulerInstance: { current: Scheduler | null };
   /** Build a pipeline config for the current project */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  buildPipelineConfig: (overrides?: Record<string, unknown>) => Promise<any>;
+  buildPipelineConfig: (overrides?: Record<string, unknown>) => Promise<PipelineConfig>;
   /** Resolve service base URL from config */
   resolveConfiguredServiceBaseUrl: (root: string, service: string, baseUrl?: string) => Promise<string | undefined>;
   /** Load raw inkos.json config */
@@ -46,6 +57,5 @@ export interface ServerContext {
   /** Save raw inkos.json config */
   saveRawConfig: (root: string, config: Record<string, unknown>) => Promise<void>;
   /** Probe LLM service capabilities (doctor check) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  probeServiceCapabilities: (args: Record<string, unknown>) => Promise<any>;
+  probeServiceCapabilities: (args: Record<string, unknown>) => Promise<ServiceProbeResult>;
 }

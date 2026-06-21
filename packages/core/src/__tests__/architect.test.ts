@@ -832,7 +832,7 @@ describe("ArchitectAgent", () => {
     }
   });
 
-  it("writeFoundationFiles falls back to legacy layout when storyFrame is empty", async () => {
+  it("writeFoundationFiles writes Phase 5 output even when storyFrame is empty (legacy compat via compat shims)", async () => {
     const { mkdtemp, rm, access, readFile } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
@@ -848,10 +848,11 @@ describe("ArchitectAgent", () => {
         pendingHooks: "| hook_id |\n",
       }, false, "zh");
 
+      // C6 (P2-16): Always write Phase 5 layout. story_bible.md is now a compat shim.
       const storyBible = await readFile(join(tmpDir, "story", "story_bible.md"), "utf-8");
       expect(storyBible).toContain("Legacy Story Bible");
-      // outline/ 目录是创建的但里面没 story_frame.md
-      await expect(access(join(tmpDir, "story", "outline", "story_frame.md"))).rejects.toThrow();
+      // Phase 5 story_frame.md IS created (storyBible content flows into story_frame)
+      await expect(access(join(tmpDir, "story", "outline", "story_frame.md"))).resolves.not.toThrow();
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }

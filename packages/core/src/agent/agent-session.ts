@@ -33,6 +33,13 @@ import { assertSafeBookId } from "../utils/book-id.js";
 // Types
 // ---------------------------------------------------------------------------
 
+/** Minimal shape for content parts accessed in message serialization. */
+interface ContentPart {
+  type: string;
+  text?: string;
+  thinking?: string;
+}
+
 export interface AgentSessionConfig {
   /** Unique session identifier (typically the BookSession id). */
   sessionId: string;
@@ -406,9 +413,9 @@ function convertAgentMessagesForModel(messages: AgentMessage[], model: Model<Api
  * Extract thinking/reasoning text from an AssistantMessage's content array.
  */
 function extractThinkingFromAssistant(msg: AssistantMessage): string {
-  return msg.content
-    .filter((c: any) => c.type === "thinking")
-    .map((c: any) => c.thinking ?? "")
+  return (msg.content as ContentPart[])
+    .filter((c) => c.type === "thinking")
+    .map((c) => c.thinking ?? "")
     .join("");
 }
 
@@ -450,15 +457,15 @@ function agentMessagesToPlain(
   for (const msg of messages) {
     if (!msg || typeof msg !== "object" || !("role" in msg)) continue;
 
-    const m = msg as { role: string; [k: string]: any };
+    const m = msg as { role: string; content?: string | ContentPart[] };
 
     if (m.role === "user") {
       const content = typeof m.content === "string"
         ? m.content
         : Array.isArray(m.content)
-          ? m.content
-              .filter((c: any) => c.type === "text")
-              .map((c: any) => c.text)
+          ? (m.content as ContentPart[])
+              .filter((c) => c.type === "text")
+              .map((c) => c.text)
               .join("")
           : "";
       if (content) out.push({ role: "user", content });

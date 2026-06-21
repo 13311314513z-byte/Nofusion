@@ -818,38 +818,7 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
       await mkdir(rolesMinorDir, { recursive: true });
     }
 
-    if (!isPhase5Output) {
-      writes.push(writeFile(join(storyDir, "story_bible.md"), output.storyBible, "utf-8"));
-      writes.push(writeFile(join(storyDir, "volume_outline.md"), output.volumeOutline, "utf-8"));
-      writes.push(writeFile(join(storyDir, "book_rules.md"), output.bookRules, "utf-8"));
-      writes.push(writeFile(
-        join(storyDir, "character_matrix.md"),
-        language === "en"
-          ? "# Character Matrix\n\n<!-- One ## section per character. Add new characters as new ## blocks. -->\n"
-          : "# 角色矩阵\n\n<!-- 每个角色一个 ## 块，新角色追加新 ## 即可。 -->\n",
-        "utf-8",
-      ));
-
-      if (mode === "init") {
-        const currentStateSeed = output.currentState?.trim()
-          ? output.currentState
-          : (language === "en"
-              ? "# Current State\n\n> Seeded at book creation. Runtime state is appended by the consolidator after each chapter.\n"
-              : "# 当前状态\n\n> 建书时占位。运行时每章之后由 consolidator 追加最新状态。\n");
-        writes.push(writeFile(join(storyDir, "current_state.md"), currentStateSeed, "utf-8"));
-        writes.push(writeFile(join(storyDir, "pending_hooks.md"), output.pendingHooks, "utf-8"));
-        writes.push(writeFile(
-          join(storyDir, "emotional_arcs.md"),
-          language === "en"
-            ? "# Emotional Arcs\n\n| Character | Chapter | Emotional State | Trigger Event | Intensity (1-10) | Arc Direction |\n| --- | --- | --- | --- | --- | --- |\n"
-            : "# 情感弧线\n\n| 角色 | 章节 | 情绪状态 | 触发事件 | 强度(1-10) | 弧线方向 |\n|------|------|----------|----------|------------|----------|\n",
-          "utf-8",
-        ));
-      }
-
-      await Promise.all(writes);
-      return;
-    }
+    // C6 (P2-16): Phase 4 flat-file write path removed. Always use Phase 5 layout.
 
     // Cleanup #3: book_rules YAML frontmatter is now the authoritative
     // schema for structured fields (protagonist, prohibitions, …). We prepend

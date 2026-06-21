@@ -19,7 +19,6 @@ import {
   persistFoundationSourceBundle,
 } from "../import/foundation-source.js";
 import {
-  isNewLayoutBook,
   readStoryFrame,
   readVolumeMap,
   readCharacterContext,
@@ -374,11 +373,9 @@ export async function reviseFoundation(
 ): Promise<void> {
   const bookDir = ctx.state.bookDir(bookId);
   const storyDir = join(bookDir, "story");
-  const isPhase5 = await isNewLayoutBook(bookDir);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupTag = isPhase5 ? "phase5" : "phase4";
-  const backupDir = join(storyDir, `.backup-${backupTag}-${timestamp}`);
+  const backupDir = join(storyDir, `.backup-phase5-${timestamp}`);
   await mkdir(backupDir, { recursive: true });
 
   const flatFiles = ["story_bible.md", "volume_outline.md", "book_rules.md", "character_matrix.md"];
@@ -391,10 +388,9 @@ export async function reviseFoundation(
     }
   }
 
-  if (isPhase5) {
-    await copyDirShallow(join(storyDir, "outline"), join(backupDir, "outline"));
-    await copyDirRecursive(join(storyDir, "roles"), join(backupDir, "roles"));
-  }
+  // C6 (P2-16): Always backup Phase 5 directories
+  await copyDirShallow(join(storyDir, "outline"), join(backupDir, "outline"));
+  await copyDirRecursive(join(storyDir, "roles"), join(backupDir, "roles"));
 
   const book = await ctx.state.loadBookConfig(bookId);
   let oldStoryBible: string;
@@ -402,21 +398,13 @@ export async function reviseFoundation(
   let oldBookRules: string;
   let oldCharacterMatrix: string;
 
-  if (isPhase5) {
-    [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
-      readStoryFrame(bookDir),
-      readVolumeMap(bookDir),
-      readCharacterContext(bookDir),
-    ]);
-    oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
-  } else {
-    [oldStoryBible, oldVolumeOutline, oldBookRules, oldCharacterMatrix] = await Promise.all([
-      readFile(join(storyDir, "story_bible.md"), "utf-8").catch(() => ""),
-      readFile(join(storyDir, "volume_outline.md"), "utf-8").catch(() => ""),
-      readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => ""),
-      readFile(join(storyDir, "character_matrix.md"), "utf-8").catch(() => ""),
-    ]);
-  }
+  // C6: Always use Phase 5 read paths — utilities have built-in fallback for old books
+  [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
+    readStoryFrame(bookDir),
+    readVolumeMap(bookDir),
+    readCharacterContext(bookDir),
+  ]);
+  oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
 
   const architect = new ArchitectAgent(ctx.agentCtxFor("architect", bookId));
   const foundation = await architect.generateFoundation(book, undefined, undefined, {

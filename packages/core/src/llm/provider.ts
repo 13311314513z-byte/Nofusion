@@ -34,6 +34,7 @@ import {
   TRANSIENT_LLM_RETRIES,
   createStreamMonitor,
 } from "./provider-types.js";
+import type { LLMResponseJson, TextPart, OutputTextPart, ChatCompletionResponse, ResponsesApiResponse, AnthropicMessageResponse } from "./llm-response-types.js";
 
 // Re-export for backward compatibility
 export type {
@@ -558,7 +559,7 @@ function parseSseEvents(buffer: string): { readonly events: ParsedSseEvent[]; re
   return { events, rest };
 }
 
-function extractOpenAITextPart(value: any): string {
+function extractOpenAITextPart(value: string | ReadonlyArray<TextPart> | undefined): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
     return value
@@ -568,24 +569,25 @@ function extractOpenAITextPart(value: any): string {
   return "";
 }
 
-function extractChatContent(json: any): string {
-  const message = json?.choices?.[0]?.message;
+function extractChatContent(json: LLMResponseJson): string {
+  const message = (json as ChatCompletionResponse)?.choices?.[0]?.message ?? {};
   return extractOpenAITextPart(message?.content) || extractOpenAITextPart(message?.reasoning_content);
 }
 
-function extractChatDeltaContent(json: any): string {
-  return extractOpenAITextPart(json?.choices?.[0]?.delta?.content);
+function extractChatDeltaContent(json: LLMResponseJson): string {
+  return extractOpenAITextPart((json as ChatCompletionResponse)?.choices?.[0]?.delta?.content);
 }
 
-function extractChatDeltaReasoningContent(json: any): string {
-  return extractOpenAITextPart(json?.choices?.[0]?.delta?.reasoning_content);
+function extractChatDeltaReasoningContent(json: LLMResponseJson): string {
+  return extractOpenAITextPart((json as ChatCompletionResponse)?.choices?.[0]?.delta?.reasoning_content);
 }
 
-function extractResponsesContent(json: any): string {
-  const output = Array.isArray(json?.output) ? json.output : [];
+function extractResponsesContent(json: LLMResponseJson): string {
+  const raw = json as ResponsesApiResponse;
+  const output = Array.isArray(raw?.output) ? raw.output : [];
   return output
-    .flatMap((item: any) => Array.isArray(item?.content) ? item.content : [])
-    .map((part: any) => {
+    .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+    .map((part: OutputTextPart) => {
       if (typeof part?.text === "string") return part.text;
       if (typeof part?.content === "string") return part.content;
       if (typeof part?.output_text === "string") return part.output_text;
@@ -594,18 +596,18 @@ function extractResponsesContent(json: any): string {
     .join("");
 }
 
-function extractAnthropicContent(json: any): string {
-  const content = Array.isArray(json?.content) ? json.content : [];
+function extractAnthropicContent(json: LLMResponseJson): string {
+  const content = Array.isArray((json as AnthropicMessageResponse)?.content) ? (json as AnthropicMessageResponse).content! : [];
   return content
-    .map((part: any) => typeof part?.text === "string" ? part.text : "")
+    .map((part: TextPart) => typeof part?.text === "string" ? part.text : "")
     .join("");
 }
 
-function mapResponsesStopReason(json: any): LLMResponse["stopReason"] {
-  const raw = json?.response?.status
-    ?? json?.status
-    ?? json?.choices?.[0]?.finish_reason
-    ?? json?.stop_reason;
+function mapResponsesStopReason(json: LLMResponseJson): LLMResponse["stopReason"] {
+  const raw = (json as ResponsesApiResponse)?.response?.status
+    ?? (json as ResponsesApiResponse)?.status
+    ?? (json as ChatCompletionResponse)?.choices?.[0]?.finish_reason
+    ?? (json as AnthropicMessageResponse)?.stop_reason;
   if (raw === "completed" || raw === "stop" || raw === "end_turn") return "stop";
   if (raw === "incomplete" || raw === "length" || raw === "max_tokens") return "length";
   if (raw === "tool_use") return "tool_use";
@@ -656,7 +658,7 @@ async function chatCompletionViaCustomAnthropicCompatible(
   }
 
   if (!client.stream) {
-    const json = await response.json() as any;
+    const json = await response.json() as LLMResponseJson;
     const content = extractAnthropicContent(json);
     if (!content) {
       throw wrapLLMError(new Error("LLM returned empty response"), errorCtx);
@@ -761,7 +763,7 @@ async function chatCompletionViaCustomOpenAICompatible(
     }
 
     if (!client.stream) {
-      const json = await response.json() as any;
+      const json = await response.json() as LLMResponseJson;
       const content = extractResponsesContent(json);
       if (!content) {
         throw wrapLLMError(new Error("LLM returned empty response"), errorCtx);
@@ -866,7 +868,7 @@ async function chatCompletionViaCustomOpenAICompatible(
   }
 
   if (!client.stream) {
-    const json = await response.json() as any;
+    const json = await response.json() as LLMResponseJson;
     const content = extractChatContent(json);
     if (!content) {
       throw wrapLLMError(new Error("LLM returned empty response"), errorCtx);

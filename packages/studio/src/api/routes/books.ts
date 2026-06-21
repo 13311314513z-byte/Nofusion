@@ -11,6 +11,7 @@ import {
 } from "@actalk/inkos-core";
 import type { ServerContext } from "../server-context.js";
 import { buildStudioBookConfig, type StudioCreateBookBody } from "../book-create.js";
+import { loadStudioBookListSummary, normalizeStudioBookConfig } from "../shared/book-helpers.js";
 
 const BOOK_CREATE_IN_PROGRESS_TTL_MS = 300_000;
 const BOOK_CREATE_TTL_MS = 600_000;
@@ -26,27 +27,6 @@ interface BookCreateJob {
 
 /** Shared book creation job tracker */
 const bookCreateStatus = new Map<string, BookCreateJob>();
-
-function normalizeStudioBookConfig(bookId: string, raw: Record<string, unknown>): Record<string, unknown> {
-  return {
-    ...raw,
-    id: bookId,
-    ...(typeof raw.genre === "string" ? { genre: raw.genre } : {}),
-    ...(typeof raw.genre !== "string" && typeof raw.genreProfileId === "string" ? { genre: raw.genreProfileId } : {}),
-  };
-}
-
-async function loadStudioBookListSummary(state: StateManager, bookId: string): Promise<Record<string, unknown>> {
-  const book = normalizeStudioBookConfig(bookId, await state.loadBookConfig(bookId) as Record<string, unknown>);
-  const nextChapter = await state.getNextChapterNumber(bookId);
-  return {
-    ...book,
-    id: bookId,
-    title: (book as Record<string, unknown>).title ?? bookId,
-    chaptersWritten: nextChapter - 1,
-    status: (book as Record<string, unknown>).status ?? "draft",
-  };
-}
 
 function withPipeline(
   label: string,
@@ -159,7 +139,7 @@ export function registerBooksRoutes(ctx: ServerContext): void {
     (async () => {
       try {
         bookCreateStatus.set(bookId, { status: "creating", createdAt: Date.now(), ttlMs: BOOK_CREATE_IN_PROGRESS_TTL_MS });
-        const pipelineConfig = await ctx.buildPipelineConfig() as Record<string, unknown>;
+        const pipelineConfig = await ctx.buildPipelineConfig() as unknown as Record<string, unknown>;
         withPipeline("create-book", pipelineConfig, async (pipeline) => {
           const tools = createInteractionToolsFromDeps(pipeline, ctx.state);
 
