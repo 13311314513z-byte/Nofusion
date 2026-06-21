@@ -1,0 +1,37 @@
+# 人机一致性报告
+
+> 生成日期: 2026-06-21T11:34:14.334Z
+> 样本数: 10 条判断
+
+---
+
+## 1. 一致性指标
+
+| 指标 | 值 | 说明 |
+|------|:---:|------|
+| 人工间一致性 (Kappa) | 0.823 | ✅ 高 |
+| 人工+Beta Reader 一致性 (Kappa) | 0.880 | 含 human1 / human2 / beta-reader-sim 三方 |
+| 人工1 vs 人工2 原始一致率 | 90.0% | — |
+| 人工1 vs Beta Reader | 100.0% | — |
+| 人工2 vs Beta Reader | 90.0% | — |
+
+## 2. 判断详情
+
+| pairId | 维度 | 人工1 | 人工2 | Beta Reader | 一致 |
+|--------|------|:-----:|:-----:|:-----------:|:----:|
+| synth-001 | engagement | B | B | B | ✅ |
+| synth-001 | character | B | A | B | ❌ |
+| synth-001 | emotion | A | A | A | ✅ |
+| synth-001 | clarity | B | B | B | ✅ |
+| synth-001 | expectation | B | B | B | ✅ |
+| synth-002 | engagement | B | B | B | ✅ |
+| synth-002 | character | A | A | A | ✅ |
+| synth-002 | emotion | B | B | B | ✅ |
+| synth-002 | clarity | A | A | A | ✅ |
+| synth-002 | expectation | tie | tie | tie | ✅ |
+
+## 3. 结论与建议
+
+1. Beta Reader 与人工标注一致性 ≥ 70%，当前配置可信，可用于大规模初筛。
+2. 若人工间一致性低，应优先澄清问题定义或培训标注员。
+3. 对不一致案例进行定性分析，找出 Beta Reader 系统偏差所在维度。

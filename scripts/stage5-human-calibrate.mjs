@@ -22,9 +22,9 @@ const DIMENSIONS = ["engagement", "character", "emotion", "clarity", "expectatio
 function parseArgs() {
   const args = process.argv.slice(2);
   return {
-    human: args.find(a => a.startsWith("--human="))?.slice(7) ?? "reports/baseline-data/human-labels-template.csv",
-    ensemble: args.find(a => a.startsWith("--ensemble="))?.slice(10) ?? "reports/baseline-data/calibration-results.csv",
-    output: args.find(a => a.startsWith("--output="))?.slice(8) ?? "reports/stage5-calibration-report.md",
+    human: args.find(a => a.startsWith("--human="))?.slice(8) ?? "reports/baseline-data/human-labels-template.csv",
+    ensemble: args.find(a => a.startsWith("--ensemble="))?.slice(11) ?? "reports/baseline-data/calibration-results.csv",
+    output: args.find(a => a.startsWith("--output="))?.slice(9) ?? "reports/stage5-calibration-report.md",
   };
 }
 
