@@ -78,6 +78,15 @@ import {
 // Helpers
 // ============================================================================
 
+type DropdownMenuSelectHandler = NonNullable<
+  ComponentProps<typeof DropdownMenuItem>["onSelect"]
+>;
+type DropdownMenuSelectEvent = Parameters<DropdownMenuSelectHandler>[0];
+type InputGroupButtonClickHandler = NonNullable<
+  ComponentProps<typeof InputGroupButton>["onClick"]
+>;
+type InputGroupButtonClickEvent = Parameters<InputGroupButtonClickHandler>[0];
+
 const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   try {
     const response = await fetch(url);
@@ -421,7 +430,7 @@ export const PromptInputActionAddAttachments = ({
   const attachments = usePromptInputAttachments();
 
   const handleSelect = useCallback(
-    (e: { preventDefault: () => void }) => {
+    (e: DropdownMenuSelectEvent) => {
       e.preventDefault();
       attachments.openFileDialog();
     },
@@ -429,7 +438,7 @@ export const PromptInputActionAddAttachments = ({
   );
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect as any}>
+    <DropdownMenuItem {...props} onSelect={handleSelect}>
       <ImageIcon className="mr-2 size-4" /> {label}
     </DropdownMenuItem>
   );
@@ -449,8 +458,8 @@ export const PromptInputActionAddScreenshot = ({
   const attachments = usePromptInputAttachments();
 
   const handleSelect = useCallback(
-    async (event: { preventDefault: () => void; defaultPrevented: boolean }) => {
-      onSelect?.(event as any);
+    async (event: DropdownMenuSelectEvent) => {
+      onSelect?.(event);
       if (event.defaultPrevented) {
         return;
       }
@@ -474,7 +483,7 @@ export const PromptInputActionAddScreenshot = ({
   );
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect as any}>
+    <DropdownMenuItem {...props} onSelect={handleSelect}>
       <Monitor className="mr-2 size-4" />
       {label}
     </DropdownMenuItem>
@@ -1232,13 +1241,13 @@ export const PromptInputSubmit = ({
   }
 
   const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e: InputGroupButtonClickEvent) => {
       if (isGenerating && onStop) {
         e.preventDefault();
         onStop();
         return;
       }
-      onClick?.(e as any);
+      onClick?.(e);
     },
     [isGenerating, onStop, onClick]
   );

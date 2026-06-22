@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
-import { streamSimple, getModel, getEnvApiKey } from "@mariozechner/pi-ai";
-import type { Model, Api, AssistantMessage, Message, ToolResultMessage, UserMessage } from "@mariozechner/pi-ai";
+import { streamSimple, getModels, getProviders, getEnvApiKey } from "@mariozechner/pi-ai";
+import type {
+  Model,
+  Api,
+  AssistantMessage,
+  Context,
+  Message,
+  SimpleStreamOptions,
+  ToolResultMessage,
+  UserMessage,
+} from "@mariozechner/pi-ai";
 import type { PipelineRunner } from "../pipeline/runner.js";
 import { buildAgentSystemPrompt } from "./agent-system-prompt.js";
 import {
@@ -137,7 +146,14 @@ function resolveModel(spec: AgentSessionConfig["model"]): Model<Api> {
   if (!provider || !modelId) {
     throw new Error(`Invalid model spec: provider=${provider}, modelId=${modelId}`);
   }
-  return getModel(provider as any, modelId as any);
+  const registeredProvider = getProviders().find((candidate) => candidate === provider);
+  const model = registeredProvider
+    ? getModels(registeredProvider).find((candidate) => candidate.id === modelId)
+    : undefined;
+  if (!model) {
+    throw new Error(`Unknown model spec: provider=${provider}, modelId=${modelId}`);
+  }
+  return model as Model<Api>;
 }
 
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
@@ -607,7 +623,7 @@ async function runAgentSessionUnlocked(
       },
       transformContext: createBookContextTransform(bookId, projectRoot),
       convertToLlm: (messages) => convertAgentMessagesForModel(messages, model),
-      streamFn: (model: Model<Api>, context: any, options: any) =>
+      streamFn: (model: Model<Api>, context: Context, options?: SimpleStreamOptions) =>
         streamSimple(model, context, { ...options, maxTokens: model.maxTokens }),
       getApiKey: (provider: string) => {
         if (config.apiKey) return config.apiKey;

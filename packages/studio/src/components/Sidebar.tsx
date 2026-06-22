@@ -392,7 +392,7 @@ export function Sidebar({ nav, activePage, sse, t }: {
               onClick={nav.toLogs}
             />
             <SidebarItem
-              label={t("nav.automation" as any)}
+              label={t("nav.automation")}
               icon={<Zap size={16} />}
               active={activePage === "automation"}
               onClick={nav.toAutomation}

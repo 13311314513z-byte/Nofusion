@@ -1,4 +1,4 @@
-import { getModel } from "@mariozechner/pi-ai";
+import { getModels, getProviders } from "@mariozechner/pi-ai";
 import type { Model, Api } from "@mariozechner/pi-ai";
 import { resolveServicePiProvider, resolveServicePreset } from "./service-presets.js";
 import { getServiceApiKey } from "./secrets.js";
@@ -46,7 +46,10 @@ export async function resolveServiceModel(
     : undefined;
 
   // Get pi-ai Model — may return undefined for model IDs not in the built-in registry
-  const piModel = getModel(piProvider as any, modelId as any) as Model<Api> | undefined;
+  const registeredProvider = getProviders().find((provider) => provider === piProvider);
+  const piModel = registeredProvider
+    ? getModels(registeredProvider).find((model) => model.id === modelId) as Model<Api> | undefined
+    : undefined;
   const effectiveBaseUrl = configuredBaseUrl || piModel?.baseUrl || "";
   const compat = apiType === "openai-completions"
     ? resolveProviderCompat(endpoint, effectiveBaseUrl)

@@ -8,7 +8,12 @@ import {
   setBookCreateSessionId,
 } from "./chat-page-state";
 
+const SERIALIZATION_STATUSES = ["draft", "serializing", "completed", "hiatus"] as const;
+type SerializationStatus = typeof SERIALIZATION_STATUSES[number];
 
+function isSerializationStatus(value: string): value is SerializationStatus {
+  return (SERIALIZATION_STATUSES as readonly string[]).includes(value);
+}
 
 interface PlatformOption {
   readonly value: string;
@@ -301,8 +306,8 @@ export function buildBookCreatePayload(
     currentVolume: parsePositiveInteger(form.currentVolume) ?? undefined,
     keywords: parseKeywords(form.keywords),
     targetAudience: form.targetAudience.trim() || undefined,
-    serializationStatus: (["draft", "serializing", "completed", "hiatus"] as const).includes(form.serializationStatus as any)
-      ? (form.serializationStatus as "draft" | "serializing" | "completed" | "hiatus")
+    serializationStatus: isSerializationStatus(form.serializationStatus)
+      ? form.serializationStatus
       : undefined,
   };
 }

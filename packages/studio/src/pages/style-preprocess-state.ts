@@ -235,8 +235,8 @@ export function getPreset(id: PresetId): PreprocessPreset {
 /** Determine if a set of options matches a known preset (returns the preset id or "custom"). */
 export function identifyPreset(preprocess: PreprocessOptions, relayout: RelayoutOptions): PresetId | "custom" {
   for (const preset of PRESETS) {
-    if (shallowEqual(preprocess as any, preset.preprocess as any)
-        && shallowEqual(relayout as any, preset.relayout as any)) {
+    if (shallowEqual(preprocess, preset.preprocess)
+        && shallowEqual(relayout, preset.relayout)) {
       return preset.id;
     }
   }
@@ -369,12 +369,13 @@ export function buildSnapshot(stage: TextStage, text: string): TextStageSnapshot
 // Utility
 // ---------------------------------------------------------------------------
 
-function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+function shallowEqual<T extends object>(a: T, b: T): boolean {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
   if (keysA.length !== keysB.length) return false;
   for (const key of keysA) {
-    if (a[key] !== b[key]) return false;
+    const typedKey = key as keyof T;
+    if (a[typedKey] !== b[typedKey]) return false;
   }
   return true;
 }

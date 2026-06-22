@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useCallback, type ChangeEvent } from "react";
 import { fetchJson, useApi, postApi } from "../../hooks/use-api";
-import type { TFunction } from "../../hooks/use-i18n";
+import type { StringKey, TFunction } from "../../hooks/use-i18n";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
 import type { PresetId, InspectionResult } from "../style-preprocess-state.js";
 import { computeRemovalStats, requiresConfirmation } from "../style-preprocess-state.js";
@@ -311,8 +311,8 @@ export function useStyleManagerState(t: TFunction) {
     const textToAnalyze = getStageText();
     if (!textToAnalyze.trim()) return;
     setText(textToAnalyze); setSourceName(fileSourceName || "preprocessed-sample"); setProfile(null);
-    const stageKey = analysisStage === "extracted" ? "style.stage.extracted" : analysisStage === "cleaned" ? "style.stage.cleaned" : "style.stage.relayouted";
-    setAnalyzeStatus(`已使用「${t(stageKey as any)}」版本`);
+    const stageKey: StringKey = analysisStage === "extracted" ? "style.stage.extracted" : analysisStage === "cleaned" ? "style.stage.cleaned" : "style.stage.relayouted";
+    setAnalyzeStatus(`已使用「${t(stageKey)}」版本`);
     setActiveTab("diagnose");
   }, [getStageText, fileSourceName, analysisStage, t]);
 

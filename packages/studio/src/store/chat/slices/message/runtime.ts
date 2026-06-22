@@ -28,6 +28,12 @@ const TOOL_LABELS: Record<string, string> = {
   generate_cover: "生成封面",
 };
 
+function isTextContentPart(value: unknown): value is { readonly type: "text"; readonly text?: string } {
+  return typeof value === "object"
+    && value !== null
+    && (value as { readonly type?: unknown }).type === "text";
+}
+
 export function bookKey(bookId: string | null | undefined): string {
   return bookId ?? NULL_BOOK_KEY;
 }
@@ -72,8 +78,8 @@ export function extractToolError(result: unknown): string {
     const record = result as Record<string, unknown>;
     if (typeof record.content === "string") return localizeKnownRuntimeMessage(record.content).slice(0, 500);
     if (record.content && Array.isArray(record.content)) {
-      const textPart = record.content.find((content: any) => content.type === "text");
-      if (textPart) return localizeKnownRuntimeMessage((textPart as any).text ?? "").slice(0, 500);
+      const textPart = record.content.find(isTextContentPart);
+      if (textPart) return localizeKnownRuntimeMessage(textPart.text ?? "").slice(0, 500);
     }
   }
   return localizeKnownRuntimeMessage(String(result)).slice(0, 500);
@@ -167,7 +173,7 @@ export function deserializeMessages(
   return msgs
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => {
-      const toolExecutions = (message as any).toolExecutions as ToolExecution[] | undefined;
+      const toolExecutions = message.toolExecutions ? [...message.toolExecutions] : undefined;
       const parts: MessagePart[] = [];
       if (message.thinking) parts.push({ type: "thinking", content: message.thinking, streaming: false });
       if (toolExecutions) {

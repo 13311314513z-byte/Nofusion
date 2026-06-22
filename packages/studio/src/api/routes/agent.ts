@@ -12,7 +12,6 @@ import {
   resolveServiceModel, loadSecrets, listModelsForService,
   runAgentSession, SessionAlreadyMigratedError, migrateBookSession,
   PipelineRunner,
-  type ResolvedModel,
 } from "@actalk/inkos-core";
 import { withPipeline } from "../shared/pipeline.js";
 import {
@@ -113,7 +112,7 @@ export function registerAgentRoutes(ctx: ServerContext): void {
       }
 
       // Resolve model
-      let resolvedModel: ResolvedModel["model"] | undefined;
+      let resolvedModel: Parameters<typeof runAgentSession>[0]["model"] | undefined;
       let resolvedApiKey: string | undefined;
       let configuredEntry: Awaited<ReturnType<typeof resolveConfiguredServiceEntry>>;
 
@@ -124,8 +123,9 @@ export function registerAgentRoutes(ctx: ServerContext): void {
             await resolveConfiguredServiceBaseUrl(root, reqService), configuredEntry?.apiFormat);
           resolvedModel = resolved.model;
           resolvedApiKey = resolved.apiKey;
-        } catch (e: any) {
-          if (/API key/i.test(e?.message ?? "")) {
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          if (/API key/i.test(message)) {
             return c.json({ error: `请先为 ${reqService} 配置 API Key`, response: `请先在模型配置中为 ${reqService} 填写 API Key，然后再试。` }, 400);
           }
           throw e;
@@ -165,8 +165,8 @@ export function registerAgentRoutes(ctx: ServerContext): void {
       }
 
       if (!resolvedModel) {
-        resolvedModel = (client as any)._piModel ?? { provider: config.llm.provider ?? "anthropic", modelId: config.llm.model };
-        resolvedApiKey = (client as any)._apiKey;
+        resolvedModel = client._piModel ?? { provider: config.llm.provider ?? "anthropic", modelId: config.llm.model };
+        resolvedApiKey = client._apiKey;
       }
 
       const model = resolvedModel!;
@@ -180,14 +180,14 @@ export function registerAgentRoutes(ctx: ServerContext): void {
             ...(configuredEntry?.apiFormat ? { apiFormat: configuredEntry.apiFormat } : {}),
             ...(configuredEntry?.stream !== undefined ? { stream: configuredEntry.stream } : {}),
             baseUrl: configuredEntry?.baseUrl ?? "",
-          } as any)
+          })
         : client;
 
       const pipeline = new PipelineRunner(await buildPipelineConfig({
         client: pipelineClient, model: reqModel ?? config.llm.model,
         currentConfig: config, sessionIdForSSE: bookSession.sessionId,
       }));
-      const disposePipeline = () => { if (typeof (pipeline as any).dispose === "function") (pipeline as any).dispose(); };
+      const disposePipeline = () => { pipeline.dispose(); };
 
       try {
         // Direct write-next shortcut
@@ -225,7 +225,7 @@ export function registerAgentRoutes(ctx: ServerContext): void {
             if (event.type === "message_update") {
               const ame = event.assistantMessageEvent;
               if (ame.type === "text_delta") broadcast("draft:delta", { sessionId: streamSessionId, text: ame.delta });
-              else if (ame.type === "thinking_delta") broadcast("thinking:delta", { sessionId: streamSessionId, text: (ame as any).delta });
+              else if (ame.type === "thinking_delta") broadcast("thinking:delta", { sessionId: streamSessionId, text: ame.delta });
               else if (ame.type === "thinking_start") broadcast("thinking:start", { sessionId: streamSessionId });
               else if (ame.type === "thinking_end") broadcast("thinking:end", { sessionId: streamSessionId });
             }
@@ -296,7 +296,7 @@ export function registerAgentRoutes(ctx: ServerContext): void {
             baseUrl: configuredEntry?.baseUrl ?? "",
             ...(configuredEntry?.apiFormat ? { apiFormat: configuredEntry.apiFormat } : {}),
             ...(configuredEntry?.stream !== undefined ? { stream: configuredEntry.stream } : {}),
-          } as any);
+          });
           const { chatCompletion: fallbackChat } = await import("@actalk/inkos-core");
           const { buildAgentSystemPrompt: fallbackPrompt } = await import("@actalk/inkos-core");
 

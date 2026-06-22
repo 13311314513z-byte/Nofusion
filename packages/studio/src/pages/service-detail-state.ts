@@ -3,6 +3,8 @@ import { fetchJson } from "../hooks/use-api";
 export interface ServiceDetailModelInfo {
   readonly id: string;
   readonly name?: string;
+  readonly maxOutput?: number;
+  readonly contextWindow?: number;
 }
 
 export interface ServiceDetailDetectedConfig {

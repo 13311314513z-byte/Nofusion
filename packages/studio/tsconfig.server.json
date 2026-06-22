@@ -8,5 +8,11 @@
     "noEmit": false
   },
   "include": ["src/api", "src/shared/**/*.ts"],
-  "exclude": ["src/api/**/*.test.ts", "src/shared/source-utils.ts", "src/shared/extract-adapter.ts", "src/shared/api-client-utils.ts"]
+  "exclude": [
+    "src/api/**/*.test.ts",
+    "src/api/**/__tests__/**/*.ts",
+    "src/shared/source-utils.ts",
+    "src/shared/extract-adapter.ts",
+    "src/shared/api-client-utils.ts"
+  ]
 }

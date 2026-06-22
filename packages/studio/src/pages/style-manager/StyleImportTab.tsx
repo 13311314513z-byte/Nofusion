@@ -1,10 +1,34 @@
 import { StyleTextTab } from "../StyleTextTab.js";
 import { BarChart3, AlertTriangle } from "lucide-react";
-import type { TFunction } from "../../hooks/use-i18n";
+import type { StringKey, TFunction } from "../../hooks/use-i18n";
 import type { CoreStyleProfile, ExtractedDoc, BookSummary } from "../style-types.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import type { InspectionResult } from "../style-preprocess-state.js";
+import type { InspectionCode, InspectionResult } from "../style-preprocess-state.js";
 import { computeRemovalStats } from "../style-preprocess-state.js";
+
+const INSPECTION_MESSAGE_KEYS = {
+  "explicit-think-block": "style.inspect.explicitThinkBlock",
+  "similar-paragraphs": "style.inspect.similarParagraphs",
+  "repeated-phrase": "style.inspect.repeatedPhrase",
+  "mixed-language": "style.inspect.mixedLanguage",
+  "encoded-data": "style.inspect.encodedData",
+  "asr-marker": "style.inspect.asrMarker",
+  "translation-pair": "style.inspect.translationPair",
+  "quote-block": "style.inspect.quoteBlock",
+  "rp-marker": "style.inspect.rpMarker",
+  "high-whitespace": "style.inspect.highWhitespace",
+  "possible-garbled-text": "style.inspect.possibleGarbledText",
+  "duplicate-parallelism": "style.inspect.duplicate-parallelism",
+  "duplicate-metaphor": "style.inspect.duplicate-metaphor",
+  "duplicate-personification": "style.inspect.duplicate-personification",
+  "duplicate-repetition": "style.inspect.duplicate-repetition",
+  "duplicate-transition": "style.inspect.duplicate-transition",
+  "duplicate-hyperbole": "style.inspect.duplicate-hyperbole",
+  "duplicate-rhetorical-question": "style.inspect.duplicate-rhetorical-question",
+  "duplicate-anaphora": "style.inspect.duplicate-anaphora",
+  "duplicate-epistrophe": "style.inspect.duplicate-epistrophe",
+  "duplicate-parallel-structure": "style.inspect.duplicate-parallel-structure",
+} satisfies Record<InspectionCode, StringKey>;
 
 interface StyleImportTabProps {
   // Shared text state
@@ -193,7 +217,7 @@ export function StyleImportTab(props: StyleImportTabProps) {
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={filterNoiseMarkers} onChange={(e) => { setFilterNoiseMarkers(e.target.checked); setActivePreset("custom"); }} /><span>{t("style.filterNoiseMarkers")}</span></label>
                 </div>
                 <div className="flex items-center gap-2 text-xs"><span>{t("style.minLineLength")}</span><input type="number" min={0} max={100} value={minLineLength} onChange={(e) => { setMinLineLength(Math.max(0, Math.min(100, Number(e.target.value) || 0))); setActivePreset("custom"); }} className="w-16 px-1.5 py-0.5 rounded border border-border bg-background text-xs text-right" /><span className="text-muted-foreground">(0 = {t("common.off")})</span></div>
-                {inspectionResult && inspectionResult.findings.length > 0 && (<div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"><div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"><AlertTriangle className="w-3.5 h-3.5" />{t("style.inspect.title")}（{inspectionResult.findings.length}）</div>{inspectionResult.findings.map((f, i) => (<div key={i} className="text-xs text-amber-600 dark:text-amber-500">{f.count > 1 ? `${t(f.messageKey as any)}（${f.count} 处）` : t(f.messageKey as any)}</div>))}</div>)}
+                {inspectionResult && inspectionResult.findings.length > 0 && (<div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"><div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"><AlertTriangle className="w-3.5 h-3.5" />{t("style.inspect.title")}（{inspectionResult.findings.length}）</div>{inspectionResult.findings.map((f, i) => (<div key={i} className="text-xs text-amber-600 dark:text-amber-500">{f.count > 1 ? `${t(INSPECTION_MESSAGE_KEYS[f.code])}（${f.count} 处）` : t(INSPECTION_MESSAGE_KEYS[f.code])}</div>))}</div>)}
                 {preprocessActions.length > 0 && (<div className="space-y-1">{preprocessActions.map((a, i) => (<div key={i} className="text-xs text-muted-foreground">✓ {a}</div>))}</div>)}
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleRunPreprocess(extractedDoc?.text || fileText)} disabled={!(extractedDoc?.text || fileText).trim() || loading} className={`px-3 py-1.5 text-xs rounded-lg ${c.btnPrimary} disabled:opacity-30`}>{t("style.runPreprocess")}</button>

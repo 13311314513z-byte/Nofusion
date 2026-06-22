@@ -6,7 +6,7 @@
  *   - Total JS:   < 18,000 KB (includes all async chunks)
  *   - Total CSS:  < 300 KB
  *   - Max chunk:  < 1,700 KB (critical path only; streamdown/mermaid ~1.6MB)
- *   - Total dist: < 15,500 KB (temporarily raised from 15,000; P0-B fix pending shiki lazy-load completion)
+ *   - Total dist: < 15,500 KB
  */
 
 import { readdir, stat } from "node:fs/promises";
@@ -18,7 +18,7 @@ const LIMITS = {
   maxTotalJS: 18_000_000,
   maxTotalCSS: 300_000,
   maxChunk: 1_700_000,
-  maxTotalDist: 16_500_000,  // P0-3: temporarily 16,500KB; revert to 15,000KB after shiki lazy-load + streamdown chunk split verified
+  maxTotalDist: 15_500_000,
 };
 
 async function collectFiles(dir) {

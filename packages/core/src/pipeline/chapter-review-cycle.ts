@@ -1,6 +1,6 @@
 import type { AuditIssue, AuditResult } from "../agents/continuity.js";
 import { IssueNormalizer } from "../agents/issue-normalizer.js";
-import { createIssue, resolveAuditIssue } from "../models/audit-issue.js";
+import { createIssue, hasAuditIssueParagraphLocation, resolveAuditIssue } from "../models/audit-issue.js";
 import { checkPatchBoundary, issueLocationsToParagraphSet } from "../utils/patch-boundary.js";
 import type { ReviseMode, ReviseOutput } from "../agents/reviser.js";
 import type { WriteChapterOutput } from "../agents/writer.js";
@@ -267,12 +267,7 @@ export async function runChapterReviewCycle(params: {
       // Patch boundary check: verify the auto-revision only modified targeted paragraphs.
       // This mirrors the check in runner.ts reviseDraft() for manual revisions.
       {
-        const issuesWithLocation = currentAudit.auditResult.issues.filter(
-          (i): i is typeof i & { location: { startParagraph: number; endParagraph: number } } =>
-            "location" in i &&
-            (i as any).location?.startParagraph > 0 &&
-            (i as any).location?.endParagraph > 0,
-        );
+        const issuesWithLocation = currentAudit.auditResult.issues.filter(hasAuditIssueParagraphLocation);
         if (issuesWithLocation.length > 0) {
           const targetSet = issueLocationsToParagraphSet(issuesWithLocation.map((i) => i.location));
           const splitParagraphs = (text: string) => text

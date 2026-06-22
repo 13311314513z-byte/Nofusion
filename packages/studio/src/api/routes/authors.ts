@@ -302,10 +302,14 @@ export function registerAuthorsRoutes(ctx: ServerContext): void {
       const { saveDistillationOverrides, loadCurrentDistillation, saveDistillationDraft,
         generateDistillation, getAuthorProfile, loadDistillationEvidence,
       } = await import("@actalk/inkos-core");
+      type DistillationRule = import("@actalk/inkos-core").DistillationRule;
       if (!body.overrides || !Array.isArray(body.overrides)) {
         return c.json({ error: "overrides array is required" }, 400);
       }
-      await saveDistillationOverrides(prjRoot, authorId, body.overrides as any);
+      const overrides = body.overrides.filter((override): override is DistillationRule =>
+        typeof override === "object" && override !== null,
+      );
+      await saveDistillationOverrides(prjRoot, authorId, overrides);
       const authorData = await getAuthorProfile(prjRoot, authorId);
       if (!authorData) return c.json({ error: "Author not found" }, 404);
       const evidence = await loadDistillationEvidence(prjRoot, authorId);

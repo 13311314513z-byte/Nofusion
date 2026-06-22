@@ -1,6 +1,12 @@
 import type { NotifyChannel } from "../models/project.js";
 import type { WebhookPayload } from "./webhook.js";
 
+declare global {
+  // Optional hook installed by the Studio runtime when it wants core
+  // notification failures mirrored into the in-app log buffer.
+  var __inkosLogBuffer: ((level: "error", message: string, timestamp: string) => void) | undefined;
+}
+
 export interface NotifyMessage {
   readonly title: string;
   readonly body: string;
@@ -65,9 +71,9 @@ export async function dispatchNotification(
       const msg = `[notify] ${channel.type} failed: ${e instanceof Error ? e.message : String(e)}`;
       process.stderr.write(msg + "\n");
       // Route to application log buffer if available
-      if (typeof globalThis !== "undefined" && (globalThis as any).__inkosLogBuffer) {
+      if (typeof globalThis !== "undefined" && globalThis.__inkosLogBuffer) {
         try {
-          (globalThis as any).__inkosLogBuffer("error", msg, new Date().toISOString());
+          globalThis.__inkosLogBuffer("error", msg, new Date().toISOString());
         } catch {
           // fallback to stderr
         }

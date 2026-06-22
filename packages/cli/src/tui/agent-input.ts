@@ -3,6 +3,8 @@ import {
   clearPendingDecision,
   createLLMClient,
   runAgentSession,
+  type AgentSessionConfig,
+  type AgentSessionResult,
   type InteractionSession,
 } from "@actalk/inkos-core";
 import { persistProjectSession } from "./session-store.js";
@@ -117,7 +119,7 @@ export async function processTuiAgentInput(params: {
         ? client._piModel
         : { provider: config.llm.provider ?? "openai", modelId: config.llm.model },
       apiKey: client._apiKey,
-      onEvent: (event: any) => {
+      onEvent: (event: Parameters<NonNullable<AgentSessionConfig["onEvent"]>>[0]) => {
         if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
           params.onTextDelta?.(event.assistantMessageEvent.delta);
         }
@@ -130,7 +132,12 @@ export async function processTuiAgentInput(params: {
   const activeBookId = createdBookId ?? resolvedBookId;
 
   if (result.responseText?.trim()) {
-    const lastAssistant = result.messages.filter((message: any) => message.role === "assistant").pop() as { thinking?: string } | undefined;
+    const lastAssistant = result.messages
+      .filter((message): message is Extract<AgentSessionResult["messages"][number], { role: "assistant" }> =>
+        message.role === "assistant",
+      )
+      .pop();
+    const thinking = lastAssistant?.content.find((part) => part.type === "thinking")?.thinking;
     nextSession = appendInteractionMessage({
       ...nextSession,
       ...(activeBookId ? { activeBookId } : {}),
@@ -143,7 +150,7 @@ export async function processTuiAgentInput(params: {
     }, {
       role: "assistant",
       content: result.responseText,
-      ...(lastAssistant?.thinking ? { thinking: lastAssistant.thinking } : {}),
+      ...(thinking ? { thinking } : {}),
       timestamp: userTimestamp + 1,
     });
   } else {

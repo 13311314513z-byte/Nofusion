@@ -122,6 +122,18 @@ export function resolveAuditIssue(
   };
 }
 
+export function hasAuditIssueParagraphLocation(
+  issue: AuditIssue,
+): issue is AuditIssue & { readonly location: NonNullable<AuditIssue["location"]> } {
+  return Boolean(
+    issue.location
+      && Number.isInteger(issue.location.startParagraph)
+      && Number.isInteger(issue.location.endParagraph)
+      && issue.location.startParagraph > 0
+      && issue.location.endParagraph >= issue.location.startParagraph,
+  );
+}
+
 function inferFixScope(issue: AuditIssue): ResolvedAuditIssue["fixScope"] {
   if (issue.location) return "paragraph";
   if (issue.severity === "critical") return "chapter";

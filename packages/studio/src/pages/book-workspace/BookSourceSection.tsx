@@ -2,7 +2,7 @@ import { useState } from "react";
 import { fetchJson, useApi } from "../../hooks/use-api";
 import { Trash2, AlertCircle, Database, CheckCircle, X, Upload } from "lucide-react";
 import type { Theme } from "../../hooks/use-theme";
-import type { TFunction } from "../../hooks/use-i18n";
+import type { StringKey, TFunction } from "../../hooks/use-i18n";
 
 interface SourceEntry {
   readonly sourceId: string;
@@ -24,6 +24,26 @@ const PURPOSE_OPTIONS = [
   { value: "rule", label: "规则" },
   { value: "style", label: "文风" },
 ];
+
+const SOURCE_PURPOSE_KEYS = {
+  auto: "sources.purpose.auto",
+  world: "sources.purpose.world",
+  character: "sources.purpose.character",
+  era: "sources.purpose.era",
+  plot: "sources.purpose.plot",
+  chapter: "sources.purpose.chapter",
+  rule: "sources.purpose.rule",
+  style: "sources.purpose.style",
+} satisfies Record<string, StringKey>;
+
+type SourcePurpose = keyof typeof SOURCE_PURPOSE_KEYS;
+
+function sourcePurposeLabel(t: TFunction, purpose: string): string {
+  if (purpose in SOURCE_PURPOSE_KEYS) {
+    return t(SOURCE_PURPOSE_KEYS[purpose as SourcePurpose]);
+  }
+  return purpose;
+}
 
 interface BookSourceSectionProps {
   readonly bookId: string;
@@ -121,7 +141,7 @@ export function BookSourceSection({ bookId, t }: BookSourceSectionProps) {
             {data.sources.map((entry) => (
               <tr key={entry.sourceId} className="border-b border-gray-800">
                 <td className="py-2">{entry.sourceName}</td>
-                <td className="py-2">{t(`sources.purpose.${entry.purpose}` as any)}</td>
+                <td className="py-2">{sourcePurposeLabel(t, entry.purpose)}</td>
                 <td className="py-2 text-right">{entry.charCount.toLocaleString()}</td>
                 <td className="py-2 text-xs">{new Date(entry.importedAt).toLocaleDateString()}</td>
                 <td className="py-2 text-center">

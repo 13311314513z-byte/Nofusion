@@ -11,20 +11,42 @@ export function registerRhetoricRoutes(ctx: ServerContext): void {
     if (!raw.text?.trim()) return c.json({ error: "text is required" }, 400);
     try {
       const { buildDedupePrompt, detectDuplicateRhetoric } = await import("@actalk/inkos-core");
-      let findings: unknown[] | undefined;
+      type DedupeFinding = Parameters<typeof buildDedupePrompt>[1][number];
+      type DedupeMode = Parameters<typeof buildDedupePrompt>[2];
+      let findings: ReadonlyArray<DedupeFinding> | undefined;
       if (Array.isArray(raw.findings)) {
-        findings = raw.findings;
+        findings = raw.findings.filter((finding): finding is DedupeFinding => {
+          if (!finding || typeof finding !== "object") return false;
+          const record = finding as Record<string, unknown>;
+          return typeof record.category === "string"
+            && typeof record.id === "string"
+            && typeof record.label === "string"
+            && typeof record.count === "number"
+            && typeof record.perThousandChars === "number"
+            && typeof record.severity === "string"
+            && typeof record.confidence === "number"
+            && Array.isArray(record.examples)
+            && Array.isArray(record.ranges);
+        });
       } else if (Array.isArray(raw.categories) && raw.categories.length) {
-        findings = raw.categories.map((cat) => ({
-          category: cat, label: cat, count: 0, perThousandChars: 0,
-          severity: "low" as const, examples: [] as Array<{ text: string }>,
+        findings = raw.categories.map((cat): DedupeFinding => ({
+          id: `manual-${cat}`,
+          category: cat as DedupeFinding["category"],
+          label: cat,
+          count: 0,
+          perThousandChars: 0,
+          severity: "low" as const,
+          confidence: 1,
+          examples: [] as Array<{ text: string; lineNumber: number }>,
+          ranges: [],
         }));
       } else {
         const detected = detectDuplicateRhetoric(raw.text, "zh");
-        findings = detected?.findings as unknown[] | undefined;
+        findings = detected?.findings;
       }
       if (!Array.isArray(findings)) return c.json({ error: "findings must be an array" }, 400);
-      const prompt = buildDedupePrompt(raw.text, findings as any[], (raw.mode ?? "replace") as any);
+      const mode: DedupeMode = raw.mode === "delete" || raw.mode === "redistribute" ? raw.mode : "replace";
+      const prompt = buildDedupePrompt(raw.text, findings, mode);
       return c.json({ prompt });
     } catch (e) { return c.json({ error: String(e) }, 500); }
   });

@@ -22,5 +22,8 @@ export default defineConfig({
     },
     // Increase timeout for server.test.ts which makes real HTTP calls
     testTimeout: 30_000,
+    // Automatically reset all mocks before each test to ensure isolation
+    // within split test files that share mocked modules
+    mockReset: true,
   },
 });

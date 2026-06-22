@@ -60,8 +60,12 @@ export function extractToolError(result: unknown): string {
     const r = result as Record<string, unknown>;
     if (typeof r.content === "string") return r.content.slice(0, 500);
     if (r.content && Array.isArray(r.content)) {
-      const textPart = r.content.find((c: any) => c.type === "text");
-      if (textPart) return (textPart as any).text?.slice(0, 500) ?? "";
+      const textPart = r.content.find((item): item is { readonly type: "text"; readonly text?: string } =>
+        typeof item === "object"
+          && item !== null
+          && (item as { readonly type?: unknown }).type === "text",
+      );
+      if (textPart) return textPart.text?.slice(0, 500) ?? "";
     }
   }
   return String(result).slice(0, 500);

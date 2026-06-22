@@ -80,25 +80,25 @@ export function AutomationGuide({ nav, theme, t }: { nav: Nav; theme: Theme; t: 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <button onClick={nav.toDashboard} className={c.link}>{t("bread.home")}</button>
         <span className="text-border">/</span>
-        <span>{t("nav.automation" as any)}</span>
+        <span>{t("nav.automation")}</span>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-primary/10 text-primary">
           <Zap size={20} />
         </div>
-        <h1 className="font-serif text-3xl">{t("automation.title" as any)}</h1>
+        <h1 className="font-serif text-3xl">{t("automation.title")}</h1>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {t("automation.desc" as any)}
+        {t("automation.desc")}
       </p>
 
       {/* Webhook Payloads */}
       <div className={`border ${c.cardStatic} rounded-xl overflow-hidden`}>
         <div className="px-6 py-4 border-b border-border/40 bg-muted/30 flex items-center gap-2">
           <Webhook size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.webhookPayloads" as any)}</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.webhookPayloads")}</h2>
         </div>
         <div className="p-6 space-y-6">
           {WEBHOOK_PAYLOADS.map((item) => (
@@ -118,7 +118,7 @@ export function AutomationGuide({ nav, theme, t }: { nav: Nav; theme: Theme; t: 
       <div className={`border ${c.cardStatic} rounded-xl overflow-hidden`}>
         <div className="px-6 py-4 border-b border-border/40 bg-muted/30 flex items-center gap-2">
           <Terminal size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.cliJson" as any)}</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.cliJson")}</h2>
         </div>
         <div className="p-6 space-y-4">
           {CLI_COMMANDS.map((cmd) => (
@@ -136,7 +136,7 @@ export function AutomationGuide({ nav, theme, t }: { nav: Nav; theme: Theme; t: 
       <div className={`border ${c.cardStatic} rounded-xl overflow-hidden`}>
         <div className="px-6 py-4 border-b border-border/40 bg-muted/30 flex items-center gap-2">
           <CheckSquare size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.checklist" as any)}</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider">{t("automation.checklist")}</h2>
         </div>
         <div className="p-6 space-y-6">
           {CHECKLIST.map((item) => (

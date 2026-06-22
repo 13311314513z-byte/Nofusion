@@ -5,26 +5,32 @@ import { tmpdir } from "node:os";
 
 // Simulate pi-ai returning MiniMax's stale Anthropic-compatible route.
 // Our resolveServiceModel should override it with the current OpenAI-compatible preset.
-vi.mock("@mariozechner/pi-ai", () => ({
-  getModel: vi.fn((provider: string, modelId: string) => {
-    if (modelId === "MiniMax-M2.7") {
-      return {
-        id: "MiniMax-M2.7",
-        name: "MiniMax-M2.7",
-        api: "anthropic-messages",        // stale pi-ai metadata
-        provider: "minimax",
-        baseUrl: "https://api.minimax.io/anthropic",
-        reasoning: true,
-        input: ["text"],
-        cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 },
-        contextWindow: 204800,
-        maxTokens: 131072,
-      };
-    }
-    return undefined;
-  }),
-  getEnvApiKey: vi.fn(() => undefined),
-}));
+// Note: pi-ai maps minimax -> providerFamily "openai", so the stale minimax model
+// is registered under the "openai" provider.
+vi.mock("@mariozechner/pi-ai", () => {
+  const ALL_MODELS = [
+    {
+      id: "MiniMax-M2.7",
+      name: "MiniMax-M2.7",
+      api: "anthropic-messages",        // stale pi-ai metadata
+      provider: "openai",               // pi-ai registers minimax models under "openai"
+      baseUrl: "https://api.minimax.io/anthropic",
+      reasoning: true,
+      input: ["text"],
+      cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 },
+      contextWindow: 204800,
+      maxTokens: 131072,
+    } as any,
+  ];
+  return {
+    getModels: vi.fn((provider: string) => ALL_MODELS.filter((m: any) => m.provider === provider)),
+    getProviders: vi.fn(() => ["openai", "moonshot", "minimax"]),
+    getModel: vi.fn((provider: string, modelId: string) => {
+      return ALL_MODELS.find((m: any) => m.id === modelId && m.provider === provider);
+    }),
+    getEnvApiKey: vi.fn(() => undefined),
+  };
+});
 
 import { resolveServiceModel } from "../llm/service-resolver.js";
 

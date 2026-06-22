@@ -58,7 +58,7 @@ export function StyleDiagnoseTab({
         </button>
       </div>
       {renderProfileCard(profile, true)}
-      {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} text={text} t={t as any} />}
+      {diagnostics && <StyleDiagnosticsPanel diagnostics={diagnostics} text={text} t={t} />}
 
       {/* Style drift score — shown when source is a book */}
       {importBookId && (

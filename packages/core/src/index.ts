@@ -722,6 +722,7 @@ export { importFanficCanon } from "./pipeline/pipeline-fanfic.js";
 export { Scheduler, type SchedulerConfig } from "./pipeline/scheduler.js";
 export { runAgentLoop, AGENT_TOOLS as AGENT_TOOLS, type AgentLoopOptions } from "./pipeline/agent.js";
 export { detectChapter, detectAndRewrite, loadDetectionHistory, type DetectChapterResult, type DetectAndRewriteResult } from "./pipeline/detection-runner.js";
+export { runAgentSession, evictAgentCache, type AgentSessionConfig, type AgentSessionResult } from "./agent/agent-session.js";
 
 // Pipeline Stages (extracted from PipelineRunner)
 export {

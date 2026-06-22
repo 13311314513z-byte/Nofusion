@@ -9,10 +9,32 @@ import {
   buildFoundationSourceBundle,
   isDocumentFileType,
   isFoundationSourcePurpose,
+  type ArchitectOutput,
   type ChapterImportPlan,
+  type FoundationSourceBundle,
   type FoundationSourceInput,
 } from "@actalk/inkos-core";
 import { randomUUID } from "node:crypto";
+
+interface FoundationImportPlan {
+  readonly bookId: string;
+  readonly mode: "supplement" | "rebuild";
+  readonly proposed: ArchitectOutput;
+  readonly foundationRevision: string;
+  readonly sourceBundle?: FoundationSourceBundle;
+  readonly expiresAt: number;
+}
+
+function isFoundationImportPlan(value: unknown): value is FoundationImportPlan {
+  if (!value || typeof value !== "object") return false;
+  const plan = value as Record<string, unknown>;
+  return typeof plan.bookId === "string"
+    && (plan.mode === "supplement" || plan.mode === "rebuild")
+    && typeof plan.proposed === "object"
+    && plan.proposed !== null
+    && typeof plan.foundationRevision === "string"
+    && typeof plan.expiresAt === "number";
+}
 
 export function registerImportRoutes(ctx: ServerContext): void {
   const { app, root, state: stateManager, broadcast, buildPipelineConfig } = ctx;
@@ -184,9 +206,8 @@ export function registerImportRoutes(ctx: ServerContext): void {
     const { planId } = await c.req.json<{ planId?: string }>();
     if (!planId) return c.json({ error: "planId is required" }, 400);
     await ctx.foundationPlansPromise;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const plan = ctx.foundationPlans.get(planId) as any;
-    if (!plan || plan.bookId !== id || plan.expiresAt < Date.now()) {
+    const plan = ctx.foundationPlans.get(planId);
+    if (!isFoundationImportPlan(plan) || plan.bookId !== id || plan.expiresAt < Date.now()) {
       ctx.foundationPlans.delete(planId);
       ctx.removePersistedFoundationPlan(root, planId).catch((e) => {
         console.error("[studio] Failed to remove expired foundation plan:", e);

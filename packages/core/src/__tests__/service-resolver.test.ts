@@ -7,39 +7,23 @@ import { tmpdir } from "node:os";
 // Models that exist in pi-ai's built-in registry (simulated)
 const KNOWN_MODELS = new Set(["gpt-4o", "kimi-k2.5", "MiniMax-M2.7"]);
 
-// Mock pi-ai's getModel — returns undefined for models not in registry (like the real implementation)
-vi.mock("@mariozechner/pi-ai", () => ({
-  getModel: vi.fn((provider: string, modelId: string) => {
-    if (!KNOWN_MODELS.has(modelId)) return undefined;
-    if (modelId === "MiniMax-M2.7" && provider === "anthropic") {
-      return {
-        id: modelId,
-        name: modelId,
-        api: "anthropic-messages",
-        provider: "anthropic",
-        baseUrl: "https://api.minimaxi.com/anthropic",
-        reasoning: true,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 204800,
-        maxTokens: 131072,
-      };
-    }
-    return {
-      id: modelId,
-      name: modelId,
-      api: "openai-completions",
-      provider,
-      baseUrl: "https://api.openai.com/v1",
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128000,
-      maxTokens: 16384,
-    };
-  }),
-  getEnvApiKey: vi.fn(() => undefined),
-}));
+// Mock pi-ai — simulate built-in model registry
+vi.mock("@mariozechner/pi-ai", () => {
+  const ALL_MODELS = [
+    { id: "gpt-4o", api: "openai-completions", provider: "openai", baseUrl: "https://api.openai.com/v1", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 } as any,
+    { id: "kimi-k2.5", api: "openai-completions", provider: "moonshot", baseUrl: "https://api.moonshot.cn/v1", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 } as any,
+    { id: "MiniMax-M2.7", api: "openai-completions", provider: "minimax", baseUrl: "https://api.minimaxi.com/v1", reasoning: true, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 204800, maxTokens: 131072 } as any,
+    { id: "MiniMax-M2.7", api: "anthropic-messages", provider: "anthropic", baseUrl: "https://api.minimaxi.com/anthropic", reasoning: true, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 204800, maxTokens: 131072 } as any,
+  ];
+  return {
+    getModels: vi.fn((provider: string) => ALL_MODELS.filter((m: any) => m.provider === provider)),
+    getProviders: vi.fn(() => ["openai", "moonshot", "minimax", "anthropic"]),
+    getModel: vi.fn((provider: string, modelId: string) => {
+      return ALL_MODELS.find((m: any) => m.id === modelId && m.provider === provider);
+    }),
+    getEnvApiKey: vi.fn(() => undefined),
+  };
+});
 
 import { resolveServiceModel } from "../llm/service-resolver.js";
 

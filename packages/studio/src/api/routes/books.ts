@@ -7,6 +7,7 @@ import {
   persistFoundationSourceBundle,
   createInteractionToolsFromDeps,
   processProjectInteractionRequest,
+  type BookConfig,
   type FoundationSourceBundle,
 } from "@actalk/inkos-core";
 import type { ServerContext } from "../server-context.js";
@@ -31,8 +32,7 @@ const bookCreateStatus = new Map<string, BookCreateJob>();
 function withPipeline(
   label: string,
   pipelineConfig: Record<string, unknown>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (pipeline: any) => Promise<void>,
+  fn: (pipeline: PipelineRunner) => Promise<void>,
 ): Promise<void> {
   const pipeline = new PipelineRunner(pipelineConfig as never);
   return fn(pipeline).catch((e: unknown) => {
@@ -279,9 +279,9 @@ export function registerBooksRoutes(ctx: ServerContext): void {
 
     try {
       const book = await ctx.state.loadBookConfig(id);
-      const updated: Record<string, unknown> = {
+      const updated: BookConfig = {
         ...book,
-        ...(cleanString(body.keywords) !== undefined ? { keywords: cleanString(body.keywords) } : {}),
+        ...(cleanStringArray(body.keywords) !== undefined ? { keywords: cleanStringArray(body.keywords) } : {}),
         ...(cleanNumber(body.chapterWordCount) !== undefined ? { chapterWordCount: cleanNumber(body.chapterWordCount) } : {}),
         ...(cleanNumber(body.targetChapters) !== undefined ? { targetChapters: cleanNumber(body.targetChapters) } : {}),
         ...(cleanNumber(body.volumeCount) !== undefined ? { volumeCount: cleanNumber(body.volumeCount) } : {}),
@@ -293,8 +293,7 @@ export function registerBooksRoutes(ctx: ServerContext): void {
         ...(cleanStringArray(body.genreTags) !== undefined ? { genreTags: cleanStringArray(body.genreTags) } : {}),
         ...(cleanStringArray(body.contentWarnings) !== undefined ? { contentWarnings: cleanStringArray(body.contentWarnings) } : {}),
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await ctx.state.saveBookConfig(id, updated as any);
+      await ctx.state.saveBookConfig(id, updated);
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "Failed to update config" }, 500);

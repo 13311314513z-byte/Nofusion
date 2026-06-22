@@ -14,6 +14,38 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 
+interface SqliteRunResult {
+  readonly lastInsertRowid: number | bigint;
+  readonly changes: number | bigint;
+}
+
+interface SqliteStatement {
+  run(...params: readonly unknown[]): SqliteRunResult;
+  all(...params: readonly unknown[]): unknown[];
+  get(...params: readonly unknown[]): unknown;
+}
+
+interface SqliteDatabase {
+  exec(sql: string): void;
+  prepare(sql: string): SqliteStatement;
+  close(): void;
+}
+
+interface DatabaseSyncConstructor {
+  new(path: string): SqliteDatabase;
+}
+
+function createUnavailableSqliteDatabase(): SqliteDatabase {
+  const throwUnavailable = (): never => {
+    throw new Error("SQLite database is unavailable");
+  };
+  return {
+    exec: throwUnavailable,
+    prepare: throwUnavailable,
+    close: () => undefined,
+  };
+}
+
 const FACT_SELECT_COLUMNS = `
   id,
   subject,
@@ -71,14 +103,13 @@ export interface StoredHook {
 // for intent CRUD operations.
 
 export class MemoryDB {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private db: any;
+  private db: SqliteDatabase = createUnavailableSqliteDatabase();
   private available = false;
 
   constructor(bookDir: string) {
     // node:sqlite requires Node 22+; require() via createRequire for ESM compat
     try {
-      const { DatabaseSync } = require("node:sqlite");
+      const { DatabaseSync } = require("node:sqlite") as { DatabaseSync: DatabaseSyncConstructor };
       const dbPath = join(bookDir, "story", "memory.db");
       this.db = new DatabaseSync(dbPath);
       this.db.exec("PRAGMA journal_mode = WAL");
@@ -90,7 +121,7 @@ export class MemoryDB {
       } catch {
         // Ignore cleanup errors while degrading to the no-op implementation.
       }
-      this.db = undefined;
+      this.db = createUnavailableSqliteDatabase();
       // Graceful degradation: node:sqlite unavailable (Node < 22 or missing build).
       // All operations become no-ops so callers don't need to handle this.
       this.available = false;

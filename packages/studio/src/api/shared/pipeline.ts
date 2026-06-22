@@ -30,9 +30,7 @@ export async function withPipeline<T>(
     return result as T;
   } finally {
     if (timer) clearTimeout(timer);
-    if (typeof (pipeline as any).dispose === "function") {
-      (pipeline as any).dispose();
-    }
+    pipeline.dispose();
   }
 }
 
@@ -95,6 +93,6 @@ export async function withPooledPipeline<T>(
   } finally {
     if (timer) clearTimeout(timer);
     if (p) { p.release(pipeline); }
-    else { if (typeof (pipeline as any).dispose === "function") (pipeline as any).dispose(); }
+    else { pipeline.dispose(); }
   }
 }

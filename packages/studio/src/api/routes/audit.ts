@@ -111,12 +111,32 @@ async function probeServiceCapabilities(opts: { root: string; service: string; a
   return { ok: true, models: [], modelsSource: "api", baseUrl: opts.baseUrl };
 }
 
-async function loadAuditHistory(bookDir: string): Promise<Array<{ chapterNumber: number; timestamp: string; passed?: boolean; overallScore?: number; issueCount?: number; criticalCount?: number; warningCount?: number; infoCount?: number }>> {
+interface AuditHistoryEntry {
+  readonly chapterNumber: number;
+  readonly timestamp: string;
+  readonly passed?: boolean;
+  readonly overallScore?: number;
+  readonly issueCount?: number;
+  readonly criticalCount?: number;
+  readonly warningCount?: number;
+  readonly infoCount?: number;
+}
+
+function isAuditHistoryEntry(value: unknown): value is AuditHistoryEntry {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.chapterNumber === "number"
+    && Number.isFinite(entry.chapterNumber)
+    && typeof entry.timestamp === "string";
+}
+
+async function loadAuditHistory(bookDir: string): Promise<AuditHistoryEntry[]> {
   try {
     const { readFile } = await import("node:fs/promises");
     const { join } = await import("node:path");
     const raw = await readFile(join(bookDir, ".inkos", "audit-history.json"), "utf-8");
-    return JSON.parse(raw) as any[];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isAuditHistoryEntry) : [];
   } catch { return []; }
 }
 

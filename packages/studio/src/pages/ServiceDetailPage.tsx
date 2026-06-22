@@ -437,9 +437,9 @@ export function ServiceDetailPage({ serviceId, nav }: { serviceId: string; nav: 
               >
                 {models.map((model) => {
                   const tags: string[] = [];
-                  if ((model as any).contextWindow >= 32000) tags.push("32k");
-                  if ((model as any).contextWindow >= 128000) tags.push("128k");
-                  if ((model as any).maxOutput >= 4096) tags.push("高输出");
+                  if ((model.contextWindow ?? 0) >= 32000) tags.push("32k");
+                  if ((model.contextWindow ?? 0) >= 128000) tags.push("128k");
+                  if ((model.maxOutput ?? 0) >= 4096) tags.push("高输出");
                   const tagStr = tags.length > 0 ? ` [${tags.join("/")}]` : "";
                   return (
                     <option key={model.id} value={model.id}>
