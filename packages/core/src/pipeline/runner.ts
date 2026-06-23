@@ -1338,7 +1338,6 @@ export class PipelineRunner {
   // ─── Memory index (delegated to runner-memory-index.ts) ────────────────────
 
   private buildMemoryIndexDeps(): MemoryIndexDeps {
-    const self = this;
     return {
       state: this.state,
       config: this.config,
