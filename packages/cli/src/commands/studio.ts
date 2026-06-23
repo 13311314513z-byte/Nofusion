@@ -1,10 +1,10 @@
 import { Command } from "commander";
-import { findProjectRoot, log, logError } from "../utils.js";
 import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
 import { access } from "node:fs/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname,join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ensureProjectDirectoryInitialized } from "../project-bootstrap.js";
+import { findProjectRoot,log,logError } from "../utils.js";
 
 export interface StudioLaunchSpec {
   readonly studioEntry: string;

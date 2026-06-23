@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Plus, RefreshCw, Search, X } from "lucide-react";
-import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, GROUP_SHORT_LABELS } from "../constants/service-groups";
-import { fetchJson } from "../hooks/use-api";
-import { useI18n } from "../hooks/use-i18n";
-import { useServiceStore } from "../store/service";
-import type { EndpointGroup, ServiceInfo } from "../store/service";
-import { ServiceQuickLinks, getServiceQuickLinks } from "../components/ServiceQuickLinks";
+import { Check,Eye,EyeOff,Loader2,Plus,RefreshCw,Search,X } from "lucide-react";
+import { useEffect,useMemo,useState } from "react";
 import { ModelOverridesPanel } from "../components/ModelOverridesPanel";
 import { NotifyConfigPanel } from "../components/NotifyConfigPanel";
+import { ServiceQuickLinks,getServiceQuickLinks } from "../components/ServiceQuickLinks";
+import { GROUP_DESCRIPTIONS,GROUP_LABELS,GROUP_ORDER,GROUP_SHORT_LABELS } from "../constants/service-groups";
+import { fetchJson } from "../hooks/use-api";
+import { useI18n } from "../hooks/use-i18n";
+import type { EndpointGroup,ServiceInfo } from "../store/service";
+import { useServiceStore } from "../store/service";
 
 interface Nav {
   toDashboard: () => void;
@@ -257,7 +257,7 @@ export function ServiceListPage({ nav }: { nav: Nav }) {
   const refreshServices = useServiceStore((s) => s.refreshServices);
   const fetchBankModels = useServiceStore((s) => s.fetchBankModels);
   const fetchCustomModels = useServiceStore((s) => s.fetchCustomModels);
-  const modelsByService = useServiceStore((s) => s.modelsByService);
+  const _modelsByService = useServiceStore((s) => s.modelsByService);
   const bankModelsLoading = useServiceStore((s) => s.bankModelsLoading);
 
   useEffect(() => { void fetchServices(); }, [fetchServices]);

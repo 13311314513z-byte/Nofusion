@@ -1,16 +1,16 @@
-import { BaseAgent } from "./base.js";
-import type { BookConfig, FanficMode } from "../models/book.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import { readGenreProfile } from "./rules-reader.js";
-import { writeFile, mkdir, rm } from "node:fs/promises";
+import { mkdir,rm,writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderHookSnapshot } from "../utils/memory-retrieval.js";
-import {
-  shouldPromoteHook,
-  type PromotionContext,
-  type VolumeBoundary,
-} from "../utils/hook-promotion.js";
+import type { BookConfig,FanficMode } from "../models/book.js";
+import type { GenreProfile } from "../models/genre-profile.js";
 import type { StoredHook } from "../state/memory-db.js";
+import {
+shouldPromoteHook,
+type PromotionContext,
+type VolumeBoundary,
+} from "../utils/hook-promotion.js";
+import { renderHookSnapshot } from "../utils/memory-retrieval.js";
+import { BaseAgent } from "./base.js";
+import { readGenreProfile } from "./rules-reader.js";
 
 // ---------------------------------------------------------------------------
 // Phase 5 (v13) — Static 骨架 layer collapse
@@ -99,6 +99,12 @@ export interface ArchitectOutput {
   readonly volumeMap?: string;
   readonly rhythmPrinciples?: string;
   readonly roles?: ReadonlyArray<ArchitectRole>;
+}
+
+interface SectionMarker {
+  readonly index: number;
+  readonly marker: string;
+  readonly name: string;
 }
 
 export class ArchitectAgent extends BaseAgent {
@@ -610,13 +616,12 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
   // -------------------------------------------------------------------------
   private parseSections(content: string, language: "zh" | "en"): ArchitectOutput {
     const parsedSections = new Map<string, string>();
-    const sectionPattern = /^\s*===\s*SECTION\s*[：:]\s*([^\n=]+?)\s*===\s*$/gim;
-    const matches = [...content.matchAll(sectionPattern)];
+    const matches = this.findSectionMarkers(content);
 
     for (let i = 0; i < matches.length; i++) {
       const match = matches[i]!;
-      const rawName = match[1] ?? "";
-      const start = (match.index ?? 0) + match[0].length;
+      const rawName = match.name;
+      const start = match.index + match.marker.length;
       const end = matches[i + 1]?.index ?? content.length;
       const normalizedName = this.normalizeSectionName(rawName);
       parsedSections.set(normalizedName, content.slice(start, end).trim());
@@ -705,6 +710,51 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
       rhythmPrinciples,
       roles,
     };
+  }
+
+  private findSectionMarkers(content: string): SectionMarker[] {
+    const patterns = [
+      /^\s*===\s*SECTION\s*(?:[：:]\s*)?([^\n=]+?)\s*===\s*$/gim,
+      /^\s*===\s*([a-z][a-z0-9_ -]+?)\s*===\s*$/gim,
+      /^\s{0,3}#{1,3}\s*SECTION\s*(?:[：:]\s*)?([a-z][a-z0-9_ -]+?)\s*$/gim,
+      /^\s{0,3}#{1,3}\s*([a-z][a-z0-9_-]*_[a-z0-9_ -]*?)\s*$/gim,
+      /^\s*SECTION\s*(?:[：:]\s*)?([a-z][a-z0-9_ -]+?)\s*$/gim,
+      /^\s*(?:【|\[)\s*SECTION\s*(?:[：:]\s*)?([a-z][a-z0-9_ -]+?)\s*(?:】|\])\s*$/gim,
+      /^\s*(?:【|\[)\s*([a-z][a-z0-9_-]*_[a-z0-9_ -]*?)\s*(?:】|\])\s*$/gim,
+    ];
+
+    const byPosition = new Map<number, SectionMarker>();
+    for (const pattern of patterns) {
+      for (const match of content.matchAll(pattern)) {
+        const rawName = match[1] ?? "";
+        const name = this.normalizeSectionName(rawName);
+        if (!this.isKnownSectionName(name)) continue;
+        const index = match.index ?? 0;
+        if (!byPosition.has(index)) {
+          byPosition.set(index, {
+            index,
+            marker: match[0],
+            name,
+          });
+        }
+      }
+    }
+
+    return [...byPosition.values()].sort((a, b) => a.index - b.index);
+  }
+
+  private isKnownSectionName(name: string): boolean {
+    return new Set([
+      "story_frame",
+      "volume_map",
+      "roles",
+      "book_rules",
+      "pending_hooks",
+      "story_bible",
+      "volume_outline",
+      "current_state",
+      "rhythm_principles",
+    ]).has(name);
   }
 
   /**
@@ -1022,7 +1072,7 @@ ${continuationDirective}
     fanficMode: FanficMode,
     reviewFeedback?: string,
   ): Promise<ArchitectOutput> {
-    const { profile: gp, body: genreBody } =
+    const { profile: _gp, body: genreBody } =
       await readGenreProfile(this.ctx.projectRoot, book.genre);
     const reviewFeedbackBlock = this.buildReviewFeedbackBlock(reviewFeedback, book.language ?? "zh");
 

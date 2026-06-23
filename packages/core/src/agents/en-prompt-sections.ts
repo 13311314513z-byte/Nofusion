@@ -1,6 +1,5 @@
 import type { BookConfig } from "../models/book.js";
 import type { GenreProfile } from "../models/genre-profile.js";
-import type { BookRules } from "../models/book-rules.js";
 
 // English equivalent of buildCoreRules() — universal writing rules for English fiction
 export function buildEnglishCoreRules(_book: BookConfig): string {

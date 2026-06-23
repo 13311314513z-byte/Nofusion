@@ -1,11 +1,9 @@
-import type { BookCreationDraft, FoundationSourceInput } from "@actalk/inkos-core";
-import { fetchJson, useApi } from "../hooks/use-api";
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
+import type { BookCreationDraft,FoundationSourceInput } from "@actalk/inkos-core";
+import { fetchJson } from "../hooks/use-api";
 import {
-  clearBookCreateSessionId,
-  getBookCreateSessionId,
-  setBookCreateSessionId,
+clearBookCreateSessionId,
+getBookCreateSessionId,
+setBookCreateSessionId,
 } from "./chat-page-state";
 
 const SERIALIZATION_STATUSES = ["draft", "serializing", "completed", "hiatus"] as const;
@@ -56,7 +54,7 @@ export interface DraftSummaryRow {
   readonly value: string;
 }
 
-interface InteractionSessionResponse {
+interface _InteractionSessionResponse {
   readonly session?: {
     readonly activeBookId?: string;
     readonly creationDraft?: BookCreationDraft;
@@ -64,7 +62,7 @@ interface InteractionSessionResponse {
   readonly activeBookId?: string;
 }
 
-interface AgentResponse {
+interface _AgentResponse {
   readonly response?: string;
   readonly error?: string;
   readonly session?: {
@@ -141,7 +139,7 @@ const PLATFORMS_EN: ReadonlyArray<PlatformOption> = [
   { value: "other", label: "Other" },
 ];
 
-const PAGE_COPY: Record<"zh" | "en", PlatformCopy> = {
+const _PAGE_COPY: Record<"zh" | "en", PlatformCopy> = {
   zh: {
     idleTitle: "从一句模糊想法开始",
     idleBody: "先填清楚书名、题材和故事核心，系统会生成基础设定并进入新书工作台。",
@@ -372,7 +370,7 @@ interface WaitForBookReadyOptions {
 
 const DEFAULT_BOOK_READY_MAX_ATTEMPTS = 120;
 const DEFAULT_BOOK_READY_DELAY_MS = 250;
-const CREATION_DRAFT_SYNC_INTERVAL_MS = 2500;
+const _CREATION_DRAFT_SYNC_INTERVAL_MS = 2500;
 
 interface BookCreateSessionOptions {
   readonly fetchSession?: (sessionId: string) => Promise<SessionResponse>;

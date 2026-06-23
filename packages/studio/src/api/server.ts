@@ -1,197 +1,81 @@
+import {
+GLOBAL_ENV_PATH,
+Scheduler,
+StateManager,
+chatCompletion,
+createLLMClient,
+createLogger,
+fetchWithProxy,
+getAllEndpoints,
+loadProjectConfig,
+resolveCoverProviderPreset,
+resolveServiceModelsBaseUrl,
+resolveServicePreset,
+resolveServiceProviderFamily,
+resolveWritingReviewRetries,
+type ArchitectOutput,
+type FoundationSourceBundle,
+type LogEntry,
+type LogSink,
+type PipelineConfig,
+type ProjectConfig
+} from "@actalk/inkos-core";
+import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { streamSSE } from "hono/streaming";
-import { serve } from "@hono/node-server";
-import {
-  StateManager,
-  PipelineRunner,
-  createLLMClient,
-  createLogger,
-  createInteractionToolsFromDeps,
-  computeAnalytics,
-  loadProjectConfig,
-  listFoundationSources,
-  archiveFoundationSource,
-  summarizePendingHookHealth,
-  loadProjectSession,
-  processProjectInteractionRequest,
-  resolveSessionActiveBook,
-  listBookSessions,
-  loadBookSession,
-  appendManualSessionMessages,
-  createAndPersistBookSession,
-  renameBookSession,
-  deleteBookSession,
-  migrateBookSession,
-  SessionAlreadyMigratedError,
-  runAgentSession,
-  buildAgentSystemPrompt,
-  resolveServicePreset,
-  resolveServiceProviderFamily,
-  resolveServiceModelsBaseUrl,
-  resolveServiceModel,
-  resolveWritingReviewRetries,
-  loadSecrets,
-  saveSecrets,
-  setServiceApiKey,
-  listModelsForService,
-  isApiKeyOptionalForEndpoint,
-  getAllEndpoints,
-  probeModelsFromUpstream,
-  fetchWithProxy,
-  chatCompletion,
-  buildExportArtifact,
-  ChapterMetaSchema,
-  GLOBAL_ENV_PATH,
-  COVER_PROVIDER_PRESETS,
-  Scheduler,
-  coverSecretKey,
-  resolveCoverProviderPreset,
-  type ResolvedModel,
-  type PipelineConfig,
-  type ProjectConfig,
-  type LogSink,
-  type LogEntry,
-  type ChapterMeta,
-  listAuthorProfiles,
-  getAuthorProfile,
-  createAuthorProfile,
-  addStyleSource,
-  reanalyzeAuthorProfile,
-  deleteAuthorProfile,
-  deleteStyleSource,
-  saveAuthorDiagnostics,
-  listAuthorDiagnostics,
-  getAuthorDiagnostics,
-  compareWithAuthorProfile,
-  generateAdjustmentPlan,
-  rewriteWithAuthorProfile,
-  extractDocumentFromText,
-  extractDocumentChunked,
-  MAX_CHARS,
-  buildFoundationSourceBundle,
-  isDocumentFileType,
-  isFoundationSourcePurpose,
-  persistFoundationSourceBundle,
-  buildAuthorProfile,
-  planChapterImport,
-  loadChapterGoals,
-  saveChapterGoals,
-  getChapterGoal,
-  upsertChapterGoal,
-  removeChapterGoal,
-  loadChapterIntents,
-  saveChapterIntents,
-  getChapterIntent,
-  upsertChapterIntent,
-  removeChapterIntent,
-  AuthorChapterIntentSchema,
-  buildAuthorIntentBlock,
-  generateSuggestions,
-  type AuthorChapterIntent,
-  listRoleCards,
-  loadRoleCard,
-  saveRoleCard,
-  deleteRoleCard,
-  createRoleCardTemplate,
-  appendAuditHistory,
-  loadAuditHistory,
-  type AuthorStyleProfile,
-  type StyleSourceDocument,
-  type StyleLibraryIndex,
-  type ChapterImportPlan,
-  type ChapterGoalCard,
-  type RoleCard,
-  type RoleTier,
-  type AuditIssue,
-  sendTelegram,
-  sendFeishu,
-  sendWechatWork,
-  sendWebhook,
-  analyzeStyleFingerprint,
-  type StyleFingerprint,
-  type ArchitectOutput,
-  type FoundationSourceBundle,
-  type FoundationSourceInput,
-} from "@actalk/inkos-core";
-import { loadStudioBookListSummary, type StudioBookListSummary } from "./shared/book-helpers.js";
-import { randomUUID } from "node:crypto";
-import { access, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { lookup } from "node:dns/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { isIP } from "node:net";
-import { isSafeBookId } from "./safety.js";
+import { lstat,mkdir,readFile,readdir,rm,stat,writeFile } from "node:fs/promises";
+import { join,resolve,sep } from "node:path";
 import { ApiError } from "./errors.js";
-import { buildStudioBookConfig, type StudioCreateBookBody } from "./book-create.js";
+import { isSafeBookId } from "./safety.js";
 
 // Route modules (extracted from this file to reduce file size)
-import { registerEventsRoutes } from "./routes/events.js";
-import { registerDaemonRoutes } from "./routes/daemon.js";
-import { registerCoverRoutes } from "./routes/cover.js";
-import { registerProjectRoutes } from "./routes/project.js";
-import { registerLogsRoutes } from "./routes/logs.js";
-import { registerGenresRoutes } from "./routes/genres.js";
-import { registerAnalyticsRoutes } from "./routes/analytics.js";
-import { registerHealthRoutes } from "./routes/health.js";
-import { registerTruthBrowserRoutes } from "./routes/truth-browser.js";
-import { registerLanguageRoutes } from "./routes/language.js";
-import { registerModelOverridesRoutes, registerNotifyRoutes } from "./routes/project-config.js";
-import { registerSourcesRoutes } from "./routes/sources.js";
-import { registerHooksRoutes } from "./routes/hooks.js";
-import { registerBooksRoutes } from "./routes/books.js";
-import { registerChaptersRoutes } from "./routes/chapters.js";
-import { registerServicesRoutes } from "./routes/services.js";
-import { registerAuditRoutes } from "./routes/audit.js";
-import { registerStyleRoutes } from "./routes/style.js";
-import { registerChapterIntentRoutes } from "./routes/chapter-intent.js";
-import { registerImportRoutes } from "./routes/import-foundation.js";
-import { registerAuthorsRoutes } from "./routes/authors.js";
-import { registerEventChainRoutes } from "./routes/event-chain.js";
-import { registerRhetoricRoutes } from "./routes/rhetoric.js";
-import { registerStyleQualityRoutes } from "./routes/style-quality.js";
-import { registerRuntimeTruthRoutes } from "./routes/runtime-truth.js";
-import { registerVoicesSceneRoutes } from "./routes/voices-scene.js";
-import { registerSessionsRoutes } from "./routes/sessions.js";
-import { registerRolesRoutes } from "./routes/roles.js";
-import { registerDetectRoutes } from "./routes/detect.js";
-import { registerWritingRoutes } from "./routes/writing.js";
-import { registerRevisionExportRoutes } from "./routes/revision-export.js";
-import { registerFanficRadarDoctorRoutes } from "./routes/fanfic-radar-doctor.js";
 import { registerAgentRoutes } from "./routes/agent.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerAuditRoutes } from "./routes/audit.js";
+import { registerAuthorsRoutes } from "./routes/authors.js";
+import { registerBooksRoutes } from "./routes/books.js";
+import { registerChapterIntentRoutes } from "./routes/chapter-intent.js";
+import { registerChaptersRoutes } from "./routes/chapters.js";
+import { registerCoverRoutes } from "./routes/cover.js";
+import { registerDaemonRoutes } from "./routes/daemon.js";
+import { registerDetectRoutes } from "./routes/detect.js";
+import { registerEventChainRoutes } from "./routes/event-chain.js";
+import { registerEventsRoutes } from "./routes/events.js";
+import { registerFanficRadarDoctorRoutes } from "./routes/fanfic-radar-doctor.js";
+import { registerGenresRoutes } from "./routes/genres.js";
+import { registerHealthRoutes } from "./routes/health.js";
+import { registerHooksRoutes } from "./routes/hooks.js";
+import { registerImportRoutes } from "./routes/import-foundation.js";
+import { registerLanguageRoutes } from "./routes/language.js";
+import { registerLogsRoutes } from "./routes/logs.js";
+import { registerModelOverridesRoutes,registerNotifyRoutes } from "./routes/project-config.js";
+import { registerProjectRoutes } from "./routes/project.js";
+import { registerRevisionExportRoutes } from "./routes/revision-export.js";
+import { registerRhetoricRoutes } from "./routes/rhetoric.js";
+import { registerRolesRoutes } from "./routes/roles.js";
+import { registerRuntimeTruthRoutes } from "./routes/runtime-truth.js";
+import { registerServicesRoutes } from "./routes/services.js";
+import { registerSessionsRoutes } from "./routes/sessions.js";
+import { registerSourcesRoutes } from "./routes/sources.js";
+import { registerStyleQualityRoutes } from "./routes/style-quality.js";
+import { registerStyleRoutes } from "./routes/style.js";
+import { registerTruthBrowserRoutes } from "./routes/truth-browser.js";
+import { registerVoicesSceneRoutes } from "./routes/voices-scene.js";
+import { registerWritingRoutes } from "./routes/writing.js";
 
 // Shared helpers (extracted so route modules can import directly)
-import { withPipeline, setPipelinePoolConfig, drainPipelinePool } from "./shared/pipeline.js";
-import { registerStaticMiddleware } from "./static-middleware.js";
+import { drainPipelinePool,setPipelinePoolConfig } from "./shared/pipeline.js";
 import {
-  writeJobs,
-  WRITE_JOB_TIMEOUT_MS,
-  acquireWriteJob,
-  completeWriteJob,
-  failWriteJob,
-  timeoutWriteJob,
-  type WriteJobEntry,
-} from "./shared/write-jobs.js";
-import type { CollectedToolExec } from "./shared/agent-validation.js";
-import {
-  type ServiceConfigEntry,
-  type LLMConfigSource,
-  type EnvConfigSummary,
-  type EnvConfigStatus,
-  type ServiceProbeResult,
-  isCustomServiceId,
-  serviceConfigKey,
+isCustomServiceId,
+serviceConfigKey,
+type EnvConfigStatus,
+type EnvConfigSummary,
+type LLMConfigSource,
+type ServiceConfigEntry,
+type ServiceProbeResult,
 } from "./shared/service-helpers.js";
+import { registerStaticMiddleware } from "./static-middleware.js";
 
-import {
-  PreprocessRequestSchema,
-  RelayoutRequestSchema,
-  InspectRequestSchema,
-  MAX_PREPROCESS_TEXT_CHARS,
-  DiagnosticsRequestSchema,
-  CompareRequestSchema,
-  AdjustmentPlanRequestSchema,
-  RewritePreviewRequestSchema,
-} from "./style-schemas.js";
 
 const NON_TEXT_MODEL_ID_PARTS = [
   "image",
@@ -276,7 +160,7 @@ function normalizeServiceEntry(serviceId: string, value: Record<string, unknown>
   };
 }
 
-function normalizeConfigSource(value: unknown): LLMConfigSource {
+function _normalizeConfigSource(value: unknown): LLMConfigSource {
   return value === "studio" ? "studio" : "env";
 }
 
@@ -307,7 +191,7 @@ function normalizeServiceConfig(raw: unknown): ServiceConfigEntry[] {
   return [];
 }
 
-function mergeServiceConfig(existing: ServiceConfigEntry[], updates: ServiceConfigEntry[]): ServiceConfigEntry[] {
+function _mergeServiceConfig(existing: ServiceConfigEntry[], updates: ServiceConfigEntry[]): ServiceConfigEntry[] {
   const merged = new Map(existing.map((entry) => [serviceConfigKey(entry), entry]));
   for (const update of updates) {
     merged.set(serviceConfigKey(update), update);
@@ -315,7 +199,7 @@ function mergeServiceConfig(existing: ServiceConfigEntry[], updates: ServiceConf
   return [...merged.values()];
 }
 
-function normalizeCoverConfig(raw: unknown): { service: string; model: string } | undefined {
+function _normalizeCoverConfig(raw: unknown): { service: string; model: string } | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const record = raw as Record<string, unknown>;
   const service = typeof record.service === "string" ? record.service : "";
@@ -328,7 +212,7 @@ function normalizeCoverConfig(raw: unknown): { service: string; model: string } 
   return { service: preset.service, model };
 }
 
-function syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
+function _syncTopLevelLlmMirror(llm: Record<string, unknown>): void {
   const selectedService = typeof llm.service === "string" ? llm.service : undefined;
   if (!selectedService) return;
 
@@ -387,7 +271,7 @@ async function loadRawConfig(root: string): Promise<Record<string, unknown>> {
   }
 }
 
-async function assertBookExists(state: StateManager, id: string): Promise<void> {
+async function _assertBookExists(state: StateManager, id: string): Promise<void> {
   try {
     await state.loadBookConfig(id);
   } catch {
@@ -395,7 +279,7 @@ async function assertBookExists(state: StateManager, id: string): Promise<void> 
   }
 }
 
-async function assertBookDirectoryExists(state: StateManager, id: string): Promise<void> {
+async function _assertBookDirectoryExists(state: StateManager, id: string): Promise<void> {
   try {
     const info = await lstat(state.bookDir(id));
     if (!info.isDirectory()) {
@@ -480,7 +364,7 @@ async function resolveConfiguredServiceBaseUrl(root: string, serviceId: string, 
   }
 }
 
-async function resolveConfiguredServiceEntry(root: string, serviceId: string): Promise<ServiceConfigEntry | undefined> {
+async function _resolveConfiguredServiceEntry(root: string, serviceId: string): Promise<ServiceConfigEntry | undefined> {
   try {
     const config = await loadRawConfig(root);
     const services = normalizeServiceConfig((config.llm as Record<string, unknown> | undefined)?.services);
@@ -1065,7 +949,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
   // Security helpers
   // ---------------------------------------------------------------------------
 
-  function assertProjectRoot(input: string | undefined, serverRoot: string): string {
+  function _assertProjectRoot(input: string | undefined, serverRoot: string): string {
     const candidate = input ? resolve(input) : resolve(serverRoot);
     const allowed = resolve(serverRoot);
     // Must be either the exact root, or directly within it (with separator)
@@ -1076,7 +960,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     return candidate;
   }
 
-  function assertSafeAuthorId(id: string): string {
+  function _assertSafeAuthorId(id: string): string {
     const clean = id.replace(/[^a-zA-Z0-9_-]/g, "");
     if (!clean || clean !== id) throw new Error(`Invalid authorId: ${id}`);
     return clean;

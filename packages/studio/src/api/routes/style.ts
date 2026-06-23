@@ -1,36 +1,32 @@
-﻿import { join } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import {
-  createLLMClient,
-  loadProjectConfig,
-  getAuthorProfile,
-  compareWithAuthorProfile,
-  generateAdjustmentPlan,
-  rewriteWithAuthorProfile,
-  extractDocumentFromText,
-  extractDocumentChunked,
-  MAX_CHARS,
-  type PipelineConfig,
-  type AuthorStyleProfile,
-  type StyleSourceDocument,
-  type StyleLibraryIndex,
+﻿import {
+compareWithAuthorProfile,
+createLLMClient,
+extractDocumentChunked,
+extractDocumentFromText,
+generateAdjustmentPlan,
+getAuthorProfile,
+loadProjectConfig,
+MAX_CHARS,
+rewriteWithAuthorProfile,
+type AuthorStyleProfile
 } from "@actalk/inkos-core";
-import {
-  DiagnosticsRequestSchema, CompareRequestSchema,
-  AdjustmentPlanRequestSchema, RewritePreviewRequestSchema,
-  InspectRequestSchema, MAX_PREPROCESS_TEXT_CHARS,
-  PreprocessRequestSchema, RelayoutRequestSchema,
-} from "../style-schemas.js";
 import type { ServerContext } from "../server-context.js";
 import { withPipeline } from "../shared/pipeline.js";
 import {
-  isSafeStyleId,
-  isTextStyleFileType,
-  parseSafeStyleImportUrl,
-  assertSafeStyleImportTarget,
-  extractHtmlTitle,
-  readStyleImportBody,
+assertSafeStyleImportTarget,
+extractHtmlTitle,
+isTextStyleFileType,
+parseSafeStyleImportUrl,
+readStyleImportBody
 } from "../shared/style-import-guards.js";
+import {
+AdjustmentPlanRequestSchema,
+CompareRequestSchema,
+DiagnosticsRequestSchema,
+InspectRequestSchema,MAX_PREPROCESS_TEXT_CHARS,
+PreprocessRequestSchema,RelayoutRequestSchema,
+RewritePreviewRequestSchema,
+} from "../style-schemas.js";
 
 // ── Constants ──
 
@@ -38,9 +34,9 @@ import {
  * Style analysis, comparison, rewrite, import, and style library routes.
  */
 export function registerStyleRoutes(ctx: ServerContext): void {
-  const { app, root, state: stateManager, broadcast, buildPipelineConfig, loadCurrentProjectConfig } = ctx;
+  const { app, root, state: _stateManager, broadcast: _broadcast, buildPipelineConfig: _buildPipelineConfig, loadCurrentProjectConfig: _loadCurrentProjectConfig } = ctx;
 
-  async function assertBookExists(state: ServerContext["state"], bookId: string): Promise<void> {
+  async function _assertBookExists(state: ServerContext["state"], bookId: string): Promise<void> {
     try {
       await state.loadBookConfig(bookId);
     } catch {

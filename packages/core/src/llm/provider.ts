@@ -1,54 +1,46 @@
-import type { LLMConfig } from "../models/project.js";
-import {
-  streamSimple as piStreamSimple,
-  stream as piStream,
-  completeSimple as piCompleteSimple,
-  complete as piComplete,
-} from "@mariozechner/pi-ai";
 import type {
-  Api as PiApi,
-  Model as PiModel,
-  Context as PiContext,
-  AssistantMessageEvent,
-  Tool as PiTool,
-  TextContent as PiTextContent,
-  ToolCall as PiToolCall,
+Api as PiApi,
+Context as PiContext,
+Model as PiModel,
+TextContent as PiTextContent,
+Tool as PiTool,
+ToolCall as PiToolCall
 } from "@mariozechner/pi-ai";
-import { resolveServicePreset } from "./service-presets.js";
+import {
+complete as piComplete,
+completeSimple as piCompleteSimple,
+stream as piStream,
+streamSimple as piStreamSimple,
+} from "@mariozechner/pi-ai";
+import type { LLMConfig } from "../models/project.js";
+import { isApiKeyOptionalForEndpoint } from "../utils/llm-endpoint-auth.js";
+import { fetchWithProxy } from "../utils/proxy-fetch.js";
+import type { AnthropicMessageResponse,ChatCompletionResponse,LLMResponseJson,OutputTextPart,ResponsesApiResponse,TextPart } from "./llm-response-types.js";
+import {
+type AgentMessage,
+type ChatWithToolsResult,
+INKOS_USER_AGENT,
+type LLMClient,
+type LLMMessage,
+type LLMResponse,
+type OnStreamProgress,
+type StreamProgress,
+TRANSIENT_LLM_RETRIES,
+type ToolCall,
+type ToolDefinition,
+UNKNOWN_MODEL_FALLBACK_MAX_TOKENS,
+createStreamMonitor,
+} from "./provider-types.js";
 import { getEndpoint } from "./providers/index.js";
 import { lookupModel } from "./providers/lookup.js";
-import { fetchWithProxy } from "../utils/proxy-fetch.js";
-import { isApiKeyOptionalForEndpoint } from "../utils/llm-endpoint-auth.js";
-import {
-  type StreamProgress,
-  type OnStreamProgress,
-  type LLMResponse,
-  type LLMMessage,
-  type LLMClient,
-  type ToolDefinition,
-  type ToolCall,
-  type AgentMessage,
-  type ChatWithToolsResult,
-  INKOS_USER_AGENT,
-  UNKNOWN_MODEL_FALLBACK_MAX_TOKENS,
-  TRANSIENT_LLM_RETRIES,
-  createStreamMonitor,
-} from "./provider-types.js";
-import type { LLMResponseJson, TextPart, OutputTextPart, ChatCompletionResponse, ResponsesApiResponse, AnthropicMessageResponse } from "./llm-response-types.js";
+import { resolveServicePreset } from "./service-presets.js";
 
 // Re-export for backward compatibility
-export type {
-  StreamProgress,
-  OnStreamProgress,
-  LLMResponse,
-  LLMMessage,
-  LLMClient,
-  ToolDefinition,
-  ToolCall,
-  AgentMessage,
-  ChatWithToolsResult,
-};
 export { createStreamMonitor };
+export type {
+AgentMessage,
+ChatWithToolsResult,LLMClient,LLMMessage,LLMResponse,OnStreamProgress,StreamProgress,ToolCall,ToolDefinition
+};
 
 // === HTTP Header Helpers ===
 
@@ -1133,7 +1125,7 @@ async function chatCompletionViaPiAi(
   resolved: { readonly temperature: number; readonly maxTokens: number; readonly extra: Record<string, unknown> },
   onStreamProgress?: OnStreamProgress,
   onTextDelta?: (text: string) => void,
-  signal?: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<LLMResponse> {
   const piModel = resolvePiModel(client, model);
   const context = toPiContext(messages);

@@ -1,8 +1,8 @@
-import { Command } from "commander";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { findProjectRoot, log, logError, GLOBAL_CONFIG_DIR, GLOBAL_ENV_PATH } from "../utils.js";
 import { listModelsForService } from "@actalk/inkos-core";
+import { Command } from "commander";
+import { mkdir,readFile,writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { findProjectRoot,GLOBAL_CONFIG_DIR,GLOBAL_ENV_PATH,log,logError } from "../utils.js";
 
 export const configCommand = new Command("config")
   .description("Manage project configuration");

@@ -12,16 +12,15 @@
  *      based on full story context.
  */
 
-import { BaseAgent, type AgentContext } from "./base.js";
 import type { BookConfig } from "../models/book.js";
-import type { StoredHook } from "../state/memory-db.js";
+import { loadChapterGoals,type ChapterGoalCard } from "../models/chapter-goal.js";
+import { getChapterIntent,loadChapterIntents } from "../models/chapter-intent.js";
+import { BaseAgent,type AgentContext } from "./base.js";
 import {
-  readPendingHooks,
-  readCharacterMatrix,
-  readEmotionalArcs,
+readCharacterMatrix,
+readEmotionalArcs,
+readPendingHooks,
 } from "./planner-context.js";
-import { loadChapterGoals, type ChapterGoalCard } from "../models/chapter-goal.js";
-import { loadChapterIntents, getChapterIntent, type AuthorChapterIntent } from "../models/chapter-intent.js";
 
 export interface InterviewQuestion {
   readonly id: string;

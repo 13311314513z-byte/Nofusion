@@ -9,22 +9,20 @@
  * or later merged into chapter_goals.json if the two models converge.
  */
 
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { mkdir,readFile,rename,writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  ChapterIntentsIndexSchema,
-  migrateIntentsIndex,
-  type AuthorChapterIntent,
-  type AuthorCharacterState,
-  type AuthorScenePlan,
-  type ChapterIntentsIndex,
+ChapterIntentsIndexSchema,
+migrateIntentsIndex,
+type AuthorChapterIntent,
+type ChapterIntentsIndex
 } from "./chapter-intent.schema.js";
 
 export type {
-  AuthorChapterIntent,
-  AuthorCharacterState,
-  AuthorScenePlan,
-  ChapterIntentsIndex,
+AuthorChapterIntent,
+AuthorCharacterState,
+AuthorScenePlan,
+ChapterIntentsIndex
 } from "./chapter-intent.schema.js";
 
 // ─── Persistence ──────────────────────────────────────────────────

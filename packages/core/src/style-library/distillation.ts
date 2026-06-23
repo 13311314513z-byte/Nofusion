@@ -8,17 +8,15 @@
  * DistillationStore handles all file persistence separately.
  */
 
-import type {
-  AuthorStyleProfile,
-  StyleSourceDocument,
-  AuthorDistillation,
-  DistillationRule,
-  DistillationEvidence,
-  DistillationStatus,
-  SampleAdequacyLevel,
-} from "./models.js";
-import type { StyleFingerprint } from "../models/style-profile.js";
 import type { StyleProfile } from "../models/style-profile.js";
+import type {
+AuthorDistillation,
+AuthorStyleProfile,
+DistillationEvidence,
+DistillationRule,
+SampleAdequacyLevel,
+StyleSourceDocument
+} from "./models.js";
 
 // ---------------------------------------------------------------------------
 // Input / Output
@@ -50,7 +48,7 @@ export function evaluateAuthorSampleAdequacy(
   sampleStats: AuthorStyleProfile["sampleStats"],
   sources: ReadonlyArray<StyleSourceDocument>,
 ): AdequacyResult {
-  const warnings: string[] = [];
+  const _warnings: string[] = [];
   const readySources = sources.filter((s) => s.status === "ready");
   const readyCount = readySources.length;
   const totalChars = readySources.reduce((sum, s) => sum + s.charCount, 0);

@@ -1,9 +1,9 @@
+import { AlertCircle,GitBranch,Network,Play,RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { fetchJson, useApi } from "../../hooks/use-api";
-import type { Theme } from "../../hooks/use-theme";
+import { fetchJson,useApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { Network, GitBranch, Play, RefreshCw, AlertCircle } from "lucide-react";
+import type { Theme } from "../../hooks/use-theme";
 
 interface EventChainData {
   chain: {
@@ -43,7 +43,7 @@ interface BookEventChainSectionProps {
   readonly sse: { readonly messages: ReadonlyArray<SSEMessage>; readonly connected: boolean };
 }
 
-export function BookEventChainSection({ bookId, nav, theme, t }: BookEventChainSectionProps) {
+export function BookEventChainSection({ bookId, nav: _nav, theme: _theme, t: _t }: BookEventChainSectionProps) {
   const [chapterNum, setChapterNum] = useState(1);
   const [extracting, setExtracting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);

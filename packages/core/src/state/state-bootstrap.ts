@@ -1,33 +1,32 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir,readdir,readFile,stat,writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  ChapterSummariesStateSchema,
-  CurrentStateStateSchema,
-  HooksStateSchema,
-  StateManifestSchema,
-  type ChapterSummariesState,
-  type CurrentStateState,
-  type HooksState,
-  type HookStatus,
-  type StateManifest,
+ChapterSummariesStateSchema,
+CurrentStateStateSchema,
+HooksStateSchema,
+StateManifestSchema,
+type ChapterSummariesState,
+type CurrentStateState,
+type HooksState,
+type HookStatus,
+type StateManifest,
 } from "../models/runtime-state.js";
-import type { Fact, StoredHook } from "./memory-db.js";
 import { normalizeHookPayoffTiming } from "../utils/hook-lifecycle.js";
 import {
-  inferFactSubject,
-  isCurrentChapterLabel,
-  isStateTableHeaderRow,
-  normalizeHookId,
-  parseChapterSummariesMarkdown,
-  parseInteger,
-  parseMarkdownTableRows,
+inferFactSubject,
+isCurrentChapterLabel,
+isStateTableHeaderRow,
+normalizeHookId,
+parseChapterSummariesMarkdown,
+parseMarkdownTableRows
 } from "../utils/story-markdown.js";
+import type { Fact,StoredHook } from "./memory-db.js";
 
 export {
-  normalizeHookId,
-  parseChapterSummariesMarkdown,
-  parseCurrentStateFacts,
-  parsePendingHooksMarkdown,
+normalizeHookId,
+parseChapterSummariesMarkdown,
+parseCurrentStateFacts,
+parsePendingHooksMarkdown
 } from "../utils/story-markdown.js";
 
 export interface BootstrapStructuredStateResult {
@@ -67,14 +66,14 @@ export async function bootstrapStructuredStateFromMarkdown(params: {
     warnings,
   });
 
-  const summariesState = await loadOrBootstrapSummaries({
+  const _summariesState = await loadOrBootstrapSummaries({
     storyDir,
     statePath: summariesPath,
     createdFiles,
     warnings,
     bootstrapState: markdownState.summariesState,
   });
-  const hooksState = await loadOrBootstrapHooks({
+  const _hooksState = await loadOrBootstrapHooks({
     storyDir,
     statePath: hooksPath,
     createdFiles,

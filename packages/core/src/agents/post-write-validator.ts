@@ -5,16 +5,16 @@
  * Catches violations that prompt-only rules cannot guarantee.
  */
 
+import type { BookRules } from "../models/book-rules.js";
+import type { ClosingFrame,OpeningFrame,PathConstraints } from "../models/chapter-intent.schema.js";
+import type { GenreProfile } from "../models/genre-profile.js";
 import { analyzeChapterCadence } from "../utils/chapter-cadence.js";
 import {
-  extractWordNgrams,
-  extractCharNgrams,
-  countNgrams,
-  findCrossTextRepeats,
+countNgrams,
+extractCharNgrams,
+extractWordNgrams,
+findCrossTextRepeats,
 } from "../utils/ngram-utils.js";
-import type { BookRules } from "../models/book-rules.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import type { OpeningFrame, ClosingFrame, PathConstraints } from "../models/chapter-intent.schema.js";
 
 export interface PostWriteViolation {
   readonly rule: string;
@@ -881,7 +881,7 @@ export function validateAuthorIntentInContent(
   content: string,
   keyMoment: string,
   coreNarrative: string,
-  readerTakeaway: string,
+  _readerTakeaway: string,
 ): ReadonlyArray<PostWriteViolation> {
   const violations: PostWriteViolation[] = [];
 

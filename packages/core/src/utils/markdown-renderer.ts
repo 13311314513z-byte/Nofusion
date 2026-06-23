@@ -10,21 +10,21 @@
  * @module
  */
 
-import type {
-  ChapterSummariesState,
-  CurrentStateState,
-  HooksState,
-} from "../models/runtime-state.js";
-import type { StoredHook, StoredSummary } from "../state/memory-db.js";
-import type { AuthorChapterIntent, AuthorScenePlan, AuthorCharacterState } from "../models/chapter-intent.schema.js";
 import type { ChapterGoalCard } from "../models/chapter-goal.js";
+import type { AuthorChapterIntent } from "../models/chapter-intent.schema.js";
+import type {
+ChapterSummariesState,
+CurrentStateState,
+HooksState,
+} from "../models/runtime-state.js";
+import type { StoredHook,StoredSummary } from "../state/memory-db.js";
 import {
-  localizeHookPayoffTiming,
-  resolveHookPayoffTiming,
+localizeHookPayoffTiming,
+resolveHookPayoffTiming,
 } from "./hook-lifecycle.js";
 import {
-  computeHookDiagnostics,
-  renderHookDiagnosticMarker,
+computeHookDiagnostics,
+renderHookDiagnosticMarker,
 } from "./hook-stale-detection.js";
 
 // ─── Table helpers ─────────────────────────────────────────────────

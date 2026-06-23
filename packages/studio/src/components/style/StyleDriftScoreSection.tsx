@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { fetchJson, useApi } from "../../hooks/use-api";
 import { BarChart3 } from "lucide-react";
+import { useState } from "react";
+import { fetchJson,useApi } from "../../hooks/use-api";
 import type { BookSummary } from "../../pages/style-types.js";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   t: (key: string) => string;
 }
 
-export function StyleDriftScoreSection({ bookId, chapterNumber, t }: Props) {
+export function StyleDriftScoreSection({ bookId, chapterNumber, t: _t }: Props) {
   const [scoreData, setScoreData] = useState<{ score: number | null; chapterFingerprint?: unknown; profileFingerprint?: unknown } | null>(null);
   const [loadingScore, setLoadingScore] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);

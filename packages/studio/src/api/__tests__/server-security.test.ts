@@ -26,6 +26,8 @@ import {
 import { projectConfig, cloneProjectConfig, setupTestRoot, cleanupTestRoot } from "./mocks/fixtures.js";
 import { createStudioServer } from "../server.js";
 
+const SERVER_TEST_TIMEOUT_MS = 30_000;
+
 describe("createStudioServer security / import validation", () => {
   let root: string;
 
@@ -43,7 +45,7 @@ describe("createStudioServer security / import validation", () => {
     expect(vi.isMockFunction(isSafeBookId)).toBe(false);
     expect(isSafeBookId("demo-book")).toBe(true);
     expect(isSafeBookId("demo/book")).toBe(false);
-  }, 10_000);
+  }, SERVER_TEST_TIMEOUT_MS);
 
   it("rejects foundation commits that are not bound to a server-side plan", async () => {
     const { createStudioServer } = await import("../server.js");

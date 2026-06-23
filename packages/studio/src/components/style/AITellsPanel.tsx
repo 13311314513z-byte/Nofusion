@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { AlertTriangle,Bug,FileText,Info,Loader2,Search } from "lucide-react";
+import { useEffect,useRef,useState } from "react";
 import { fetchJson } from "../../hooks/use-api";
-import { AlertTriangle, Shield, Info, Search, Loader2, FileText, Bug } from "lucide-react";
 
 interface AITellIssue {
   readonly severity: "warning" | "info";
@@ -44,7 +44,7 @@ async function runDetection(
   });
 }
 
-export function AITellsPanel({ t, initialText, language = "zh" }: Props) {
+export function AITellsPanel({ t: _t, initialText, language = "zh" }: Props) {
   const [text, setText] = useState(initialText ?? "");
   const [result, setResult] = useState<AITellResult | null>(null);
   const [loading, setLoading] = useState(false);

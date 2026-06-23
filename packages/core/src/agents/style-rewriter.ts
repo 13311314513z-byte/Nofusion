@@ -15,11 +15,11 @@
  *   c. Parses the response into a structured preview with before/after diagnostics
  */
 
-import { runFullDiagnostics, type FullStyleDiagnostics } from "./style-diagnostics.js";
+import type { LLMClient,LLMResponse } from "../llm/provider.js";
 import { chatCompletion } from "../llm/provider.js";
-import type { AdjustmentPlan, AdjustmentSuggestion } from "./style-adjuster.js";
 import type { AuthorStyleProfile } from "../style-library/models.js";
-import type { LLMClient, LLMResponse } from "../llm/provider.js";
+import type { AdjustmentPlan } from "./style-adjuster.js";
+import { runFullDiagnostics,type FullStyleDiagnostics } from "./style-diagnostics.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,8 +141,8 @@ function computeChangedRanges(
   }
 
   let suffixLen = 0;
-  const origSuffixStart = original.length - 1 - suffixLen;
-  const adjSuffixStart = adjusted.length - 1 - suffixLen;
+  const _origSuffixStart = original.length - 1 - suffixLen;
+  const _adjSuffixStart = adjusted.length - 1 - suffixLen;
   while (
     suffixLen < original.length - prefixLen &&
     suffixLen < adjusted.length - prefixLen &&

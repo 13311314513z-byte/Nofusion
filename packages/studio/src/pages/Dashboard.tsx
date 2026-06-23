@@ -1,29 +1,26 @@
-import { fetchJson, useApi, postApi } from "../hooks/use-api";
-import { useEffect, useMemo, useState, useRef } from "react";
-import { useServiceStore } from "../store/service";
-import type { SSEMessage } from "../hooks/use-sse";
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
-import { useColors } from "../hooks/use-colors";
-import { deriveActiveBookIds, shouldRefetchBookCollections } from "../hooks/use-book-activity";
+import {
+AlertCircle,
+BarChart2,
+BookOpen,
+Clock,
+Download,
+Flame,
+MoreVertical,
+Plus,
+Settings,
+Trash2,
+Zap
+} from "lucide-react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { WriteConfirmPanel } from "../components/author/WriteConfirmPanel";
-import {
-  Plus,
-  BookOpen,
-  BarChart2,
-  Zap,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  MoreVertical,
-  ChevronRight,
-  Flame,
-  Trash2,
-  Settings,
-  Download,
-  FileInput,
-} from "lucide-react";
+import { fetchJson,postApi,useApi } from "../hooks/use-api";
+import { deriveActiveBookIds,shouldRefetchBookCollections } from "../hooks/use-book-activity";
+import { useColors } from "../hooks/use-colors";
+import type { TFunction } from "../hooks/use-i18n";
+import type { SSEMessage } from "../hooks/use-sse";
+import type { Theme } from "../hooks/use-theme";
+import { useServiceStore } from "../store/service";
 
 interface BookSummary {
   readonly id: string;
@@ -130,7 +127,7 @@ function BookMenu({ bookId, bookTitle, nav, t, onDelete, onOpenChange }: {
 }
 
 export function Dashboard({ nav, sse, theme, t }: { nav: Nav; sse: { messages: ReadonlyArray<SSEMessage> }; theme: Theme; t: TFunction }) {
-  const c = useColors(theme);
+  const _c = useColors(theme);
   const [menuOpenBookId, setMenuOpenBookId] = useState<string | null>(null);
   const [writeConfirm, setWriteConfirm] = useState<{ bookId: string; chapterNumber: number; bookTitle: string } | null>(null);
   const { data, loading, error, refetch } = useApi<{ books: ReadonlyArray<BookSummary> }>("/books");

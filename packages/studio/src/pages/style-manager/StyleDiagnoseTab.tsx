@@ -1,11 +1,9 @@
-import { useState } from "react";
-import { useApi } from "../../hooks/use-api";
-import type { TFunction } from "../../hooks/use-i18n";
-import type { CoreStyleProfile } from "../style-types.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
+import { Stethoscope } from "lucide-react";
 import { StyleDiagnosticsPanel } from "../../components/style/StyleDiagnosticsPanel.js";
 import { StyleDriftScoreSection } from "../../components/style/StyleDriftScoreSection.js";
-import { Stethoscope } from "lucide-react";
+import type { TFunction } from "../../hooks/use-i18n";
+import type { CoreStyleProfile } from "../style-types.js";
 
 interface StyleDiagnoseTabProps {
   readonly text: string;

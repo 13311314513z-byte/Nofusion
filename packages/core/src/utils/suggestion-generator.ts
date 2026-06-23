@@ -8,13 +8,13 @@
 
 import { join } from "node:path";
 import {
-  readPendingHooks,
-  readCharacterMatrix,
-  readEmotionalArcs,
+readCharacterMatrix,
+readEmotionalArcs,
+readPendingHooks,
 } from "../agents/planner-context.js";
-import { readCurrentStateWithFallback } from "../utils/outline-paths.js";
 import { loadChapterGoals } from "../models/chapter-goal.js";
-import { loadChapterIntents, getChapterIntent } from "../models/chapter-intent.js";
+import { getChapterIntent,loadChapterIntents } from "../models/chapter-intent.js";
+import { readCurrentStateWithFallback } from "../utils/outline-paths.js";
 
 export interface Suggestion {
   readonly id: string;
@@ -31,7 +31,7 @@ export async function generateSuggestions(
   const storyDir = join(bookDir, "story");
   const suggestions: Suggestion[] = [];
 
-  const [pendingHooks, characterMatrix, emotionalArcs, currentState, chapterGoalsIndex, chapterIntentsIndex] =
+  const [pendingHooks, characterMatrix, emotionalArcs, currentState, _chapterGoalsIndex, chapterIntentsIndex] =
     await Promise.all([
       readPendingHooks(storyDir).catch(() => ""),
       readCharacterMatrix(storyDir).catch(() => ""),

@@ -4,19 +4,26 @@
  * Handles chapter-goals CRUD, chapter-intents CRUD, suggestions,
  * endpoint-check, and interview endpoints.
  */
-import type { ServerContext } from "../server-context.js";
 import {
-  loadChapterGoals, saveChapterGoals, getChapterGoal,
-  upsertChapterGoal, removeChapterGoal,
-  loadChapterIntents, saveChapterIntents, getChapterIntent,
-  upsertChapterIntent, removeChapterIntent,
-  AuthorChapterIntentSchema, generateSuggestions,
-  type ChapterGoalCard, type AuthorChapterIntent,
+AuthorChapterIntentSchema,generateSuggestions,
+getChapterGoal,
+getChapterIntent,
+loadChapterGoals,
+loadChapterIntents,
+removeChapterGoal,
+removeChapterIntent,
+saveChapterGoals,
+saveChapterIntents,
+upsertChapterGoal,
+upsertChapterIntent,
+type AuthorChapterIntent,
+type ChapterGoalCard,
 } from "@actalk/inkos-core";
 import { join } from "node:path";
+import type { ServerContext } from "../server-context.js";
 
 export function registerChapterIntentRoutes(ctx: ServerContext): void {
-  const { app, root, state: stateManager } = ctx;
+  const { app, root: _root, state: stateManager } = ctx;
 
   async function assertBookExists(state: ServerContext["state"], bookId: string): Promise<void> {
     try { await state.loadBookConfig(bookId); }

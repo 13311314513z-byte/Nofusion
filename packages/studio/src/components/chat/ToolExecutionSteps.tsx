@@ -1,18 +1,18 @@
-import { useMemo, useState, useEffect } from "react";
-import type { ToolExecution, PipelineStage } from "../../store/chat/types";
 import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "../ui/collapsible";
-import {
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  ChevronDown,
-  Wrench,
+CheckCircle2,
+ChevronDown,
+Loader2,
+Wrench,
+XCircle,
 } from "lucide-react";
+import { useEffect,useMemo,useState } from "react";
 import { buildApiUrl } from "../../hooks/use-api";
+import type { PipelineStage,ToolExecution } from "../../store/chat/types";
+import {
+Collapsible,
+CollapsibleContent,
+CollapsibleTrigger,
+} from "../ui/collapsible";
 
 // -- Status rendering helpers --
 
@@ -49,7 +49,7 @@ function ExecStatusBadge({ status }: { status: ToolExecution["status"] }) {
   }
 }
 
-function StageIcon({ status }: { status: PipelineStage["status"] }) {
+function _StageIcon({ status }: { status: PipelineStage["status"] }) {
   switch (status) {
     case "pending":
       return <span className="w-4 h-4 rounded-full border border-border/60 flex items-center justify-center shrink-0 text-[8px] text-muted-foreground/40">○</span>;
@@ -60,7 +60,7 @@ function StageIcon({ status }: { status: PipelineStage["status"] }) {
   }
 }
 
-function formatProgress(progress: NonNullable<PipelineStage["progress"]>): string {
+function _formatProgress(progress: NonNullable<PipelineStage["progress"]>): string {
   const secs = Math.round(progress.elapsedMs / 1000);
   const statusLabel = progress.status === "thinking" ? "思考中" : "";
   const chars = progress.totalChars > 0

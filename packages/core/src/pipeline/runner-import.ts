@@ -1,20 +1,24 @@
-/**
+﻿/**
  * runner-import.ts — importCanon + importChapters extracted from runner.ts (Plan B).
  * Module functions receive a narrow interface to avoid circular imports.
  */
+import { mkdir,readFile,readdir,writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
-import { chatCompletion } from "../llm/provider.js";
+import type { ArchitectOutput } from "../agents/architect.js";
+import type { ArchitectAgent } from "../agents/architect.js";
+import type { AgentContext } from "../agents/base.js";
+import type { ChapterAnalyzerAgent } from "../agents/chapter-analyzer.js";
+import type { FoundationReviewerAgent } from "../agents/foundation-reviewer.js";
+import type { WriterAgent } from "../agents/writer.js";
+import type { WriteChapterOutput } from "../agents/writer.js";
 import type { LLMClient } from "../llm/provider.js";
+import { chatCompletion } from "../llm/provider.js";
 import type { BookConfig } from "../models/book.js";
 import type { ChapterMeta } from "../models/chapter.js";
 import type { GenreProfile } from "../models/genre-profile.js";
-import type { AgentContext } from "../agents/base.js";
-import type { ArchitectOutput } from "../agents/architect.js";
-import type { WriteChapterOutput } from "../agents/writer.js";
-import { resolveLengthCountingMode, countChapterLength, formatLengthCount, type LengthLanguage } from "../utils/length-metrics.js";
-import type { ImportChaptersInput, ImportChaptersResult } from "./runner.js";
+import { countChapterLength,formatLengthCount,resolveLengthCountingMode,type LengthLanguage } from "../utils/length-metrics.js";
 import type { generateAndReviewFoundation } from "./pipeline-foundation.js";
+import type { ImportChaptersInput,ImportChaptersResult } from "./runner.js";
 
 // ─── Host interface — all PipelineRunner methods needed by importCanon / importChapters ──
 
@@ -236,10 +240,10 @@ ${matrix}`,
 // ─── importChapters ───────────────────────────────────────────────────────────
 
 // Forward references to agent classes (imported dynamically by runner.ts)
-interface ArchitectAgentLike { new(ctx: AgentContext): any; }
-interface FoundationReviewerAgentLike { new(ctx: AgentContext): any; }
-interface ChapterAnalyzerAgentLike { new(ctx: AgentContext): any; }
-interface WriterAgentLike { new(ctx: AgentContext): any; }
+interface ArchitectAgentLike { new(ctx: AgentContext): ArchitectAgent; }
+interface FoundationReviewerAgentLike { new(ctx: AgentContext): FoundationReviewerAgent; }
+interface ChapterAnalyzerAgentLike { new(ctx: AgentContext): ChapterAnalyzerAgent; }
+interface WriterAgentLike { new(ctx: AgentContext): WriterAgent; }
 
 export async function importChapters(
   host: ImportHost,
@@ -281,7 +285,7 @@ export async function importChapters(
         zh: `步骤 1：从 ${input.chapters.length} 章生成基础设定...`,
         en: `Step 1: Generating foundation from ${input.chapters.length} chapters...`,
       }));
-      const foundationSource = deps.buildImportFoundationSource(input.chapters as any, resolvedLanguage);
+      const foundationSource = deps.buildImportFoundationSource(input.chapters, resolvedLanguage);
 
       const architect = new deps.AgentClasses.ArchitectAgent(host.agentCtxFor("architect", input.bookId));
       const isSeries = input.importMode === "series";
@@ -293,7 +297,7 @@ export async function importChapters(
             mode: "series",
             language: resolvedLanguage === "en" ? "en" : "zh",
             stageLanguage: resolvedLanguage,
-          } as any)
+          })
         : await architect.generateFoundationFromImport(book, foundationSource);
       await architect.writeFoundationFiles(
         bookDir,

@@ -1,8 +1,8 @@
 /**
  * Event Chain routes — extracted from style.ts (B4).
  */
-import type { ServerContext } from "../server-context.js";
 import { join } from "node:path";
+import type { ServerContext } from "../server-context.js";
 
 export function registerEventChainRoutes(ctx: ServerContext): void {
   const { app, state: stateManager } = ctx;
@@ -21,7 +21,7 @@ export function registerEventChainRoutes(ctx: ServerContext): void {
     }
     try {
       const bookDir = stateManager.bookDir(id);
-      const { readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core");
+      const { readArtifactIndex: _readArtifactIndex, readLatestArtifact } = await import("@actalk/inkos-core");
       const artifactDir = join(bookDir, "story", "runtime", `chapter-${String(chapterNumber).padStart(4, "0")}`);
       const latest = await readLatestArtifact(artifactDir, "event-chain");
       if (!latest) {

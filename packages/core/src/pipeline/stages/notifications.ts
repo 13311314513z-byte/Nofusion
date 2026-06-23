@@ -1,5 +1,5 @@
-import { dispatchNotification } from "../../notify/dispatcher.js";
 import type { NotifyChannel } from "../../models/project.js";
+import { dispatchNotification } from "../../notify/dispatcher.js";
 import type { Logger } from "../../utils/logger.js";
 
 /**
@@ -28,7 +28,7 @@ export interface NotificationInput {
 }
 
 export async function runNotificationStage(input: NotificationInput): Promise<void> {
-  const { channels, logger, bookId, chapterNumber, title, wordCount, auditPassed, error } = input;
+  const { channels, logger: _logger, bookId, chapterNumber, title, wordCount, auditPassed, error } = input;
 
   if (!channels || channels.length === 0) return;
 

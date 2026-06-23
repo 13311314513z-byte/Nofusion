@@ -1,35 +1,33 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { readCurrentStateWithFallback } from "./outline-paths.js";
 import {
-  ChapterSummariesStateSchema,
-  CurrentStateStateSchema,
-  HooksStateSchema,
+ChapterSummariesStateSchema,
+CurrentStateStateSchema,
+HooksStateSchema,
 } from "../models/runtime-state.js";
-import { MemoryDB, tryCreateMemoryDB, type Fact, type StoredHook, type StoredSummary } from "../state/memory-db.js";
+import { MemoryDB,tryCreateMemoryDB,type Fact,type StoredHook,type StoredSummary } from "../state/memory-db.js";
 import { bootstrapStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
 import {
-  filterActiveHooks,
-  isFuturePlannedHook,
-  isHookWithinChapterWindow,
+filterActiveHooks,
+isFuturePlannedHook,
+isHookWithinChapterWindow,
 } from "./hook-lifecycle.js";
+import { readCurrentStateWithFallback } from "./outline-paths.js";
 import {
-  parseChapterSummariesMarkdown,
-  parseCurrentStateFacts,
-  parsePendingHooksMarkdown,
-  renderHookSnapshot,
-  renderSummarySnapshot,
+parseChapterSummariesMarkdown,
+parseCurrentStateFacts,
+parsePendingHooksMarkdown
 } from "./story-markdown.js";
 export {
-  isFuturePlannedHook,
-  isHookWithinChapterWindow,
+isFuturePlannedHook,
+isHookWithinChapterWindow
 } from "./hook-lifecycle.js";
 export {
-  parseChapterSummariesMarkdown,
-  parseCurrentStateFacts,
-  parsePendingHooksMarkdown,
-  renderHookSnapshot,
-  renderSummarySnapshot,
+parseChapterSummariesMarkdown,
+parseCurrentStateFacts,
+parsePendingHooksMarkdown,
+renderHookSnapshot,
+renderSummarySnapshot
 } from "./story-markdown.js";
 
 export interface MemorySelection {
@@ -243,7 +241,7 @@ async function readStructuredState<T>(
   }
 }
 
-function buildLegacyQueryTerms(goal: string, outlineNode: string | undefined, mustKeep: ReadonlyArray<string>): string[] {
+function _buildLegacyQueryTerms(goal: string, outlineNode: string | undefined, mustKeep: ReadonlyArray<string>): string[] {
   const stopWords = new Set([
     "bring", "focus", "back", "chapter", "clear", "narrative", "before", "opening",
     "track", "the", "with", "from", "that", "this", "into", "still", "cannot",

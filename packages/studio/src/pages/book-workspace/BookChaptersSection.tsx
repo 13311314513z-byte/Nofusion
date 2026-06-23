@@ -1,34 +1,34 @@
-import { useState, useRef, useEffect } from "react";
-import type { Theme } from "../../hooks/use-theme";
-import type { TFunction, StringKey } from "../../hooks/use-i18n";
-import type { SSEMessage } from "../../hooks/use-sse";
-import { useApi, fetchJson, postApi } from "../../hooks/use-api";
 import type { StyleFingerprint } from "@actalk/inkos-core";
 import {
-  FileText,
-  Search,
-  Check,
-  X,
-  ShieldCheck,
-  RotateCcw,
-  RefreshCw,
-  Eye,
-  Download,
-  CheckCheck,
-  Clock,
-  Layers,
-  UserRound,
-  MapPin,
-  Save,
-  Palette,
-  ListChecks,
-  Tag,
-  ChevronDown,
-  ChevronUp,
-  Stethoscope,
-  History,
+Check,
+CheckCheck,
+ChevronDown,
+ChevronUp,
+Clock,
+Download,
+Eye,
+FileText,
+History,
+Layers,
+ListChecks,
+MapPin,
+Palette,
+RefreshCw,
+RotateCcw,
+Save,
+Search,
+ShieldCheck,
+Stethoscope,
+Tag,
+UserRound,
+X,
 } from "lucide-react";
+import { useEffect,useRef,useState } from "react";
 import { ChapterVersionModal } from "../../components/ChapterVersionModal";
+import { fetchJson,postApi,useApi } from "../../hooks/use-api";
+import type { TFunction } from "../../hooks/use-i18n";
+import type { SSEMessage } from "../../hooks/use-sse";
+import type { Theme } from "../../hooks/use-theme";
 
 interface ChapterMeta {
   readonly number: number;
@@ -487,7 +487,7 @@ export function BookChaptersSection({ bookId, nav, t }: BookChaptersSectionProps
               profileFingerprint: result.profileFingerprint,
             },
           }));
-        } catch (e) {
+        } catch (_e) {
           if (calculateCancelledRef.current) break;
           setStyleScores((prev) => ({
             ...prev,

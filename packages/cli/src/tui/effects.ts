@@ -1,14 +1,35 @@
 /* ── TUI animation effects ── */
 
 import {
-  c, bold, dim, italic,
-  cyan, green, yellow, blue, magenta, red, gray, white,
-  brightCyan, brightGreen, brightYellow, brightBlue, brightMagenta, brightWhite,
-  bgCyan, bgBlue, bgMagenta, bgGreen, bgYellow, bgRed, bgGray,
-  clearLine, hideCursor, showCursor, reset,
-  badge, sleep, stripAnsi, box,
+badge,
+bgBlue,
+bgCyan,
+bgGray,
+bgGreen,
+bgMagenta,
+bgRed,
+bgYellow,
+blue,
+bold,
+brightBlue,
+brightCyan,brightGreen,
+brightMagenta,brightWhite,
+brightYellow,
+c,
+clearLine,
+cyan,
+dim,
+gray,
+green,
+hideCursor,
+italic,
+magenta,red,
+showCursor,
+sleep,stripAnsi,
+white,
+yellow
 } from "./ansi.js";
-import { formatModeLabel, getTuiCopy, normalizeStageLabel, resolveTuiLocale, type TuiLocale } from "./i18n.js";
+import { formatModeLabel,getTuiCopy,normalizeStageLabel,resolveTuiLocale,type TuiLocale } from "./i18n.js";
 
 /* ── Operation themes ── */
 
@@ -240,7 +261,7 @@ export async function animateStartup(version: string, projectName: string, bookT
 
 /* ── Typewriter effect ── */
 
-async function typewrite(text: string, charDelay = 12): Promise<void> {
+async function _typewrite(text: string, charDelay = 12): Promise<void> {
   const chars = text.split("");
   let i = 0;
   let insideEscape = false;

@@ -1,11 +1,11 @@
-import { useState, useCallback, type ChangeEvent } from "react";
-import { fetchJson, postApi } from "../../hooks/use-api";
+import { FileText,Plus,RefreshCw,Trash2,Upload } from "lucide-react";
+import { useCallback,useState,type ChangeEvent } from "react";
+import { fetchJson,postApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
-import type { AuthorIndexItem, AuthorDetail, BookSummary } from "../style-types.js";
+import type { AuthorDetail,AuthorIndexItem,BookSummary } from "../style-types.js";
+import { buildLocalStyleSourceId,inferLocalStyleFileType,readLocalTextFile } from "../StyleManager.js";
 import { AdjustmentSuggestionsPanel } from "./AdjustmentSuggestionsPanel.js";
 import { AuthorStyleComparison } from "./AuthorStyleComparison.js";
-import { inferLocalStyleFileType, buildLocalStyleSourceId, readLocalTextFile } from "../StyleManager.js";
-import { Upload, Plus, RefreshCw, Trash2, FileText } from "lucide-react";
 
 interface StyleAuditTabProps {
   readonly text: string;
@@ -29,7 +29,7 @@ interface StyleAuditTabProps {
 export function StyleAuditTab({
   text,
   setText,
-  profile,
+  profile: _profile,
   setProfile,
   diagnostics,
   setDiagnostics,

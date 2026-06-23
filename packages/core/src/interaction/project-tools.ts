@@ -1,23 +1,23 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir,writeFile } from "node:fs/promises";
+import { dirname,join } from "node:path";
 import type {
-  InteractionEvent,
-  Logger,
-  PipelineRunner,
-  StateManager,
-  ReviseMode,
-  LLMClient,
-  BookConfig,
-  ToolDefinition,
+BookConfig,
+InteractionEvent,
+LLMClient,
+Logger,
+PipelineRunner,
+ReviseMode,
+StateManager,
+ToolDefinition,
 } from "../index.js";
-import { chatCompletion, chatWithTools } from "../index.js";
+import { chatCompletion,chatWithTools } from "../index.js";
+import { normalizePlatformOrOther } from "../models/book.js";
+import { deriveBookIdFromTitle } from "../utils/book-id.js";
+import { safeChildPath } from "../utils/path-safety.js";
 import { executeEditTransaction } from "./edit-controller.js";
+import { writeExportArtifact } from "./export-artifact.js";
 import type { InteractionRuntimeTools } from "./runtime.js";
 import type { BookCreationDraft } from "./session.js";
-import { writeExportArtifact } from "./export-artifact.js";
-import { safeChildPath } from "../utils/path-safety.js";
-import { deriveBookIdFromTitle } from "../utils/book-id.js";
-import { normalizePlatformOrOther } from "../models/book.js";
 
 const SAFE_TRUTH_FLAT_FILE_NAMES = new Set([
   "author_intent.md",
@@ -357,7 +357,7 @@ const BOOK_DRAFT_SYSTEM_PROMPT = [
 ].join("\n");
 
 /** Map directive field keys to BookCreationDraft property names. */
-function applyFieldsToDraft(
+function _applyFieldsToDraft(
   existing: BookCreationDraft | undefined,
   fields: Readonly<Record<string, string>>,
   concept: string,
@@ -434,7 +434,7 @@ function applyFieldsToDraft(
   return draft;
 }
 
-function formatDraftForUserMessage(
+function _formatDraftForUserMessage(
   existingDraft: BookCreationDraft | undefined,
   userMessage: string,
 ): string {

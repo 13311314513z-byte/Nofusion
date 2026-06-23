@@ -3,7 +3,7 @@
   "info": {
     "title": "InkOS Studio API",
     "version": "1.5.0",
-    "description": "Auto-generated OpenAPI spec from 118 endpoints across 19 route modules."
+    "description": "Auto-generated OpenAPI spec from 157 endpoints across 33 route modules."
   },
   "servers": [
     {
@@ -12,6 +12,26 @@
     }
   ],
   "paths": {
+    "/api/v1/agent": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "POST /api/v1/agent",
+        "operationId": "post__api_v1_agent",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v1/books/{id}/analytics": {
       "get": {
         "tags": [
@@ -150,6 +170,358 @@
         }
       }
     },
+    "/api/v1/style/authors": {
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors",
+        "operationId": "get__api_v1_style_authors",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors",
+        "operationId": "post__api_v1_style_authors",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}": {
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors/:authorId",
+        "operationId": "get__api_v1_style_authors_authorId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "DELETE /api/v1/style/authors/:authorId",
+        "operationId": "delete__api_v1_style_authors_authorId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/sources": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/:authorId/sources",
+        "operationId": "post__api_v1_style_authors_authorId_sources",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/reanalyze": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/:authorId/reanalyze",
+        "operationId": "post__api_v1_style_authors_authorId_reanalyze",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/diagnostics": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/:authorId/diagnostics",
+        "operationId": "post__api_v1_style_authors_authorId_diagnostics",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors/:authorId/diagnostics",
+        "operationId": "get__api_v1_style_authors_authorId_diagnostics",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/diagnostics/{diagnosticsId}": {
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors/:authorId/diagnostics/:diagnosticsId",
+        "operationId": "get__api_v1_style_authors_authorId_diagnostics_diagnosticsId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/style/apply-author": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/books/:id/style/apply-author",
+        "operationId": "post__api_v1_books_id_style_apply_author",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/search": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/search",
+        "operationId": "post__api_v1_style_authors_search",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/fetch": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/fetch",
+        "operationId": "post__api_v1_style_authors_fetch",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/samples/write": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/samples/write",
+        "operationId": "post__api_v1_style_authors_samples_write",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/distillations": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/:authorId/distillations",
+        "operationId": "post__api_v1_style_authors_authorId_distillations",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/distillations/current": {
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors/:authorId/distillations/current",
+        "operationId": "get__api_v1_style_authors_authorId_distillations_current",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "PATCH /api/v1/style/authors/:authorId/distillations/current",
+        "operationId": "patch__api_v1_style_authors_authorId_distillations_current",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/distillations/current/publish": {
+      "post": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "POST /api/v1/style/authors/:authorId/distillations/current/publish",
+        "operationId": "post__api_v1_style_authors_authorId_distillations_current_publish",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/authors/{authorId}/distillations/versions": {
+      "get": {
+        "tags": [
+          "authors"
+        ],
+        "summary": "GET /api/v1/style/authors/:authorId/distillations/versions",
+        "operationId": "get__api_v1_style_authors_authorId_distillations_versions",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v1/books": {
       "get": {
         "tags": [
@@ -273,6 +645,182 @@
         ],
         "summary": "PATCH /api/v1/books/:id/config",
         "operationId": "patch__api_v1_books_id_config",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapter-goals": {
+      "get": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "GET /api/v1/books/:id/chapter-goals",
+        "operationId": "get__api_v1_books_id_chapter_goals",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapter-goals/{chapterNumber}": {
+      "put": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "PUT /api/v1/books/:id/chapter-goals/:chapterNumber",
+        "operationId": "put__api_v1_books_id_chapter_goals_chapterNumber",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "DELETE /api/v1/books/:id/chapter-goals/:chapterNumber",
+        "operationId": "delete__api_v1_books_id_chapter_goals_chapterNumber",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapter-intents": {
+      "get": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "GET /api/v1/books/:id/chapter-intents",
+        "operationId": "get__api_v1_books_id_chapter_intents",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapter-intents/{chapterNumber}": {
+      "put": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "PUT /api/v1/books/:id/chapter-intents/:chapterNumber",
+        "operationId": "put__api_v1_books_id_chapter_intents_chapterNumber",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "DELETE /api/v1/books/:id/chapter-intents/:chapterNumber",
+        "operationId": "delete__api_v1_books_id_chapter_intents_chapterNumber",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapter-intents/{chapterNumber}/suggestions": {
+      "get": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "GET /api/v1/books/:id/chapter-intents/:chapterNumber/suggestions",
+        "operationId": "get__api_v1_books_id_chapter_intents_chapterNumber_suggestions",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/chapters/{chapterNumber}/endpoint-check": {
+      "get": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "GET /api/v1/books/:id/chapters/:chapterNumber/endpoint-check",
+        "operationId": "get__api_v1_books_id_chapters_chapterNumber_endpoint_check",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/interview": {
+      "get": {
+        "tags": [
+          "chapter-intent"
+        ],
+        "summary": "GET /api/v1/books/:id/interview",
+        "operationId": "get__api_v1_books_id_interview",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -560,6 +1108,126 @@
         }
       }
     },
+    "/api/v1/books/{id}/chapters/{num}/style-score": {
+      "post": {
+        "tags": [
+          "detect"
+        ],
+        "summary": "POST /api/v1/books/:id/chapters/:num/style-score",
+        "operationId": "post__api_v1_books_id_chapters_num_style_score",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/detect/{chapter}": {
+      "post": {
+        "tags": [
+          "detect"
+        ],
+        "summary": "POST /api/v1/books/:id/detect/:chapter",
+        "operationId": "post__api_v1_books_id_detect_chapter",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/detect-all": {
+      "post": {
+        "tags": [
+          "detect"
+        ],
+        "summary": "POST /api/v1/books/:id/detect-all",
+        "operationId": "post__api_v1_books_id_detect_all",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/detect/stats": {
+      "get": {
+        "tags": [
+          "detect"
+        ],
+        "summary": "GET /api/v1/books/:id/detect/stats",
+        "operationId": "get__api_v1_books_id_detect_stats",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/event-chain": {
+      "get": {
+        "tags": [
+          "event-chain"
+        ],
+        "summary": "GET /api/v1/books/:id/event-chain",
+        "operationId": "get__api_v1_books_id_event_chain",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/event-chain/extract": {
+      "post": {
+        "tags": [
+          "event-chain"
+        ],
+        "summary": "POST /api/v1/books/:id/event-chain/extract",
+        "operationId": "post__api_v1_books_id_event_chain_extract",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v1/events": {
       "get": {
         "tags": [
@@ -580,6 +1248,126 @@
         }
       }
     },
+    "/api/v1/fanfic/init": {
+      "post": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "POST /api/v1/fanfic/init",
+        "operationId": "post__api_v1_fanfic_init",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/fanfic": {
+      "get": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "GET /api/v1/books/:id/fanfic",
+        "operationId": "get__api_v1_books_id_fanfic",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/fanfic/refresh": {
+      "post": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "POST /api/v1/books/:id/fanfic/refresh",
+        "operationId": "post__api_v1_books_id_fanfic_refresh",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/radar/scan": {
+      "post": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "POST /api/v1/radar/scan",
+        "operationId": "post__api_v1_radar_scan",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/radar/history": {
+      "get": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "GET /api/v1/radar/history",
+        "operationId": "get__api_v1_radar_history",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/doctor": {
+      "get": {
+        "tags": [
+          "fanfic-radar-doctor"
+        ],
+        "summary": "GET /api/v1/doctor",
+        "operationId": "get__api_v1_doctor",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v1/genres": {
       "get": {
         "tags": [
@@ -587,6 +1375,102 @@
         ],
         "summary": "GET /api/v1/genres",
         "operationId": "get__api_v1_genres",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/genres/{id}": {
+      "get": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "GET /api/v1/genres/:id",
+        "operationId": "get__api_v1_genres_id",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "PUT /api/v1/genres/:id",
+        "operationId": "put__api_v1_genres_id",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "DELETE /api/v1/genres/:id",
+        "operationId": "delete__api_v1_genres_id",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/genres/{id}/copy": {
+      "post": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "POST /api/v1/genres/:id/copy",
+        "operationId": "post__api_v1_genres_id_copy",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/genres/create": {
+      "post": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "POST /api/v1/genres/create",
+        "operationId": "post__api_v1_genres_create",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -683,6 +1567,126 @@
         ],
         "summary": "DELETE /api/v1/books/:id/hooks/:hookId",
         "operationId": "delete__api_v1_books_id_hooks_hookId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/chapters/plan": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/chapters/plan",
+        "operationId": "post__api_v1_books_id_import_chapters_plan",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/chapters/commit": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/chapters/commit",
+        "operationId": "post__api_v1_books_id_import_chapters_commit",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/chapters": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/chapters",
+        "operationId": "post__api_v1_books_id_import_chapters",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/canon": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/canon",
+        "operationId": "post__api_v1_books_id_import_canon",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/foundation/plan": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/foundation/plan",
+        "operationId": "post__api_v1_books_id_import_foundation_plan",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/import/foundation/commit": {
+      "post": {
+        "tags": [
+          "import-foundation"
+        ],
+        "summary": "POST /api/v1/books/:id/import/foundation/commit",
+        "operationId": "post__api_v1_books_id_import_foundation_commit",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -877,6 +1881,358 @@
         ],
         "summary": "GET /api/v1/project/files/:file{.+}",
         "operationId": "get__api_v1_project_files_file.+",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/revise/{chapter}": {
+      "post": {
+        "tags": [
+          "revision-export"
+        ],
+        "summary": "POST /api/v1/books/:id/revise/:chapter",
+        "operationId": "post__api_v1_books_id_revise_chapter",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/export": {
+      "get": {
+        "tags": [
+          "revision-export"
+        ],
+        "summary": "GET /api/v1/books/:id/export",
+        "operationId": "get__api_v1_books_id_export",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/export-save": {
+      "post": {
+        "tags": [
+          "revision-export"
+        ],
+        "summary": "POST /api/v1/books/:id/export-save",
+        "operationId": "post__api_v1_books_id_export_save",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/rewrite/{chapter}": {
+      "post": {
+        "tags": [
+          "revision-export"
+        ],
+        "summary": "POST /api/v1/books/:id/rewrite/:chapter",
+        "operationId": "post__api_v1_books_id_rewrite_chapter",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/resync/{chapter}": {
+      "post": {
+        "tags": [
+          "revision-export"
+        ],
+        "summary": "POST /api/v1/books/:id/resync/:chapter",
+        "operationId": "post__api_v1_books_id_resync_chapter",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/rhetoric/rewrite": {
+      "post": {
+        "tags": [
+          "rhetoric"
+        ],
+        "summary": "POST /api/v1/style/rhetoric/rewrite",
+        "operationId": "post__api_v1_style_rhetoric_rewrite",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/rhetoric/detect": {
+      "post": {
+        "tags": [
+          "rhetoric"
+        ],
+        "summary": "POST /api/v1/style/rhetoric/detect",
+        "operationId": "post__api_v1_style_rhetoric_detect",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/rhetoric/aware-prompt": {
+      "post": {
+        "tags": [
+          "rhetoric"
+        ],
+        "summary": "POST /api/v1/style/rhetoric/aware-prompt",
+        "operationId": "post__api_v1_style_rhetoric_aware_prompt",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/roles": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "GET /api/v1/books/:id/roles",
+        "operationId": "get__api_v1_books_id_roles",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "POST /api/v1/books/:id/roles",
+        "operationId": "post__api_v1_books_id_roles",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/roles/{roleId}": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "GET /api/v1/books/:id/roles/:roleId",
+        "operationId": "get__api_v1_books_id_roles_roleId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "PUT /api/v1/books/:id/roles/:roleId",
+        "operationId": "put__api_v1_books_id_roles_roleId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "DELETE /api/v1/books/:id/roles/:roleId",
+        "operationId": "delete__api_v1_books_id_roles_roleId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/truth/{file{.+}}": {
+      "get": {
+        "tags": [
+          "runtime-truth"
+        ],
+        "summary": "GET /api/v1/books/:id/truth/:file{.+}",
+        "operationId": "get__api_v1_books_id_truth_file.+",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "runtime-truth"
+        ],
+        "summary": "PUT /api/v1/books/:id/truth/:file{.+}",
+        "operationId": "put__api_v1_books_id_truth_file.+",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/runtime": {
+      "get": {
+        "tags": [
+          "runtime-truth"
+        ],
+        "summary": "GET /api/v1/books/:id/runtime",
+        "operationId": "get__api_v1_books_id_runtime",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/runtime/{file{.+}}": {
+      "get": {
+        "tags": [
+          "runtime-truth"
+        ],
+        "summary": "GET /api/v1/books/:id/runtime/:file{.+}",
+        "operationId": "get__api_v1_books_id_runtime_file.+",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/state-changelog": {
+      "get": {
+        "tags": [
+          "runtime-truth"
+        ],
+        "summary": "GET /api/v1/books/:id/state-changelog",
+        "operationId": "get__api_v1_books_id_state_changelog",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -1200,26 +2556,6 @@
         }
       }
     },
-    "/api/v1/agent": {
-      "post": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "POST /api/v1/agent",
-        "operationId": "post__api_v1_agent",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
     "/api/v1/books/{id}/sources": {
       "get": {
         "tags": [
@@ -1265,6 +2601,46 @@
         ],
         "summary": "DELETE /api/v1/books/:id/sources/:sourceId",
         "operationId": "delete__api_v1_books_id_sources_sourceId",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/paragraph/dedup": {
+      "post": {
+        "tags": [
+          "style-quality"
+        ],
+        "summary": "POST /api/v1/style/paragraph/dedup",
+        "operationId": "post__api_v1_style_paragraph_dedup",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/style/readability/score": {
+      "post": {
+        "tags": [
+          "style-quality"
+        ],
+        "summary": "POST /api/v1/style/readability/score",
+        "operationId": "post__api_v1_style_readability_score",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -1458,200 +2834,6 @@
         }
       }
     },
-    "/api/v1/style/authors": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors",
-        "operationId": "get__api_v1_style_authors",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors",
-        "operationId": "post__api_v1_style_authors",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors/:authorId",
-        "operationId": "get__api_v1_style_authors_authorId",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "style"
-        ],
-        "summary": "DELETE /api/v1/style/authors/:authorId",
-        "operationId": "delete__api_v1_style_authors_authorId",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/sources": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/:authorId/sources",
-        "operationId": "post__api_v1_style_authors_authorId_sources",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/reanalyze": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/:authorId/reanalyze",
-        "operationId": "post__api_v1_style_authors_authorId_reanalyze",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/diagnostics": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/:authorId/diagnostics",
-        "operationId": "post__api_v1_style_authors_authorId_diagnostics",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors/:authorId/diagnostics",
-        "operationId": "get__api_v1_style_authors_authorId_diagnostics",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/diagnostics/{diagnosticsId}": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors/:authorId/diagnostics/:diagnosticsId",
-        "operationId": "get__api_v1_style_authors_authorId_diagnostics_diagnosticsId",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/style/apply-author": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/style/apply-author",
-        "operationId": "post__api_v1_books_id_style_apply_author",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
     "/api/v1/style/preprocess": {
       "post": {
         "tags": [
@@ -1712,600 +2894,6 @@
         }
       }
     },
-    "/api/v1/style/rhetoric/rewrite": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/rhetoric/rewrite",
-        "operationId": "post__api_v1_style_rhetoric_rewrite",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/rhetoric/detect": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/rhetoric/detect",
-        "operationId": "post__api_v1_style_rhetoric_detect",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/rhetoric/aware-prompt": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/rhetoric/aware-prompt",
-        "operationId": "post__api_v1_style_rhetoric_aware_prompt",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/paragraph/dedup": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/paragraph/dedup",
-        "operationId": "post__api_v1_style_paragraph_dedup",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/readability/score": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/readability/score",
-        "operationId": "post__api_v1_style_readability_score",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/search": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/search",
-        "operationId": "post__api_v1_style_authors_search",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/fetch": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/fetch",
-        "operationId": "post__api_v1_style_authors_fetch",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/samples/write": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/samples/write",
-        "operationId": "post__api_v1_style_authors_samples_write",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/distillations": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/:authorId/distillations",
-        "operationId": "post__api_v1_style_authors_authorId_distillations",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/distillations/current": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors/:authorId/distillations/current",
-        "operationId": "get__api_v1_style_authors_authorId_distillations_current",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "style"
-        ],
-        "summary": "PATCH /api/v1/style/authors/:authorId/distillations/current",
-        "operationId": "patch__api_v1_style_authors_authorId_distillations_current",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/distillations/current/publish": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/style/authors/:authorId/distillations/current/publish",
-        "operationId": "post__api_v1_style_authors_authorId_distillations_current_publish",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/style/authors/{authorId}/distillations/versions": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/style/authors/:authorId/distillations/versions",
-        "operationId": "get__api_v1_style_authors_authorId_distillations_versions",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/chapters/plan": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/chapters/plan",
-        "operationId": "post__api_v1_books_id_import_chapters_plan",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/chapters/commit": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/chapters/commit",
-        "operationId": "post__api_v1_books_id_import_chapters_commit",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/chapters": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/chapters",
-        "operationId": "post__api_v1_books_id_import_chapters",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/canon": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/canon",
-        "operationId": "post__api_v1_books_id_import_canon",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/foundation/plan": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/foundation/plan",
-        "operationId": "post__api_v1_books_id_import_foundation_plan",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/import/foundation/commit": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/import/foundation/commit",
-        "operationId": "post__api_v1_books_id_import_foundation_commit",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapter-goals": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/chapter-goals",
-        "operationId": "get__api_v1_books_id_chapter_goals",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapter-goals/{chapterNumber}": {
-      "put": {
-        "tags": [
-          "style"
-        ],
-        "summary": "PUT /api/v1/books/:id/chapter-goals/:chapterNumber",
-        "operationId": "put__api_v1_books_id_chapter_goals_chapterNumber",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "style"
-        ],
-        "summary": "DELETE /api/v1/books/:id/chapter-goals/:chapterNumber",
-        "operationId": "delete__api_v1_books_id_chapter_goals_chapterNumber",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapter-intents": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/chapter-intents",
-        "operationId": "get__api_v1_books_id_chapter_intents",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapter-intents/{chapterNumber}": {
-      "put": {
-        "tags": [
-          "style"
-        ],
-        "summary": "PUT /api/v1/books/:id/chapter-intents/:chapterNumber",
-        "operationId": "put__api_v1_books_id_chapter_intents_chapterNumber",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "style"
-        ],
-        "summary": "DELETE /api/v1/books/:id/chapter-intents/:chapterNumber",
-        "operationId": "delete__api_v1_books_id_chapter_intents_chapterNumber",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapter-intents/{chapterNumber}/suggestions": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/chapter-intents/:chapterNumber/suggestions",
-        "operationId": "get__api_v1_books_id_chapter_intents_chapterNumber_suggestions",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/chapters/{chapterNumber}/endpoint-check": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/chapters/:chapterNumber/endpoint-check",
-        "operationId": "get__api_v1_books_id_chapters_chapterNumber_endpoint_check",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/interview": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/interview",
-        "operationId": "get__api_v1_books_id_interview",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/event-chain": {
-      "get": {
-        "tags": [
-          "style"
-        ],
-        "summary": "GET /api/v1/books/:id/event-chain",
-        "operationId": "get__api_v1_books_id_event_chain",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v1/books/{id}/event-chain/extract": {
-      "post": {
-        "tags": [
-          "style"
-        ],
-        "summary": "POST /api/v1/books/:id/event-chain/extract",
-        "operationId": "post__api_v1_books_id_event_chain_extract",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
     "/api/v1/books/{id}/truth": {
       "get": {
         "tags": [
@@ -2325,9 +2913,191 @@
           }
         }
       }
+    },
+    "/api/v1/books/{id}/scene-templates": {
+      "get": {
+        "tags": [
+          "voices-scene"
+        ],
+        "summary": "GET /api/v1/books/:id/scene-templates",
+        "operationId": "get__api_v1_books_id_scene_templates",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "voices-scene"
+        ],
+        "summary": "PUT /api/v1/books/:id/scene-templates",
+        "operationId": "put__api_v1_books_id_scene_templates",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/voice-profiles": {
+      "get": {
+        "tags": [
+          "voices-scene"
+        ],
+        "summary": "GET /api/v1/books/:id/voice-profiles",
+        "operationId": "get__api_v1_books_id_voice_profiles",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/voice-profiles/analyze": {
+      "post": {
+        "tags": [
+          "voices-scene"
+        ],
+        "summary": "POST /api/v1/books/:id/voice-profiles/analyze",
+        "operationId": "post__api_v1_books_id_voice_profiles_analyze",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/write-preview": {
+      "get": {
+        "tags": [
+          "writing"
+        ],
+        "summary": "GET /api/v1/books/:id/write-preview",
+        "operationId": "get__api_v1_books_id_write_preview",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/plan-alternatives": {
+      "get": {
+        "tags": [
+          "writing"
+        ],
+        "summary": "GET /api/v1/books/:id/plan-alternatives",
+        "operationId": "get__api_v1_books_id_plan_alternatives",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/write-next": {
+      "post": {
+        "tags": [
+          "writing"
+        ],
+        "summary": "POST /api/v1/books/:id/write-next",
+        "operationId": "post__api_v1_books_id_write_next",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/draft": {
+      "post": {
+        "tags": [
+          "writing"
+        ],
+        "summary": "POST /api/v1/books/:id/draft",
+        "operationId": "post__api_v1_books_id_draft",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/books/{id}/write-status": {
+      "get": {
+        "tags": [
+          "writing"
+        ],
+        "summary": "GET /api/v1/books/:id/write-status",
+        "operationId": "get__api_v1_books_id_write_status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
     }
   },
   "tags": [
+    {
+      "name": "agent",
+      "description": "agent routes"
+    },
     {
       "name": "analytics",
       "description": "analytics routes"
@@ -2337,8 +3107,16 @@
       "description": "audit routes"
     },
     {
+      "name": "authors",
+      "description": "authors routes"
+    },
+    {
       "name": "books",
       "description": "books routes"
+    },
+    {
+      "name": "chapter-intent",
+      "description": "chapter-intent routes"
     },
     {
       "name": "chapters",
@@ -2353,8 +3131,20 @@
       "description": "daemon routes"
     },
     {
+      "name": "detect",
+      "description": "detect routes"
+    },
+    {
+      "name": "event-chain",
+      "description": "event-chain routes"
+    },
+    {
       "name": "events",
       "description": "events routes"
+    },
+    {
+      "name": "fanfic-radar-doctor",
+      "description": "fanfic-radar-doctor routes"
     },
     {
       "name": "genres",
@@ -2367,6 +3157,10 @@
     {
       "name": "hooks",
       "description": "hooks routes"
+    },
+    {
+      "name": "import-foundation",
+      "description": "import-foundation routes"
     },
     {
       "name": "language",
@@ -2385,6 +3179,22 @@
       "description": "project-config routes"
     },
     {
+      "name": "revision-export",
+      "description": "revision-export routes"
+    },
+    {
+      "name": "rhetoric",
+      "description": "rhetoric routes"
+    },
+    {
+      "name": "roles",
+      "description": "roles routes"
+    },
+    {
+      "name": "runtime-truth",
+      "description": "runtime-truth routes"
+    },
+    {
       "name": "services",
       "description": "services routes"
     },
@@ -2401,8 +3211,20 @@
       "description": "style routes"
     },
     {
+      "name": "style-quality",
+      "description": "style-quality routes"
+    },
+    {
       "name": "truth-browser",
       "description": "truth-browser routes"
+    },
+    {
+      "name": "voices-scene",
+      "description": "voices-scene routes"
+    },
+    {
+      "name": "writing",
+      "description": "writing routes"
     }
   ]
 }

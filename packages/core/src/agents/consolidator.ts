@@ -1,12 +1,11 @@
-import { BaseAgent } from "./base.js";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdir,readFile,writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readVolumeMap } from "../utils/outline-paths.js";
 import {
-  parsePendingHooksMarkdown,
-  renderHookSnapshot,
+parsePendingHooksMarkdown,
+renderHookSnapshot,
 } from "../utils/story-markdown.js";
-import type { StoredHook } from "../state/memory-db.js";
+import { BaseAgent } from "./base.js";
 
 export interface ConsolidationResult {
   readonly volumeSummaries: string;

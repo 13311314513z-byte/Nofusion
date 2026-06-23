@@ -3,8 +3,8 @@
  * Supports: .md, .txt, .jsonl, .json, .ts, .js, .html, .htm, .css
  */
 
-import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 export type DocumentFileType =
   | "md"
@@ -553,9 +553,8 @@ function validateExtractedText(text: string, fileType: string): string[] {
     warnings.push(`文本过短（${text.length} 字），分析结果可能不稳定`);
   }
 
-  // eslint-disable-next-line no-control-regex
   const garbledRatio =
-  // eslint-disable-next-line no-control-regex
+    // eslint-disable-next-line no-control-regex
     (text.match(/[\uFFFD\u0000-\u0008\u000B-\u000C\u000E-\u001F]/g) ?? []).length /
     text.length;
   if (garbledRatio > 0.05) {

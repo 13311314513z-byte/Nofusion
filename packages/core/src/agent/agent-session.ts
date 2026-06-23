@@ -1,42 +1,42 @@
-import { randomUUID } from "node:crypto";
+import type { AgentEvent,AgentMessage } from "@mariozechner/pi-agent-core";
 import { Agent } from "@mariozechner/pi-agent-core";
-import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
-import { streamSimple, getModels, getProviders, getEnvApiKey } from "@mariozechner/pi-ai";
 import type {
-  Model,
-  Api,
-  AssistantMessage,
-  Context,
-  Message,
-  SimpleStreamOptions,
-  ToolResultMessage,
-  UserMessage,
+Api,
+AssistantMessage,
+Context,
+Message,
+Model,
+SimpleStreamOptions,
+ToolResultMessage,
+UserMessage,
 } from "@mariozechner/pi-ai";
+import { getEnvApiKey,getModels,getProviders,streamSimple } from "@mariozechner/pi-ai";
+import { randomUUID } from "node:crypto";
+import {
+TOOL_RESULT_BRIDGE_TEXT,
+adaptRestoredAgentMessagesForModel,
+restoreAgentMessagesFromTranscript,
+} from "../interaction/session-transcript-restore.js";
+import type { TranscriptEvent,TranscriptRole } from "../interaction/session-transcript-schema.js";
+import {
+appendTranscriptEvents,
+readTranscriptEvents,
+} from "../interaction/session-transcript.js";
 import type { PipelineRunner } from "../pipeline/runner.js";
+import { assertSafeBookId } from "../utils/book-id.js";
 import { buildAgentSystemPrompt } from "./agent-system-prompt.js";
 import {
-  createPatchChapterTextTool,
-  createRenameEntityTool,
-  createSubAgentTool,
-  createReadTool,
-  createGrepTool,
-  createLsTool,
-  createWriteTruthFileTool,
-  createShortFictionRunTool,
-  createGenerateCoverTool,
+createGenerateCoverTool,
+createGrepTool,
+createLsTool,
+createPatchChapterTextTool,
+createReadTool,
+createRenameEntityTool,
+createShortFictionRunTool,
+createSubAgentTool,
+createWriteTruthFileTool,
 } from "./agent-tools.js";
 import { createBookContextTransform } from "./context-transform.js";
-import {
-  appendTranscriptEvents,
-  readTranscriptEvents,
-} from "../interaction/session-transcript.js";
-import {
-  TOOL_RESULT_BRIDGE_TEXT,
-  adaptRestoredAgentMessagesForModel,
-  restoreAgentMessagesFromTranscript,
-} from "../interaction/session-transcript-restore.js";
-import type { TranscriptEvent, TranscriptRole } from "../interaction/session-transcript-schema.js";
-import { assertSafeBookId } from "../utils/book-id.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -466,7 +466,7 @@ function plainToAgentMessages(
  * Flatten the Agent's in-memory messages to plain `{ role, content }` pairs
  * suitable for BookSession persistence.
  */
-function agentMessagesToPlain(
+function _agentMessagesToPlain(
   messages: AgentMessage[],
 ): Array<{ role: string; content: string; thinking?: string }> {
   const out: Array<{ role: string; content: string; thinking?: string }> = [];

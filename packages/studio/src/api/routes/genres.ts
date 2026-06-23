@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import type { ServerContext } from "../server-context.js";
 import { ApiError } from "../errors.js";
+import type { ServerContext } from "../server-context.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -156,7 +156,7 @@ export function registerGenresRoutes(ctx: ServerContext): void {
       const { rm } = await import("node:fs/promises");
       await rm(filePath);
       return c.json({ ok: true, id: genreId });
-    } catch (e) {
+    } catch (_e) {
       return c.json({ error: `Genre "${genreId}" not found in project` }, 404);
     }
   });

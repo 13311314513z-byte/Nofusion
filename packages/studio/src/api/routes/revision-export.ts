@@ -1,20 +1,20 @@
-import { join } from "node:path";
+import {
+buildExportArtifact,
+createInteractionToolsFromDeps,
+processProjectInteractionRequest,
+} from "@actalk/inkos-core";
 import { readdir } from "node:fs/promises";
-import type { ServerContext } from "../server-context.js";
+import { join } from "node:path";
 import { ApiError } from "../errors.js";
+import type { ServerContext } from "../server-context.js";
 import { withPipeline } from "../shared/pipeline.js";
 import {
-  acquireWriteJob,
-  completeWriteJob,
-  failWriteJob,
-  timeoutWriteJob,
-  WRITE_JOB_TIMEOUT_MS,
+acquireWriteJob,
+completeWriteJob,
+failWriteJob,
+timeoutWriteJob,
+WRITE_JOB_TIMEOUT_MS,
 } from "../shared/write-jobs.js";
-import {
-  buildExportArtifact,
-  createInteractionToolsFromDeps,
-  processProjectInteractionRequest,
-} from "@actalk/inkos-core";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ export function registerRevisionExportRoutes(ctx: ServerContext): void {
 
     broadcast("revise:start", { bookId: id, chapter: chapterNum });
     try {
-      const book = await state.loadBookConfig(id);
+      const _book = await state.loadBookConfig(id);
       const chaptersDir = join(bookDir, "chapters");
       const files = await readdir(chaptersDir);
       const paddedNum = String(chapterNum).padStart(4, "0");

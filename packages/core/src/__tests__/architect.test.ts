@@ -797,6 +797,55 @@ describe("ArchitectAgent", () => {
     expect(output.roles![1]).toMatchObject({ tier: "minor", name: "配角A" });
   });
 
+  it("generateFoundation accepts common non-strict section marker variants", async () => {
+    const agent = buildPhase5Agent();
+    const book = phase5Book();
+
+    vi.spyOn(agent as unknown as { chat: (...args: unknown[]) => Promise<unknown> }, "chat")
+      .mockResolvedValue({
+        content: [
+          "## SECTION: story_frame",
+          "## Theme",
+          "A dense story frame paragraph.",
+          "",
+          "=== volume_map ===",
+          "## Volume 1",
+          "A dense volume map paragraph.",
+          "",
+          "SECTION: roles",
+          "---ROLE---",
+          "tier: major",
+          "name: Lin Ci",
+          "---CONTENT---",
+          "## Core Tags",
+          "cold, persistent",
+          "",
+          "[SECTION: book_rules]",
+          "---",
+          "version: \"1.0\"",
+          "protagonist:",
+          "  name: Lin Ci",
+          "---",
+          "",
+          "## pending_hooks",
+          "| hook_id | start_chapter | type | status | latest_chapter | expected_payoff | payoff_arc | note |",
+          "|---|---|---|---|---|---|---|---|",
+          "| H001 | 0 | main | open | 0 | 3 | arc-1 | seed hook |",
+        ].join("\n"),
+        usage: ZERO_USAGE,
+      });
+
+    const output = await agent.generateFoundation(book);
+
+    expect(output.storyFrame).toContain("dense story frame");
+    expect(output.volumeMap).toContain("dense volume map");
+    expect(output.bookRules).toContain("protagonist");
+    expect(output.pendingHooks).toContain("H001");
+    expect(output.roles).toEqual([
+      expect.objectContaining({ tier: "major", name: "Lin Ci" }),
+    ]);
+  });
+
   it("writeFoundationFiles writes outline/ and roles/ when Phase 5 fields present", async () => {
     const { mkdtemp, rm, access } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");

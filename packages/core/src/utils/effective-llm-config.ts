@@ -1,11 +1,11 @@
-import { access, readFile, stat } from "node:fs/promises";
+import { readFile,stat } from "node:fs/promises";
 import { join } from "node:path";
-import { ProjectConfigSchema, type LLMConfig, type ProjectConfig } from "../models/project.js";
-import { loadSecrets } from "../llm/secrets.js";
 import { getEndpoint } from "../llm/providers/index.js";
-import { guessServiceFromBaseUrl, resolveServicePreset, resolveServiceProviderFamily } from "../llm/service-presets.js";
+import { loadSecrets } from "../llm/secrets.js";
+import { guessServiceFromBaseUrl,resolveServicePreset,resolveServiceProviderFamily } from "../llm/service-presets.js";
+import { ProjectConfigSchema,type LLMConfig,type ProjectConfig } from "../models/project.js";
 import { isApiKeyOptionalForEndpoint } from "./llm-endpoint-auth.js";
-import { cliOverlayEnv, legacyEnv, studioIgnoredEnv, type LLMEnvLayers, type LLMEnvMap } from "./llm-env.js";
+import { cliOverlayEnv,legacyEnv,studioIgnoredEnv,type LLMEnvLayers,type LLMEnvMap } from "./llm-env.js";
 
 export type LLMConsumer = "studio" | "cli" | "daemon" | "deploy";
 export type LLMConfigMode = "studio-project" | "cli-project" | "legacy-env";
@@ -98,6 +98,7 @@ export async function resolveEffectiveLLMConfig(
 
   const provider = typeof llm.provider === "string" ? llm.provider : undefined;
   const baseUrl = typeof llm.baseUrl === "string" ? llm.baseUrl : undefined;
+  const model = typeof llm.model === "string" ? llm.model : undefined;
   const apiKey = typeof llm.apiKey === "string" ? llm.apiKey : "";
   if (!apiKey && input.requireApiKey !== false && !isApiKeyOptionalForEndpoint({ provider, baseUrl })) {
     throw new Error(
@@ -105,6 +106,22 @@ export async function resolveEffectiveLLMConfig(
         ? "Studio LLM API key not set. Open Studio services and save an API key for the selected service."
         : "INKOS_LLM_API_KEY not set. Run 'inkos config set-global' or add it to project .env file.",
     );
+  }
+  if (input.requireApiKey !== false) {
+    if (!baseUrl) {
+      throw new Error(
+        configMode === "studio-project"
+          ? "Studio LLM base URL not set. Open Studio services and save a base URL for the selected service."
+          : "INKOS_LLM_BASE_URL not set. Run 'inkos config set-global' or add it to project .env file.",
+      );
+    }
+    if (!model || model === "noop-model") {
+      throw new Error(
+        configMode === "studio-project"
+          ? "Studio LLM model not set. Open Studio services and choose a model for the selected service."
+          : "INKOS_LLM_MODEL not set. Run 'inkos config set-global' or add it to project .env file.",
+      );
+    }
   }
 
   llm.apiKey = apiKey;

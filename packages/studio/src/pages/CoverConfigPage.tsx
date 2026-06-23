@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { fetchJson, putApi } from "../hooks/use-api";
-import { Image, Save, AlertCircle, CheckCircle, Loader2, Eye, EyeOff, Settings } from "lucide-react";
+import { AlertCircle,CheckCircle,Eye,EyeOff,Image,Loader2,Save,Settings } from "lucide-react";
+import { useEffect,useState } from "react";
+import { fetchJson,putApi } from "../hooks/use-api";
 
 interface ProviderInfo {
   readonly service: string;
@@ -21,7 +21,7 @@ interface Props {
   readonly t: (key: string) => string;
 }
 
-export function CoverConfigPage({ t }: Props) {
+export function CoverConfigPage({ t: _t }: Props) {
   const [config, setConfig] = useState<CoverConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

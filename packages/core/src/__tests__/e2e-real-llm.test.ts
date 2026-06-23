@@ -1,8 +1,27 @@
 /**
  * Real LLM E2E regression test (P2-2).
- * Requires INKOS_LLM_API_KEY and INKOS_LLM_MODEL in environment.
- * 
- * Run: pnpm --filter @actalk/inkos-core test -- src/__tests__/e2e-real-llm.test.ts
+ *
+ * Required env vars (all must be set):
+ *   INKOS_LLM_API_KEY  – API key for the LLM provider
+ *   INKOS_RUN_REAL_LLM_E2E=1 – opt-in flag
+ *
+ * Optional env vars (default to DeepSeek):
+ *   INKOS_LLM_BASE_URL – default https://api.deepseek.com/v1
+ *   INKOS_LLM_MODEL    – default deepseek-chat
+ *   INKOS_LLM_SERVICE  – default deepseek
+ *   INKOS_LLM_PROVIDER – default openai
+ *
+ * Examples:
+ *   # DeepSeek (default)
+ *   $env:INKOS_LLM_API_KEY="sk-xxx"; $env:INKOS_RUN_REAL_LLM_E2E="1"
+ *
+ *   # Kimi / Moonshot
+ *   $env:INKOS_LLM_API_KEY="sk-xxx"; $env:INKOS_LLM_BASE_URL="https://api.moonshot.cn/v1"
+ *   $env:INKOS_LLM_MODEL="moonshot-v1-8k"; $env:INKOS_LLM_SERVICE="moonshot"
+ *   $env:INKOS_RUN_REAL_LLM_E2E="1"
+ *
+ *   # Via pnpm
+ *   INKOS_LLM_API_KEY=xxx INKOS_RUN_REAL_LLM_E2E=1 pnpm --filter @actalk/inkos-core test -- src/__tests__/e2e-real-llm.test.ts
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -12,24 +31,38 @@ import { join } from "node:path";
 
 const TEST_TIMEOUT = 180_000;
 
-function getApiKey(): string | undefined {
-  return process.env.INKOS_LLM_API_KEY || undefined;
+function env(name: string, fallback: string): string {
+  return process.env[name] || fallback;
 }
 
 describe("Real LLM E2E", () => {
   let root: string;
   let API_KEY: string | undefined;
+  let LLM_BASE_URL: string;
+  let LLM_MODEL: string;
+  let LLM_SERVICE: string;
+  let LLM_PROVIDER: string;
 
   beforeAll(async () => {
     if (process.env.INKOS_RUN_REAL_LLM_E2E !== "1") {
       console.warn("Skipping real LLM E2E: set INKOS_RUN_REAL_LLM_E2E=1 to enable");
       return;
     }
-    API_KEY = getApiKey();
+    API_KEY = process.env.INKOS_LLM_API_KEY || undefined;
     if (!API_KEY) {
       console.warn("Skipping real LLM E2E: no INKOS_LLM_API_KEY in environment");
       return;
     }
+
+    // Read LLM config from env vars with DeepSeek defaults
+    LLM_BASE_URL = env("INKOS_LLM_BASE_URL", "https://api.deepseek.com/v1");
+    LLM_MODEL = env("INKOS_LLM_MODEL", "deepseek-chat");
+    LLM_SERVICE = env("INKOS_LLM_SERVICE", "deepseek");
+    LLM_PROVIDER = env("INKOS_LLM_PROVIDER", "openai");
+
+    console.log(`[E2E] Provider: ${LLM_PROVIDER} | Service: ${LLM_SERVICE} | Model: ${LLM_MODEL}`);
+    console.log(`[E2E] Base URL: ${LLM_BASE_URL}`);
+
     root = await mkdtemp(join(tmpdir(), "inkos-e2e-"));
     
     const config = {
@@ -37,11 +70,11 @@ describe("Real LLM E2E", () => {
       version: "0.1.0",
       language: "zh",
       llm: {
-        provider: "openai",
-        service: "deepseek",
+        provider: LLM_PROVIDER,
+        service: LLM_SERVICE,
         apiKey: API_KEY,
-        baseUrl: "https://api.deepseek.com/v1",
-        model: "deepseek-chat",
+        baseUrl: LLM_BASE_URL,
+        model: LLM_MODEL,
         temperature: 0.7,
         maxTokens: 4096,
         stream: false,
@@ -73,6 +106,7 @@ describe("Real LLM E2E", () => {
 
     const projectConfig = await loadProjectConfig(root, { consumer: "cli", requireApiKey: false });
     const client = createLLMClient(projectConfig.llm);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pipeline = new PipelineRunner({ client, model: projectConfig.llm.model, projectRoot: root, ...projectConfig } as any);
 
     try {

@@ -1,10 +1,10 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile,readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { analyzeChapterCadence } from "./chapter-cadence.js";
 import {
-  CADENCE_WINDOW_DEFAULTS,
-  LONG_SPAN_FATIGUE_THRESHOLDS,
+CADENCE_WINDOW_DEFAULTS,
+LONG_SPAN_FATIGUE_THRESHOLDS,
 } from "./cadence-policy.js";
+import { analyzeChapterCadence } from "./chapter-cadence.js";
 
 export interface LongSpanFatigueIssue {
   readonly severity: "warning";
@@ -517,7 +517,7 @@ function buildBigrams(value: string): Map<string, number> {
   return result;
 }
 
-function isMeaningfulValue(value: string): boolean {
+function _isMeaningfulValue(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   return normalized.length > 0 && normalized !== "none" && normalized !== "(none)" && normalized !== "无";
 }

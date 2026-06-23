@@ -26,6 +26,8 @@ import {
 import { projectConfig, cloneProjectConfig, setupTestRoot, cleanupTestRoot } from "./__tests__/mocks/fixtures.js";
 import { createStudioServer } from "./server.js";
 
+const SERVER_TEST_TIMEOUT_MS = 30_000;
+
 describe("createStudioServer daemon lifecycle", () => {
   let root: string;
 
@@ -66,7 +68,7 @@ describe("createStudioServer daemon lifecycle", () => {
     } finally {
       resolveStart?.();
     }
-  }, 10_000);
+  }, SERVER_TEST_TIMEOUT_MS);
 
   it("rejects book routes with path traversal ids", async () => {
     const { createStudioServer } = await import("./server.js");

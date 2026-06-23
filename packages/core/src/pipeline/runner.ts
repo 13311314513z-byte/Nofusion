@@ -1,139 +1,99 @@
-import type { LLMClient, OnStreamProgress } from "../llm/provider.js";
-import { chatCompletion, createLLMClient } from "../llm/provider.js";
-import type { Logger } from "../utils/logger.js";
-import type { BookConfig, FanficMode } from "../models/book.js";
-import type { ChapterMeta } from "../models/chapter.js";
-import type { NotifyChannel, LLMConfig, AgentLLMOverride, InputGovernanceMode } from "../models/project.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import { ArchitectAgent, type ArchitectOutput, type ArchitectRole } from "../agents/architect.js";
-import {
-  assembleFoundationContext,
-  buildFoundationSourceBundle,
-  persistFoundationSourceBundle,
-  type FoundationSourceBundle,
-  type FoundationSourceInput,
-} from "../import/foundation-source.js";
-import { FoundationReviewerAgent } from "../agents/foundation-reviewer.js";
-import { PlannerAgent, type PlanChapterOutput } from "../agents/planner.js";
-import { composeGovernedChapter, type ComposeChapterOutput } from "../agents/composer.js";
-import { WriterAgent, type WriteChapterInput, type WriteChapterOutput } from "../agents/writer.js";
-import { LengthNormalizerAgent } from "../agents/length-normalizer.js";
-import { ChapterAnalyzerAgent } from "../agents/chapter-analyzer.js";
-import { ContinuityAuditor } from "../agents/continuity.js";
-import { ReviserAgent, DEFAULT_REVISE_MODE, type ReviseMode } from "../agents/reviser.js";
-import { StateValidatorAgent, type ValidationResult, type ValidationWarning } from "../agents/state-validator.js";
-import { RadarAgent } from "../agents/radar.js";
-import type { RadarSource } from "../agents/radar-source.js";
-import { readGenreProfile } from "../agents/rules-reader.js";
-import { analyzeAITells } from "../agents/ai-tells.js";
-import {
-  loadChapterIntents,
-  getChapterIntent,
-  confirmChapterIntent,
-  saveChapterIntents,
-} from "../models/chapter-intent.js";
-import { validateAuthorIntentInContent } from "../agents/post-write-validator.js";
-import { BetaReader, type BetaReaderMode } from "../agents/beta-reader.js";
-import { IssueNormalizer } from "../agents/issue-normalizer.js";
-import { createIssue, hasAuditIssueParagraphLocation, resolveAuditIssue } from "../models/audit-issue.js";
-import { checkPatchBoundary, issueLocationsToParagraphSet } from "../utils/patch-boundary.js";
-import {
-  loadIssueConsecutiveCounts,
-  saveIssueConsecutiveCounts,
-  updateConsecutiveCounts,
-} from "../utils/issue-persistence.js";
-import { anchorAuditIssues } from "../utils/location-anchor.js";
-import {
-  evaluateBetaReaderModelConstraint,
-  persistBetaReaderShadow,
-} from "../utils/beta-reader-runtime.js";
-import { StateManager } from "../state/manager.js";
-import {
-  PipelineContext,
-  type PipelineConfig,
-} from "./context.js";
-import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
-import {
-  reviseDraft as revisionReviseDraft,
-  type ReviseDraftHost,
-} from "./runner-revision.js";
-import {
-  syncCurrentStateFactHistory,
-  syncNarrativeMemoryIndex,
-  syncLegacyStructuredStateFromMarkdown,
-  rebuildCurrentStateFactHistory,
-  rebuildNarrativeMemoryIndex,
-  canOpenMemoryIndex,
-  logMemoryIndexDebugInfo,
-  withMemoryIndexRetry,
-  isMemoryIndexUnavailableError,
-  isMemoryIndexBusyError,
-  factKey,
-  type MemoryIndexDeps,
-} from "./runner-memory-index.js";
-import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
-import { logPlanGenerated, logChapterWritten, logAuditCompleted } from "../utils/state-logger.js";
-import type { WebhookEvent } from "../notify/webhook.js";
-import type { AgentContext } from "../agents/base.js";
-import type { AuditResult, AuditIssue } from "../agents/continuity.js";
-import type { RadarResult } from "../agents/radar.js";
-import type { LengthSpec, LengthTelemetry } from "../models/length-governance.js";
-import type { ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
-import { buildLengthSpec, countChapterLength, formatLengthCount, isOutsideHardRange, resolveLengthCountingMode, type LengthLanguage } from "../utils/length-metrics.js";
-import { analyzeLongSpanFatigue } from "../utils/long-span-fatigue.js";
-import { buildWritingMethodologySection } from "../utils/writing-methodology.js";
-import {
-  readCharacterContext,
-  readStoryFrame,
-  readVolumeMap,
-} from "../utils/outline-paths.js";
-import { loadNarrativeMemorySeed, loadSnapshotCurrentStateFacts } from "../state/runtime-state-store.js";
-import { rewriteStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
-import { readFile, readdir, writeFile, mkdir, rename, rm, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+﻿import { mkdir,readFile,readdir,rm,writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ArchitectAgent,type ArchitectOutput,type ArchitectRole } from "../agents/architect.js";
+import type { AgentContext } from "../agents/base.js";
+import { ChapterAnalyzerAgent } from "../agents/chapter-analyzer.js";
+import { composeGovernedChapter,type ComposeChapterOutput } from "../agents/composer.js";
+import type { AuditIssue,AuditResult } from "../agents/continuity.js";
+import { ContinuityAuditor } from "../agents/continuity.js";
+import { FoundationReviewerAgent } from "../agents/foundation-reviewer.js";
+import { PlannerAgent,type PlanChapterOutput } from "../agents/planner.js";
+import type { RadarResult } from "../agents/radar.js";
+import { RadarAgent } from "../agents/radar.js";
+import { DEFAULT_REVISE_MODE,type ReviseMode } from "../agents/reviser.js";
+import { readGenreProfile } from "../agents/rules-reader.js";
+import { WriterAgent,type WriteChapterInput,type WriteChapterOutput } from "../agents/writer.js";
 import {
-  parseStateDegradedReviewNote,
-  resolveStateDegradedBaseStatus,
-  retrySettlementAfterValidationFailure,
-} from "./chapter-state-recovery.js";
-import { persistChapterArtifacts } from "./chapter-persistence.js";
-import { runChapterReviewCycle } from "./chapter-review-cycle.js";
+type FoundationSourceBundle,
+type FoundationSourceInput
+} from "../import/foundation-source.js";
+import type { LLMClient } from "../llm/provider.js";
+import type { BookConfig,FanficMode } from "../models/book.js";
+import type { ChapterMeta } from "../models/chapter.js";
+import type { GenreProfile } from "../models/genre-profile.js";
+import type { ChapterMemo,ContextPackage,RuleStack } from "../models/input-governance.js";
+import type { LengthSpec,LengthTelemetry } from "../models/length-governance.js";
+import type { WebhookEvent } from "../notify/webhook.js";
+import { StateManager } from "../state/manager.js";
+import { type Fact } from "../state/memory-db.js";
+import { buildLengthSpec,countChapterLength,type LengthLanguage } from "../utils/length-metrics.js";
+import { logAuditCompleted,logChapterWritten,logPlanGenerated } from "../utils/state-logger.js";
 import {
-  importCanon as importCanonFn,
-  importChapters as importChaptersFn,
-  type ImportHost,
+type MergedAuditEvaluation
+} from "./audit-helpers.js";
+import {
+PipelineContext,
+type PipelineConfig,
+} from "./context.js";
+import { loadPersistedPlan,relativeToBookDir,savePersistedPlan } from "./persisted-governed-plan.js";
+import { evaluateMergedAudit } from "./pipeline-audit.js";
+import {
+getBookStatusFromCtx,
+readTruthFilesFromCtx
+} from "./pipeline-book-status.js";
+import { importFanficCanon as fanficImportCanon } from "./pipeline-fanfic.js";
+import {
+assertValidArchitectOutput,
+buildFoundationReviewFeedback,
+copyDirRecursive,
+copyDirShallow,
+initBook as foundationInitBook,
+reviseFoundation as foundationReviseFoundation,
+generateAndReviewFoundation,
+getFoundationRevision,
+} from "./pipeline-foundation.js";
+import { commitFoundationImport as commitImport,planFoundationImport as planImport } from "./pipeline-import.js";
+import { repairChapterStateLocked,resyncChapterArtifactsLocked } from "./pipeline-revision.js";
+import type { ChapterPipelineResult,DraftResult,PlanChapterResult,TokenUsageSummary } from "./pipeline-types.js";
+import { writeNextChapterLocked } from "./pipeline-writing.js";
+import {
+importCanon as importCanonFn,
+importChapters as importChaptersFn,
+type ImportHost,
 } from "./runner-import.js";
 import {
-  generateStyleGuide as generateStyleGuideFn,
-  tryGenerateStyleGuide as tryGenerateStyleGuideFn,
-  buildDeterministicStyleGuide,
-  type StyleGuideHost,
+canOpenMemoryIndex,
+factKey,
+isMemoryIndexBusyError,
+isMemoryIndexUnavailableError,
+logMemoryIndexDebugInfo,
+rebuildCurrentStateFactHistory,
+rebuildNarrativeMemoryIndex,
+syncCurrentStateFactHistory,
+syncLegacyStructuredStateFromMarkdown,
+syncNarrativeMemoryIndex,
+withMemoryIndexRetry,
+type MemoryIndexDeps,
+} from "./runner-memory-index.js";
+import {
+reviseDraft as revisionReviseDraft,
+type ReviseDraftHost,
+} from "./runner-revision.js";
+import {
+generateStyleGuide as generateStyleGuideFn,
+tryGenerateStyleGuide as tryGenerateStyleGuideFn,
+type StyleGuideHost
 } from "./runner-style-guide.js";
 import {
-  assertChapterContentNotEmpty,
-  buildLengthWarnings as buildLengthWarningsFn,
-  buildLengthTelemetry as buildLengthTelemetryFn,
-  logLengthWarnings as logLengthWarningsFn,
-  normalizeDraftLengthIfNeeded as normalizeDraftLengthIfNeededFn,
-  persistAuditDriftGuidance as persistAuditDriftGuidanceFn,
-  emitWebhook as emitWebhookFn,
-  type UtilsHost,
+assertChapterContentNotEmpty,
+buildLengthTelemetry as buildLengthTelemetryFn,
+buildLengthWarnings as buildLengthWarningsFn,
+emitWebhook as emitWebhookFn,
+logLengthWarnings as logLengthWarningsFn,
+normalizeDraftLengthIfNeeded as normalizeDraftLengthIfNeededFn,
+persistAuditDriftGuidance as persistAuditDriftGuidanceFn,
+type UtilsHost,
 } from "./runner-utils.js";
-import {
-  stripAuditDriftCorrectionBlock,
-  restoreLostAuditIssues,
-  restoreActionableAuditIfLost,
-  type MergedAuditEvaluation,
-} from "./audit-helpers.js";
-import { validateChapterTruthPersistence } from "./chapter-truth-validation.js";
-import { loadPersistedPlan, relativeToBookDir, savePersistedPlan } from "./persisted-governed-plan.js";
-import {
-  readTruthFilesFromCtx,
-  getBookStatusFromCtx,
-  type TruthFiles as PipelineTruthFiles,
-  type BookStatusResult,
-} from "./pipeline-book-status.js";
 
 const SEQUENCE_LEVEL_CATEGORIES = new Set([
   "Pacing Monotony", "节奏单调",
@@ -144,7 +104,7 @@ const SEQUENCE_LEVEL_CATEGORIES = new Set([
   "Ending Pattern Repetition", "结尾同构",
 ]);
 
-function isSequenceLevelCategory(category: string): boolean {
+function _isSequenceLevelCategory(category: string): boolean {
   return SEQUENCE_LEVEL_CATEGORIES.has(category);
 }
 
@@ -301,26 +261,10 @@ export function buildImportFoundationSource(
   ].join("\n");
 }
 
-export type { PipelineConfig } from "./context.js";
 export { PipelineContext } from "./context.js";
-import {
-  initBook as foundationInitBook,
-  reviseFoundation as foundationReviseFoundation,
-  generateAndReviewFoundation,
-  buildFoundationReviewFeedback,
-  assertValidArchitectOutput,
-  getFoundationRevision,
-  copyDirShallow,
-  copyDirRecursive,
-} from "./pipeline-foundation.js";
-import { evaluateMergedAudit } from "./pipeline-audit.js";
-import { importFanficCanon as fanficImportCanon } from "./pipeline-fanfic.js";
-import { repairChapterStateLocked, resyncChapterArtifactsLocked } from "./pipeline-revision.js";
-import { writeNextChapterLocked } from "./pipeline-writing.js";
-import { planFoundationImport as planImport, commitFoundationImport as commitImport } from "./pipeline-import.js";
-import type { TokenUsageSummary, ChapterPipelineResult, DraftResult, PlanChapterResult } from "./pipeline-types.js";
+export type { PipelineConfig } from "./context.js";
 
-export type { TokenUsageSummary, ChapterPipelineResult, DraftResult, PlanChapterResult } from "./pipeline-types.js";
+export type { ChapterPipelineResult,DraftResult,PlanChapterResult,TokenUsageSummary } from "./pipeline-types.js";
 
 export interface ComposeChapterResult extends PlanChapterResult {
   readonly contextPath: string;
@@ -467,7 +411,7 @@ export class PipelineRunner {
     sourceName: string | undefined,
     language?: LengthLanguage,
   ): Promise<void> {
-    return tryGenerateStyleGuideFn(this as any as StyleGuideHost, bookId, referenceText, sourceName, language);
+    return tryGenerateStyleGuideFn(this as unknown as StyleGuideHost, bookId, referenceText, sourceName, language);
   }
 
   private async generateAndReviewFoundation(params: Parameters<typeof generateAndReviewFoundation>[4]): Promise<ArchitectOutput> {
@@ -1094,7 +1038,7 @@ export class PipelineRunner {
    * Also saves the statistical style_profile.json.
    */
   async generateStyleGuide(bookId: string, referenceText: string, sourceName?: string): Promise<string> {
-    return generateStyleGuideFn(this as any as StyleGuideHost, bookId, referenceText, sourceName);
+    return generateStyleGuideFn(this as unknown as StyleGuideHost, bookId, referenceText, sourceName);
   }
 
   // buildDeterministicStyleGuide is now re-exported from runner-style-guide.ts
@@ -1104,7 +1048,7 @@ export class PipelineRunner {
    * Reads parent's truth files, uses LLM to generate parent_canon.md in target book.
    */
   async importCanon(targetBookId: string, parentBookId: string): Promise<string> {
-    return importCanonFn(this as any as ImportHost, targetBookId, parentBookId);
+    return importCanonFn(this as unknown as ImportHost, targetBookId, parentBookId);
   }
 
   // ---------------------------------------------------------------------------
@@ -1123,7 +1067,7 @@ export class PipelineRunner {
    * Step 2: Sequentially replay each chapter through ChapterAnalyzer to build truth files.
    */
   async importChapters(input: ImportChaptersInput): Promise<ImportChaptersResult> {
-    return importChaptersFn(this as any as ImportHost, input, {
+    return importChaptersFn(this as unknown as ImportHost, input, {
       AgentClasses: {
         ArchitectAgent,
         FoundationReviewerAgent,
@@ -1328,7 +1272,7 @@ export class PipelineRunner {
     applied: boolean;
     tokenUsage?: TokenUsageSummary;
   }> {
-    return normalizeDraftLengthIfNeededFn(this as any as UtilsHost, params);
+    return normalizeDraftLengthIfNeededFn(this as unknown as UtilsHost, params);
   }
 
   private assertChapterContentNotEmpty(content: string, chapterNumber: number, stage: string): void {
@@ -1404,7 +1348,7 @@ export class PipelineRunner {
     finalCount: number,
     lengthSpec: LengthSpec,
   ): string[] {
-    return buildLengthWarningsFn(this as any as UtilsHost, chapterNumber, finalCount, lengthSpec);
+    return buildLengthWarningsFn(this as unknown as UtilsHost, chapterNumber, finalCount, lengthSpec);
   }
 
   private buildLengthTelemetry(params: {
@@ -1425,11 +1369,11 @@ export class PipelineRunner {
     readonly issues: ReadonlyArray<AuditIssue>;
     readonly language: LengthLanguage;
   }): Promise<void> {
-    return persistAuditDriftGuidanceFn(this as any as UtilsHost, params);
+    return persistAuditDriftGuidanceFn(this as unknown as UtilsHost, params);
   }
 
   private logLengthWarnings(lengthWarnings: ReadonlyArray<string>): void {
-    return logLengthWarningsFn(this as any as UtilsHost, lengthWarnings);
+    return logLengthWarningsFn(this as unknown as UtilsHost, lengthWarnings);
   }
 
   // C2-ext: Delegated to pipeline-audit.ts
@@ -1540,7 +1484,7 @@ export class PipelineRunner {
     chapterNumber?: number,
     data?: Record<string, unknown>,
   ): Promise<void> {
-    return emitWebhookFn(this as any as UtilsHost, event, bookId, chapterNumber, data);
+    return emitWebhookFn(this as unknown as UtilsHost, event, bookId, chapterNumber, data);
   }
 
   private async readChapterContent(bookDir: string, chapterNumber: number): Promise<string> {

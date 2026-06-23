@@ -5,34 +5,46 @@
  * write-next instruction shortcut, pi-agent session execution,
  * book creation finalization, and error recovery.
  */
-import type { ServerContext } from "../server-context.js";
-import { ApiError } from "../errors.js";
 import {
-  createLLMClient, loadBookSession, appendManualSessionMessages,
-  resolveServiceModel, loadSecrets, listModelsForService,
-  runAgentSession, SessionAlreadyMigratedError, migrateBookSession,
-  PipelineRunner,
+appendManualSessionMessages,
+createLLMClient,
+listModelsForService,
+loadBookSession,
+loadSecrets,
+migrateBookSession,
+PipelineRunner,
+resolveServiceModel,
+runAgentSession,SessionAlreadyMigratedError,
 } from "@actalk/inkos-core";
-import { withPipeline } from "../shared/pipeline.js";
+import { ApiError } from "../errors.js";
+import type { ServerContext } from "../server-context.js";
 import {
-  isTextChatModelId, nonTextModelMessage, filterTextChatModels,
-  isWriteNextInstruction, resolveArchitectBookIdFromArgs,
-  resolveToolLabel, summarizeResult, extractToolError,
-  tryHandleExternalChatEdit,
-  PIPELINE_STAGES,
+extractToolError,
+filterTextChatModels,
+isTextChatModelId,
+isWriteNextInstruction,
+nonTextModelMessage,
+PIPELINE_STAGES,
+resolveArchitectBookIdFromArgs,
+resolveToolLabel,summarizeResult,
+tryHandleExternalChatEdit,
 } from "../shared/agent-helpers.js";
 import {
-  validateAgentActionExecution, resolveCreatedBookIdFromToolExecs,
-  type CollectedToolExec,
+resolveCreatedBookIdFromToolExecs,
+validateAgentActionExecution,
+type CollectedToolExec,
 } from "../shared/agent-validation.js";
+import {
+BOOK_CREATE_TTL_MS,
+bookCreateStatus,
+} from "../shared/book-create-state.js";
 import { normalizeApiBookId } from "../shared/book-guards.js";
 import { loadStudioBookListSummary } from "../shared/book-helpers.js";
 import {
-  normalizeServiceConfig, serviceConfigKey, resolveConfiguredServiceEntry,
+normalizeServiceConfig,
+resolveConfiguredServiceEntry,
+serviceConfigKey,
 } from "../shared/service-helpers.js";
-import {
-  bookCreateStatus, BOOK_CREATE_TTL_MS,
-} from "../shared/book-create-state.js";
 
 export function registerAgentRoutes(ctx: ServerContext): void {
   const {

@@ -2,19 +2,19 @@
  * Import routes — Chapter Import + Canon Import + Foundation Import.
  * Extracted from style.ts (B4).
  */
-import type { ServerContext } from "../server-context.js";
-import { withPipeline } from "../../shared/pipeline-utils.js";
 import {
-  planChapterImport,
-  buildFoundationSourceBundle,
-  isDocumentFileType,
-  isFoundationSourcePurpose,
-  type ArchitectOutput,
-  type ChapterImportPlan,
-  type FoundationSourceBundle,
-  type FoundationSourceInput,
+buildFoundationSourceBundle,
+isDocumentFileType,
+isFoundationSourcePurpose,
+planChapterImport,
+type ArchitectOutput,
+type ChapterImportPlan,
+type FoundationSourceBundle,
+type FoundationSourceInput,
 } from "@actalk/inkos-core";
 import { randomUUID } from "node:crypto";
+import { withPipeline } from "../../shared/pipeline-utils.js";
+import type { ServerContext } from "../server-context.js";
 
 interface FoundationImportPlan {
   readonly bookId: string;
@@ -37,9 +37,9 @@ function isFoundationImportPlan(value: unknown): value is FoundationImportPlan {
 }
 
 export function registerImportRoutes(ctx: ServerContext): void {
-  const { app, root, state: stateManager, broadcast, buildPipelineConfig } = ctx;
+  const { app, root, state: _stateManager, broadcast, buildPipelineConfig } = ctx;
 
-  async function assertBookExists(state: ServerContext["state"], bookId: string): Promise<void> {
+  async function _assertBookExists(state: ServerContext["state"], bookId: string): Promise<void> {
     try { await state.loadBookConfig(bookId); }
     catch { throw new Error(`Book not found: ${bookId}`); }
   }
@@ -48,7 +48,7 @@ export function registerImportRoutes(ctx: ServerContext): void {
 
   // Step 1: Preview / plan import (no filesystem changes)
   app.post("/api/v1/books/:id/import/chapters/plan", async (c) => {
-    const id = c.req.param("id");
+    const _id = c.req.param("id");
     const { text, splitRegex, startNumber } = await c.req.json<{
       text: string; splitRegex?: string; startNumber?: number;
     }>();

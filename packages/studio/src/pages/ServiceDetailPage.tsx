@@ -1,21 +1,20 @@
-import { useState, useEffect } from "react";
-import { fetchJson, useApi } from "../hooks/use-api";
-import { useServiceStore } from "../store/service";
-import { Loader2, ArrowLeft, Trash2, ShieldCheck, FileText, Stethoscope } from "lucide-react";
+import { ArrowLeft,FileText,Loader2,ShieldCheck,Stethoscope,Trash2 } from "lucide-react";
+import { useEffect,useState } from "react";
+import { ApiKeyInput } from "../components/ApiKeyInput";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ServiceQuickLinks } from "../components/ServiceQuickLinks";
-import { ApiKeyInput } from "../components/ApiKeyInput";
 import { WritingParamPresets } from "../components/WritingParamPresets.js";
+import { fetchJson,useApi } from "../hooks/use-api";
+import { useServiceStore } from "../store/service";
 import {
-  deleteServiceConfig,
-  matchServiceConfigEntryForDetail,
-  probeServiceForDetail,
-  rehydrateServiceConnectionStatus,
-  saveServiceConfig,
-  type ServiceDetailConnectionStatus as ConnectionStatus,
-  type ServiceDetailDetectedConfig as DetectedConfig,
-  type ServiceDetailModelInfo as ModelInfo,
-  type ServiceDetailVerifiedProbe as VerifiedProbe,
+deleteServiceConfig,
+matchServiceConfigEntryForDetail,
+probeServiceForDetail,
+rehydrateServiceConnectionStatus,
+saveServiceConfig,
+type ServiceDetailConnectionStatus as ConnectionStatus,
+type ServiceDetailDetectedConfig as DetectedConfig,
+type ServiceDetailVerifiedProbe as VerifiedProbe
 } from "./service-detail-state";
 
 interface Nav {

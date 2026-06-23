@@ -1,10 +1,10 @@
-import type { BookConfig, FanficMode } from "../models/book.js";
-import type { GenreProfile } from "../models/genre-profile.js";
 import type { BookRules } from "../models/book-rules.js";
+import type { BookConfig,FanficMode } from "../models/book.js";
+import type { GenreProfile } from "../models/genre-profile.js";
 import type { LengthSpec } from "../models/length-governance.js";
-import { buildFanficCanonSection, buildCharacterVoiceProfiles, buildFanficModeInstructions } from "./fanfic-prompt-sections.js";
-import { buildEnglishCoreRules, buildEnglishAntiAIRules, buildEnglishCharacterMethod, buildEnglishPreWriteChecklist, buildEnglishGenreIntro } from "./en-prompt-sections.js";
 import { buildLengthSpec } from "../utils/length-metrics.js";
+import { buildEnglishCoreRules,buildEnglishGenreIntro } from "./en-prompt-sections.js";
+import { buildCharacterVoiceProfiles,buildFanficCanonSection,buildFanficModeInstructions } from "./fanfic-prompt-sections.js";
 
 export interface FanficContext {
   readonly fanficCanon: string;
@@ -278,7 +278,7 @@ function buildCoreRules(lengthSpec: LengthSpec): string {
 // 去AI味正面范例（反例→正例对照表）
 // ---------------------------------------------------------------------------
 
-function buildAntiAIExamples(): string {
+function _buildAntiAIExamples(): string {
   return `## 去AI味：反例→正例对照
 
 以下对照表展示AI常犯的"味道"问题和修正方法。正文必须贴近正例风格。
@@ -323,7 +323,7 @@ function buildAntiAIExamples(): string {
 // 六步走人物心理分析（新增方法论）
 // ---------------------------------------------------------------------------
 
-function buildCharacterPsychologyMethod(): string {
+function _buildCharacterPsychologyMethod(): string {
   return `## 六步走人物心理分析
 
 每个重要角色在关键场景中的行为，必须经过以下六步推导：
@@ -352,7 +352,7 @@ function buildCharacterPsychologyMethod(): string {
 // 配角设计方法论
 // ---------------------------------------------------------------------------
 
-function buildSupportingCharacterMethod(): string {
+function _buildSupportingCharacterMethod(): string {
   return `## 配角设计方法论
 
 ### 配角B面原则
@@ -375,7 +375,7 @@ function buildSupportingCharacterMethod(): string {
 // 读者心理学框架（新增方法论）
 // ---------------------------------------------------------------------------
 
-function buildReaderPsychologyMethod(): string {
+function _buildReaderPsychologyMethod(): string {
   return `## 读者心理学框架
 
 写作时同步考虑读者的心理状态：
@@ -392,7 +392,7 @@ function buildReaderPsychologyMethod(): string {
 // 情感节点设计方法论
 // ---------------------------------------------------------------------------
 
-function buildEmotionalPacingMethod(): string {
+function _buildEmotionalPacingMethod(): string {
   return `## 情感节点设计
 
 关系发展（友情、爱情、从属）必须经过事件驱动的节点递进：
@@ -414,7 +414,7 @@ function buildEmotionalPacingMethod(): string {
 // 代入感具体技法
 // ---------------------------------------------------------------------------
 
-function buildImmersionTechniques(): string {
+function _buildImmersionTechniques(): string {
   return `## 代入感技法
 
 - **自然信息交代**：角色身份/外貌/背景通过行动和对话带出，禁止"资料卡式"直接罗列
@@ -734,7 +734,7 @@ ${fingerprint}`;
 // Pre-write checklist
 // ---------------------------------------------------------------------------
 
-function buildPreWriteChecklist(book: BookConfig, gp: GenreProfile): string {
+function _buildPreWriteChecklist(book: BookConfig, gp: GenreProfile): string {
   let idx = 1;
   const lines = [
     "## 动笔前必须自问",

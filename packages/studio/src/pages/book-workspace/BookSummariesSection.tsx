@@ -3,14 +3,13 @@ import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { BookOpen, Globe, Users } from "lucide-react";
 import { fetchJson } from "../../hooks/use-api";
 import type { Theme } from "../../hooks/use-theme";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = { cjk, code, math };
 
 const MD_CLASS =
   "text-sm text-muted-foreground leading-relaxed " +

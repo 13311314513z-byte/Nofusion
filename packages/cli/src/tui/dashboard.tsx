@@ -1,34 +1,38 @@
-import React, { useEffect, useRef, useState } from "react";
 import {
-  appendInteractionMessage,
-  routeNaturalLanguageIntent,
-  type InteractionIntentType,
-  type InteractionSession,
+appendInteractionMessage,
+routeNaturalLanguageIntent,
+type InteractionIntentType,
+type InteractionSession,
 } from "@actalk/inkos-core";
-import { Box, Text, useApp, useInput } from "ink";
-import { processTuiAgentInput } from "./agent-input.js";
+import { Box,Text,useApp,useInput } from "ink";
+import React,{ useEffect,useRef,useState } from "react";
 import { describeActivityState } from "./activity-state.js";
+import { processTuiAgentInput } from "./agent-input.js";
+import { resolveChatDepthProfile,type ChatDepth } from "./chat-depth.js";
+import { appendStreamingAssistantChunk,createOptimisticUserMessageSession } from "./chat-draft.js";
 import { resolveComposerCaretState } from "./composer-caret.js";
-import { resolveChatDepthProfile, type ChatDepth } from "./chat-depth.js";
-import { appendStreamingAssistantChunk, createOptimisticUserMessageSession } from "./chat-draft.js";
 import { renderComposerDisplay } from "./composer-display.js";
+import { buildDashboardViewModel,type DashboardMessageRow } from "./dashboard-model.js";
+import { formatModeLabel,getTuiCopy,normalizeStageLabel,type TuiLocale } from "./i18n.js";
+import { buildInputHistory,moveHistoryCursor } from "./input-history.js";
+import { classifyLocalTuiCommand,parseDepthCommand } from "./local-commands.js";
 import { renderMarkdown } from "./markdown.js";
-import { buildDashboardViewModel, type DashboardMessageRow } from "./dashboard-model.js";
-import { buildInputHistory, moveHistoryCursor } from "./input-history.js";
-import { formatModeLabel, getTuiCopy, normalizeStageLabel, type TuiLocale } from "./i18n.js";
-import { loadProjectSession, persistProjectSession, resolveSessionActiveBook } from "./session-store.js";
-import { classifyLocalTuiCommand, parseDepthCommand } from "./local-commands.js";
+import { loadProjectSession,resolveSessionActiveBook } from "./session-store.js";
 import {
-  applySlashSuggestion,
-  getNextSlashSelection,
-  getSlashSuggestions,
-  SLASH_COMMANDS,
+applySlashSuggestion,
+getNextSlashSelection,
+getSlashSuggestions,
+SLASH_COMMANDS,
 } from "./slash-autocomplete.js";
 import {
-  WARM_ACCENT, WARM_BORDER, WARM_MUTED, WARM_REPLY,
-  STATUS_SUCCESS, STATUS_ERROR, STATUS_ACTIVE, STATUS_IDLE,
-  ROLE_USER, ROLE_SYSTEM,
-  isAppleTerminal,
+isAppleTerminal,
+ROLE_SYSTEM,
+ROLE_USER,
+STATUS_ACTIVE,
+STATUS_ERROR,
+STATUS_IDLE,
+STATUS_SUCCESS,
+WARM_ACCENT,WARM_BORDER,WARM_MUTED,WARM_REPLY,
 } from "./theme.js";
 
 export interface InkTuiDashboardProps {
@@ -508,11 +512,11 @@ function statusIcon(status: string): string {
   }
 }
 
-function MutedText(props: { readonly children: React.ReactNode }): React.JSX.Element {
+function _MutedText(props: { readonly children: React.ReactNode }): React.JSX.Element {
   return <Text color={WARM_MUTED}>{props.children}</Text>;
 }
 
-function messageColor(role: DashboardMessageRow["role"]): string {
+function _messageColor(role: DashboardMessageRow["role"]): string {
   switch (role) {
     case "user":
       return WARM_MUTED;

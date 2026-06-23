@@ -5,8 +5,8 @@
  * Displays groups of exact duplicates and near-duplicates, with actions to delete or merge.
  */
 
-import React, { useState, useCallback } from "react";
-import type { DuplicateParagraphGroup, SimilarParagraphGroup } from "@actalk/inkos-core";
+import type { DuplicateParagraphGroup,SimilarParagraphGroup } from "@actalk/inkos-core";
+import { useCallback,useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,7 +44,7 @@ export function DuplicateParagraphPanel({
       )}
 
       {/* Exact duplicates */}
-      {duplicateGroups.map((group, gi) => (
+      {duplicateGroups.map((group, _gi) => (
         <DuplicateGroupCard
           key={`dup-${group.hash}`}
           group={group}

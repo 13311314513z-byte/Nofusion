@@ -1,10 +1,10 @@
-import { StyleTextTab } from "../StyleTextTab.js";
-import { BarChart3, AlertTriangle } from "lucide-react";
-import type { StringKey, TFunction } from "../../hooks/use-i18n";
-import type { CoreStyleProfile, ExtractedDoc, BookSummary } from "../style-types.js";
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import type { InspectionCode, InspectionResult } from "../style-preprocess-state.js";
+import { AlertTriangle,BarChart3 } from "lucide-react";
+import type { StringKey,TFunction } from "../../hooks/use-i18n";
+import type { InspectionCode,InspectionResult } from "../style-preprocess-state.js";
 import { computeRemovalStats } from "../style-preprocess-state.js";
+import type { BookSummary,CoreStyleProfile,ExtractedDoc } from "../style-types.js";
+import { StyleTextTab } from "../StyleTextTab.js";
 
 const INSPECTION_MESSAGE_KEYS = {
   "explicit-think-block": "style.inspect.explicitThinkBlock",
@@ -130,7 +130,7 @@ export function StyleImportTab(props: StyleImportTabProps) {
     text, setText, sourceName, setSourceName,
     urlSource, setUrlSource,
     profile, diagnostics, loading, loadingDiagnostics,
-    textFileInputRef, fileAnalysisInputRef,
+    textFileInputRef, fileAnalysisInputRef: _fileAnalysisInputRef,
     libraryData, booksData,
     fileText, fileSourceName, setFileSourceName, fileType,
     extractedDoc, loadedChunks, loadingChunk,
@@ -143,14 +143,14 @@ export function StyleImportTab(props: StyleImportTabProps) {
     filterNoiseMarkers, setFilterNoiseMarkers, minLineLength, setMinLineLength, setActivePreset,
     relayoutedText, showRelayoutPanel, setShowRelayoutPanel,
     mergeShortParagraphs, setMergeShortParagraphs, formatDialogue, setFormatDialogue,
-    ensureParagraphSpacing, setEnsureParagraphSpacing, normalizeQuotes, setNormalizeQuotes,
-    compressBlankLines, setCompressBlankLines,
+    ensureParagraphSpacing: _ensureParagraphSpacing, setEnsureParagraphSpacing: _setEnsureParagraphSpacing, normalizeQuotes, setNormalizeQuotes,
+    compressBlankLines: _compressBlankLines, setCompressBlankLines: _setCompressBlankLines,
     inspectionResult, showRiskConfirm, setShowRiskConfirm, pendingRiskStats, setPendingRiskStats,
     showExportPanel, setShowExportPanel, exportFormat, setExportFormat, exportStatus,
     importBookId, importChapterNumber, setImportChapterNumber, chapterIndex,
     c, t,
     handleTextLocalFile, handleImportUrl, handleAnalyze, handleDiagnostics,
-    handleImportBookChapter, handleSelectBook, handleFileAnalysisLocalFile,
+    handleImportBookChapter, handleSelectBook, handleFileAnalysisLocalFile: _handleFileAnalysisLocalFile,
     handleExtractText, handleLoadNextChunk, runPreprocess, runRelayout,
     handleRunPreprocess, getStageText, sampleLargeText,
     setAnalysisToExtracted, setAnalysisToCleaned, setAnalysisToRelayouted,

@@ -9,9 +9,9 @@
  * @module
  */
 
-import { useState, useMemo } from "react";
+import { AlertCircle,Highlighter,RefreshCw,X } from "lucide-react";
+import { useMemo,useState } from "react";
 import { fetchJson } from "../../hooks/use-api";
-import { RefreshCw, AlertCircle, Highlighter, X } from "lucide-react";
 
 interface RhetoricFinding {
   readonly type: string;
@@ -49,8 +49,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function RhetoricHighlightEditor({
   text,
-  onTextChange,
-  bookId,
+  onTextChange: _onTextChange,
+  bookId: _bookId,
 }: RhetoricHighlightEditorProps) {
   const [findings, setFindings] = useState<ReadonlyArray<RhetoricFinding>>([]);
   const [detecting, setDetecting] = useState(false);

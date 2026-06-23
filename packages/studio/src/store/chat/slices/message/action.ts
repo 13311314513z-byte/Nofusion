@@ -1,22 +1,22 @@
 import type { StateCreator } from "zustand";
-import type {
-  AgentResponse,
-  ChatStore,
-  MessageActions,
-  SessionResponse,
-  SessionSummary,
-} from "../../types";
 import { fetchJson } from "../../../../hooks/use-api";
-import { attachSessionStreamListeners } from "./stream-events";
+import type {
+AgentResponse,
+ChatStore,
+MessageActions,
+SessionResponse,
+SessionSummary,
+} from "../../types";
 import {
-  bookKey,
-  createSessionRuntime,
-  deserializeMessages,
-  extractErrorMessage,
-  mergeSessionIds,
-  updateSession,
-  upsertSessionSummary,
+bookKey,
+createSessionRuntime,
+deserializeMessages,
+extractErrorMessage,
+mergeSessionIds,
+updateSession,
+upsertSessionSummary,
 } from "./runtime";
+import { attachSessionStreamListeners } from "./stream-events";
 
 export const createMessageSlice: StateCreator<ChatStore, [], [], MessageActions> = (set, get) => ({
   activateSession: (sessionId) =>
@@ -212,7 +212,7 @@ export const createMessageSlice: StateCreator<ChatStore, [], [], MessageActions>
     }
 
     set((state) => {
-      const { [sessionId]: deleted, ...rest } = state.sessions;
+      const { [sessionId]: _deleted, ...rest } = state.sessions;
       const sessionIdsByBook = Object.fromEntries(
         Object.entries(state.sessionIdsByBook).map(([key, ids]) => [
           key,

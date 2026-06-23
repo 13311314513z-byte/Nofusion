@@ -1,42 +1,42 @@
-import { fetchJson, useApi, postApi, FETCH_TIMEOUT_WRITE_MS } from "../hooks/use-api";
-import { useWriteStatus } from "../hooks/useWriteStatus";
-import { useEffect, useMemo, useState } from "react";
-import type { Theme } from "../hooks/use-theme";
+import {
+BarChart2,
+BookOpen,
+Check,
+CheckCheck,
+ChevronLeft,
+Clock,
+Database,
+Download,
+Eye,
+FileText,
+Layers,
+MapPin,
+Plus,
+RefreshCw,
+RotateCcw,
+Save,
+Search,
+ShieldCheck,
+SlidersHorizontal,
+Sparkles,
+Tags,
+Trash2,
+UserRound,
+Users,
+Wand2,
+X,
+Zap,
+} from "lucide-react";
+import { useEffect,useMemo,useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { FETCH_TIMEOUT_WRITE_MS,fetchJson,postApi,useApi } from "../hooks/use-api";
+import { deriveBookActivity,shouldRefetchBookView } from "../hooks/use-book-activity";
+import { useColors } from "../hooks/use-colors";
 import type { TFunction } from "../hooks/use-i18n";
 import type { SSEMessage } from "../hooks/use-sse";
-import { useColors } from "../hooks/use-colors";
-import { deriveBookActivity, shouldRefetchBookView } from "../hooks/use-book-activity";
-import { ConfirmDialog } from "../components/ConfirmDialog";
+import type { Theme } from "../hooks/use-theme";
+import { useWriteStatus } from "../hooks/useWriteStatus";
 import { ChapterMetadataEditor } from "./ChapterMetadataEditor";
-import {
-  ChevronLeft,
-  Zap,
-  FileText,
-  CheckCheck,
-  BarChart2,
-  Download,
-  Search,
-  Wand2,
-  Eye,
-  Database,
-  Check,
-  X,
-  ShieldCheck,
-  RotateCcw,
-  RefreshCw,
-  Sparkles,
-  Trash2,
-  Save,
-  Tags,
-  UserRound,
-  MapPin,
-  Layers,
-  Clock,
-  SlidersHorizontal,
-  Plus,
-  BookOpen,
-  Users,
-} from "lucide-react";
 
 export interface ChapterMeta {
   readonly number: number;
@@ -154,12 +154,12 @@ export function BookDetail({
   t: TFunction;
   sse: { messages: ReadonlyArray<SSEMessage> };
 }) {
-  const c = useColors(theme);
+  const _c = useColors(theme);
   const { data, loading, error, refetch } = useApi<BookData>(`/books/${bookId}`);
   const { data: rolesData, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useApi<RolesData>(`/books/${bookId}/roles`);
   const [writeRequestPending, setWriteRequestPending] = useState(false);
   const [draftRequestPending, setDraftRequestPending] = useState(false);
-  const { status: writeStatus } = useWriteStatus(bookId);
+  const { status: _writeStatus } = useWriteStatus(bookId);
   const [deleting, setDeleting] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [rewritingChapters, setRewritingChapters] = useState<ReadonlyArray<number>>([]);
@@ -192,7 +192,7 @@ export function BookDetail({
   const [metadataTimeOfDay, setMetadataTimeOfDay] = useState("");
   const [metadataMoodScore, setMetadataMoodScore] = useState("");
   const [metadataWordCountTarget, setMetadataWordCountTarget] = useState("");
-  const [savingMetadata, setSavingMetadata] = useState(false);
+  const [_savingMetadata, setSavingMetadata] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [roleCard, setRoleCard] = useState<RoleCard | null>(null);
   const [roleLoading, setRoleLoading] = useState(false);
@@ -445,7 +445,7 @@ export function BookDetail({
     setMetadataWordCountTarget(chapter.wordCountTarget === undefined ? "" : String(chapter.wordCountTarget));
   };
 
-  const handleSaveMetadata = async () => {
+  const _handleSaveMetadata = async () => {
     if (!metadataEditorChapter) return;
     setSavingMetadata(true);
     try {
@@ -595,7 +595,7 @@ export function BookDetail({
   const majorRoleCount = roles.filter((role) => role.roleTier === "major").length;
   const minorRoleCount = roles.filter((role) => role.roleTier === "minor").length;
 
-  const exportHref = `/api/v1/books/${bookId}/export?format=${exportFormat}${exportApprovedOnly ? "&approvedOnly=true" : ""}`;
+  const _exportHref = `/api/v1/books/${bookId}/export?format=${exportFormat}${exportApprovedOnly ? "&approvedOnly=true" : ""}`;
 
   return (
     <div className="space-y-8 fade-in">

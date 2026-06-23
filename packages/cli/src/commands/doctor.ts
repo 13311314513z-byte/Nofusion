@@ -1,13 +1,13 @@
+import { fetchWithProxy } from "@actalk/inkos-core";
 import { Command } from "commander";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { findProjectRoot, log, logError, formatJsonOutput, GLOBAL_ENV_PATH } from "../utils.js";
-import { fetchWithProxy } from "@actalk/inkos-core";
 import {
-  ensureNodeRuntimePinFiles,
-  evaluateSqliteMemorySupport,
-  inspectNodeRuntimePinFiles,
+ensureNodeRuntimePinFiles,
+evaluateSqliteMemorySupport,
+inspectNodeRuntimePinFiles,
 } from "../runtime-requirements.js";
+import { findProjectRoot,formatJsonOutput,GLOBAL_ENV_PATH,log } from "../utils.js";
 
 function buildDoctorProbePlans(
   preferredApiFormat: "chat" | "responses" | undefined,

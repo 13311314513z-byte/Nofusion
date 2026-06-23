@@ -1,16 +1,19 @@
 /* ── Auto-init & environment detection for TUI ── */
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { access,mkdir,readFile,writeFile } from "node:fs/promises";
+import { basename,join } from "node:path";
 import readline from "node:readline/promises";
-import {
-  c, bold, dim, italic,
-  cyan, green, yellow, gray, red,
-  brightCyan, brightGreen, brightWhite,
-} from "./ansi.js";
-import { resolveTuiLocale, type TuiLocale } from "./i18n.js";
-import { GLOBAL_ENV_PATH, loadConfig } from "../utils.js";
 import { ensureProjectGitignore } from "../project-bootstrap.js";
+import { GLOBAL_ENV_PATH,loadConfig } from "../utils.js";
+import {
+bold,
+brightCyan,brightGreen,brightWhite,
+c,
+cyan,
+dim,
+gray
+} from "./ansi.js";
+import { resolveTuiLocale,type TuiLocale } from "./i18n.js";
 
 const PROVIDERS = ["openai", "anthropic", "kkaiapi", "custom"] as const;
 const KKAIAPI_BASE_URL = "https://api.kkaiapi.com/v1";

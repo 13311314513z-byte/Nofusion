@@ -1,24 +1,24 @@
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
+import { Upload,Wand2 } from "lucide-react";
 import { useColors } from "../hooks/use-colors";
-import { Library, Plus, Upload, Wand2 } from "lucide-react";
+import type { TFunction } from "../hooks/use-i18n";
+import type { Theme } from "../hooks/use-theme";
 import { DistillationPage } from "./DistillationPage";
 import { StyleAiDetectTab } from "./style-manager/StyleAiDetectTab.js";
-import { StyleDiagnoseTab } from "./style-manager/StyleDiagnoseTab.js";
-import { StyleDeduplicateTab } from "./style-manager/StyleDeduplicateTab.js";
 import { StyleAuditTab } from "./style-manager/StyleAuditTab.js";
+import { StyleDeduplicateTab } from "./style-manager/StyleDeduplicateTab.js";
+import { StyleDiagnoseTab } from "./style-manager/StyleDiagnoseTab.js";
 import { StyleImportTab } from "./style-manager/StyleImportTab.js";
 import { useStyleManagerState } from "./style-manager/useStyleManagerState.js";
 import type { CoreStyleProfile } from "./style-types.js";
 import {
-  buildStyleStatusNotice,
-  inferLocalStyleFileType,
-  buildLocalStyleSourceId,
-  readLocalTextFile,
+buildLocalStyleSourceId,
+buildStyleStatusNotice,
+inferLocalStyleFileType,
+readLocalTextFile,
 } from "./style-utils.js";
 
 // Re-export for backward compat (consumed by StyleAuditTab, tests, etc.)
-export { buildStyleStatusNotice, inferLocalStyleFileType, buildLocalStyleSourceId, readLocalTextFile };
+export { buildLocalStyleSourceId,buildStyleStatusNotice,inferLocalStyleFileType,readLocalTextFile };
 
 type StyleTab = "import" | "diagnose" | "ai-detect" | "deduplicate" | "audit" | "distillation";
 
@@ -68,7 +68,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
         {showImport && (
           <div className="border-t border-border pt-4 mt-4 space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2"><Upload size={14} />{t("style.importToBook")}</h4>
-            <select value={state.importBookId} onChange={(e) => { /* handled by StyleImportTab */ }} className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
+            <select value={state.importBookId} onChange={(_e) => { /* handled by StyleImportTab */ }} className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
               <option value="">{t("style.selectBook")}</option>
               {state.booksData?.books.map((b) => (<option key={b.id} value={b.id}>{b.title}</option>))}
             </select>

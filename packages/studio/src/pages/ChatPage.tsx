@@ -1,47 +1,47 @@
-import { useRef, useEffect, useMemo, useState } from "react";
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
-import type { SSEMessage } from "../hooks/use-sse";
-import { fetchJson } from "../hooks/use-api";
-import { chatSelectors, useChatStore } from "../store/chat";
-import { useServiceStore } from "../store/service";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "../components/ui/dropdown-menu";
+ArrowUp,
+BotMessageSquare,
+Check,
+ChevronDown,
+Loader2,
+} from "lucide-react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
+Message,
+MessageContent,
+} from "../components/ai-elements/message";
+import {
+Reasoning,
+ReasoningContent,
+ReasoningTrigger,
 } from "../components/ai-elements/reasoning";
+import { Shimmer } from "../components/ai-elements/shimmer";
+import { ChatContextBar } from "../components/chat/ChatContextBar";
 import { ChatMessage } from "../components/chat/ChatMessage";
 import { QuickActions } from "../components/chat/QuickActions";
 import { ToolExecutionSteps } from "../components/chat/ToolExecutionSteps";
 import {
-  Loader2,
-  BotMessageSquare,
-  ArrowUp,
-  ChevronDown,
-  Check,
-} from "lucide-react";
-import { Shimmer } from "../components/ai-elements/shimmer";
-import { ChatContextBar } from "../components/chat/ChatContextBar";
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import { fetchJson } from "../hooks/use-api";
+import type { TFunction } from "../hooks/use-i18n";
+import type { SSEMessage } from "../hooks/use-sse";
+import type { Theme } from "../hooks/use-theme";
+import { chatSelectors,useChatStore } from "../store/chat";
+import { useServiceStore } from "../store/service";
 import {
-  Message,
-  MessageContent,
-} from "../components/ai-elements/message";
-import {
-  type ChatPageModelInfo,
-  type ChatPageModelPreference,
-  filterModelGroups,
-  getBookCreateSessionId,
-  getProjectChatSessionId,
-  pickProjectChatSessionId,
-  pickModelSelection,
-  setBookCreateSessionId,
-  setProjectChatSessionId,
+type ChatPageModelInfo,
+type ChatPageModelPreference,
+filterModelGroups,
+getBookCreateSessionId,
+getProjectChatSessionId,
+pickModelSelection,
+pickProjectChatSessionId,
+setBookCreateSessionId,
+setProjectChatSessionId,
 } from "./chat-page-state";
 
 // -- Types --
@@ -269,7 +269,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
     void sendMessage(activeSessionId, text, activeBookId);
   };
 
-  const handleRetry = (instruction: string) => {
+  const handleRetry = (_instruction: string) => {
     if (!activeSessionId) return;
     // Find the last user message to re-send
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");

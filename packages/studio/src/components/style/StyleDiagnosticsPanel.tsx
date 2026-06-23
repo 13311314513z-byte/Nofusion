@@ -1,8 +1,8 @@
 import type { FullStyleDiagnostics } from "@actalk/inkos-core";
-import type { TFunction } from "../../hooks/use-i18n";
-import { AlertTriangle, Hash, ShieldAlert, ShieldCheck, Shield, ChevronDown, ChevronUp, Save, FileText } from "lucide-react";
+import { AlertTriangle,ChevronDown,ChevronUp,FileText,Hash,Save,Shield,ShieldAlert,ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { fetchJson } from "../../hooks/use-api";
+import type { TFunction } from "../../hooks/use-i18n";
 
 interface AuthorItem {
   readonly id: string;

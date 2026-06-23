@@ -387,7 +387,7 @@ export function detectDuplicateRhetoric(text: string, language: "zh" | "en" = "z
 // English pattern definitions (stub — can be extended)
 // ---------------------------------------------------------------------------
 
-const EN_PATTERNS: ReadonlyArray<RhetoricPattern> = [
+const _EN_PATTERNS: ReadonlyArray<RhetoricPattern> = [
   // Simile — like/as if/as though
   {
     category: "metaphor",

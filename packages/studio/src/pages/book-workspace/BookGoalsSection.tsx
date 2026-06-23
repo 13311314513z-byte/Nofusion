@@ -1,16 +1,14 @@
-import { useState, useEffect } from "react";
-import type { Theme } from "../../hooks/use-theme";
+import { ChevronDown,ChevronRight,FileText,Plus,Save,Target,TargetIcon,Trash2,X } from "lucide-react";
+import { useEffect,useState } from "react";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { fetchJson,useApi } from "../../hooks/use-api";
+import { useBookContext } from "../../hooks/use-book-context";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { fetchJson, useApi } from "../../hooks/use-api";
-import { Target, Save, Trash2, Plus, X, TargetIcon, ChevronDown, ChevronRight, FileText } from "lucide-react";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { useBookContext } from "../../hooks/use-book-context";
+import type { Theme } from "../../hooks/use-theme";
 // Import shared types from core — these are the single source of truth.
 import type {
-  AuthorChapterIntent,
-  AuthorScenePlan,
-  AuthorCharacterState,
+AuthorChapterIntent
 } from "@actalk/inkos-core";
 
 interface ChapterGoalCard {
@@ -99,7 +97,7 @@ function GoalField({
   );
 }
 
-export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
+export function BookGoalsSection({ bookId, nav: _nav, t }: BookGoalsSectionProps) {
   const { data: bookData } = useApi<BookData>(`/books/${bookId}`);
   const { notify } = useBookContext();
   const [goals, setGoals] = useState<Record<number, ChapterGoalCard>>({});
@@ -324,7 +322,7 @@ export function BookGoalsSection({ bookId, nav, t }: BookGoalsSectionProps) {
     );
   }
 
-  const hasGoals = Object.keys(goals).length > 0;
+  const _hasGoals = Object.keys(goals).length > 0;
 
   return (
     <div className="h-full overflow-y-auto p-6">

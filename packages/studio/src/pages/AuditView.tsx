@@ -1,34 +1,33 @@
-import { useState, useCallback, useEffect } from "react";
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
-import { useColors } from "../hooks/use-colors";
-import { useApi, fetchJson, postApi } from "../hooks/use-api";
-import { ApiKeyInput } from "../components/ApiKeyInput";
 import {
-  ShieldCheck,
-  BookOpen,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Info,
-  BarChart3,
-  Loader2,
-  RefreshCw,
-  Eye,
-  ChevronRight,
-  Settings,
-  Save,
-  Zap,
-  KeyRound,
-  Server,
-  Lock,
-  Unlock,
-  X,
-  Filter,
-  ListOrdered,
-  FileText,
-  Stethoscope,
+AlertTriangle,
+BarChart3,
+BookOpen,
+CheckCircle2,
+ChevronRight,
+Eye,
+FileText,
+Filter,
+Info,
+KeyRound,
+ListOrdered,
+Loader2,
+Lock,
+RefreshCw,
+Save,
+Server,
+Settings,
+ShieldCheck,
+Stethoscope,
+Unlock,
+X,
+Zap
 } from "lucide-react";
+import { useCallback,useEffect,useState } from "react";
+import { ApiKeyInput } from "../components/ApiKeyInput";
+import { fetchJson,postApi,useApi } from "../hooks/use-api";
+import { useColors } from "../hooks/use-colors";
+import type { TFunction } from "../hooks/use-i18n";
+import type { Theme } from "../hooks/use-theme";
 
 interface BookSummary {
   readonly id: string;
@@ -135,7 +134,7 @@ export function AuditView({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFunct
 
   const {
     data: auditConfig,
-    loading: configLoading,
+    loading: _configLoading,
     refetch: refetchConfig,
   } = useApi<AuditConfig>("/audit/config");
 

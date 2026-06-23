@@ -1,6 +1,6 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { EPub } from "epub-gen-memory";
+import { mkdir,readFile,readdir,writeFile } from "node:fs/promises";
+import { dirname,join } from "node:path";
 
 export interface ExportStateLike {
   readonly bookDir: (bookId: string) => string;
@@ -109,7 +109,7 @@ export async function buildExportArtifact(
   }
 
   // Build TOC for html/md; for txt just use plain title
-  const hasToc = format === "md" || format === "html";
+  const _hasToc = format === "md" || format === "html";
   const parts: string[] = [];
 
   if (format === "html") {

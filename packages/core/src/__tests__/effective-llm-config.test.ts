@@ -28,6 +28,26 @@ describe("resolveEffectiveLLMConfig", () => {
     await writeFile(join(root, ".inkos", "secrets.json"), JSON.stringify({ services }, null, 2), "utf-8");
   }
 
+  it("CLI new-project config reports a missing base URL before schema parsing", async () => {
+    await writeProject({
+      configSource: "studio",
+      service: "custom",
+      provider: "openai",
+      baseUrl: "",
+      model: "",
+    });
+
+    await expect(resolveEffectiveLLMConfig({
+      consumer: "cli",
+      projectRoot: root,
+      envLayers: {
+        global: { INKOS_LLM_API_KEY: "sk-env" },
+        project: {},
+        process: {},
+      },
+    })).rejects.toThrow(/INKOS_LLM_BASE_URL not set/);
+  });
+
   it("Studio consumer 使用 Studio/project 配置，并忽略旧顶层 model/baseUrl", async () => {
     await writeProject({
       configSource: "studio",

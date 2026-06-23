@@ -14,13 +14,12 @@
  * @module
  */
 
-import { BaseAgent, type AgentContext } from "./base.js";
 import {
-  EventChainSchema,
-  type EventNode,
-  type EventChain,
-  type InferenceReasoningEntry,
+type EventChain,
+type EventNode,
+type InferenceReasoningEntry
 } from "../models/event-chain.js";
+import { BaseAgent,type AgentContext } from "./base.js";
 
 // ─── Input / Output ─────────────────────────────────────────────────
 

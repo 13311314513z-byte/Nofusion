@@ -1,23 +1,22 @@
+import {
+AlertTriangle,
+BarChart3,
+BookOpen,
+CheckCircle2,
+ChevronDown,
+ChevronRight,
+Eye,
+Info,
+Play,
+RefreshCw,
+ShieldCheck,
+X
+} from "lucide-react";
 import { useState } from "react";
-import type { Theme } from "../../hooks/use-theme";
+import { FETCH_TIMEOUT_WRITE_MS,fetchJson,useApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { useApi, fetchJson, FETCH_TIMEOUT_WRITE_MS } from "../../hooks/use-api";
-import {
-  ShieldCheck,
-  BookOpen,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  BarChart3,
-  RefreshCw,
-  ChevronRight,
-  ChevronDown,
-  Eye,
-  Filter,
-  X,
-  Play,
-} from "lucide-react";
+import type { Theme } from "../../hooks/use-theme";
 
 interface AuditIssue {
   readonly severity: string;

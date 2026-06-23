@@ -17,18 +17,17 @@
  * @module
  */
 
-import { BaseAgent, type AgentContext } from "./base.js";
-import { logPromptManifest } from "../utils/prompt-tracing.js";
 import type {
-  BetaReaderMode,
-  BetaReaderOutput,
-  ReaderObservation,
+BetaReaderOutput,
+ReaderObservation
 } from "../models/beta-reader-output.js";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { BaseAgent,type AgentContext } from "./base.js";
 
 export type {
-  BetaReaderMode,
-  BetaReaderOutput,
-  ReaderObservation,
+BetaReaderMode,
+BetaReaderOutput,
+ReaderObservation
 } from "../models/beta-reader-output.js";
 
 // ─── Agent ────────────────────────────────────────────────────────

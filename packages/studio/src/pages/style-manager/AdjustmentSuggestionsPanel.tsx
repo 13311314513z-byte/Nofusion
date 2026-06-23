@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
-import { fetchJson, useApi } from "../../hooks/use-api";
-import { Lightbulb, AlertTriangle, ShieldCheck, Shield, ShieldAlert, RotateCcw, CheckCircle, ChevronDown, ChevronUp, Eye } from "lucide-react";
-import type { AdjustmentPlan, AdjustmentSuggestion } from "@actalk/inkos-core";
-import type { AdjustmentState } from "./style-adjustment-state";
-import { createAdjustmentReducer, createInitialAdjustmentState } from "./style-adjustment-state";
+import type { AdjustmentPlan,AdjustmentSuggestion } from "@actalk/inkos-core";
+import { AlertTriangle,CheckCircle,ChevronDown,ChevronUp,Eye,Lightbulb,RotateCcw,Shield,ShieldAlert,ShieldCheck } from "lucide-react";
+import { useCallback,useEffect,useState } from "react";
+import { fetchJson,useApi } from "../../hooks/use-api";
 import { AdjustmentDiffPreview } from "./AdjustmentDiffPreview.js";
+import type { AdjustmentState } from "./style-adjustment-state";
+import { createAdjustmentReducer,createInitialAdjustmentState } from "./style-adjustment-state";
 
 interface AuthorItem {
   readonly id: string;
@@ -27,12 +27,12 @@ const SEVERITY_CONFIG: Record<string, { icon: React.ElementType; className: stri
 
 type CategoryFilter = "all" | AdjustmentSuggestion["category"];
 
-export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics, t, onApply }: Props) {
+export function AdjustmentSuggestionsPanel({ text, onTextChange, diagnostics: _diagnostics, t, onApply }: Props) {
   const [state, setState] = useState<AdjustmentState>(createInitialAdjustmentState());
   const [targetAuthorId, setTargetAuthorId] = useState("");
   const [filterCategory, setFilterCategory] = useState<CategoryFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showApplied, setShowApplied] = useState(false);
+  const [_showApplied, setShowApplied] = useState(false);
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const { data: authorsData } = useApi<{ authors: ReadonlyArray<AuthorItem> }>("/style/authors");

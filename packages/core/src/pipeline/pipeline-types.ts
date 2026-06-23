@@ -2,7 +2,7 @@
  * Shared pipeline types — used by runner.ts and extracted sub-modules
  * to avoid circular imports.
  */
-import type { AuditResult, AuditIssue } from "../agents/continuity.js";
+import type { AuditResult } from "../agents/continuity.js";
 import type { LengthTelemetry } from "../models/length-governance.js";
 
 export interface TokenUsageSummary {

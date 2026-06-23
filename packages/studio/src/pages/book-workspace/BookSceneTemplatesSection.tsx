@@ -1,9 +1,9 @@
+import { AlertCircle,MapPinned,Plus,RefreshCw,Save,Trash2 } from "lucide-react";
 import { useState } from "react";
-import { fetchJson, useApi } from "../../hooks/use-api";
-import type { Theme } from "../../hooks/use-theme";
+import { fetchJson,useApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { MapPinned, Plus, Save, Trash2, AlertCircle, RefreshCw } from "lucide-react";
+import type { Theme } from "../../hooks/use-theme";
 
 interface SceneTemplateItem {
   id: string;
@@ -58,7 +58,7 @@ const EMPTY_TEMPLATE: SceneTemplateItem = {
   updatedAt: new Date().toISOString(),
 };
 
-export function BookSceneTemplatesSection({ bookId, nav, theme, t }: BookSceneTemplatesSectionProps) {
+export function BookSceneTemplatesSection({ bookId, nav: _nav, theme: _theme, t: _t }: BookSceneTemplatesSectionProps) {
   const [editing, setEditing] = useState<SceneTemplateItem | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);

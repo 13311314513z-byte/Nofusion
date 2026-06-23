@@ -1,54 +1,53 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdir,readFile,writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BaseAgent } from "./base.js";
 import type { BookConfig } from "../models/book.js";
-import { readBookRules as readAuthoritativeBookRules } from "./rules-reader.js";
 import {
-  ChapterIntentSchema,
-  type ChapterIntent,
-  type ChapterMemo,
-} from "../models/input-governance.js";
-import { logPromptManifest } from "../utils/prompt-tracing.js";
-import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
-import {
-  renderHookSnapshot,
-  renderSummarySnapshot,
-} from "../utils/memory-retrieval.js";
-import {
-  gatherPlanningMaterials,
-  loadPlanningSeedMaterials,
-} from "../utils/planning-materials.js";
-import {
-  loadChapterGoals,
-  type ChapterGoalCard,
+loadChapterGoals,
+type ChapterGoalCard,
 } from "../models/chapter-goal.js";
 import {
-  loadChapterIntents,
-  getChapterIntent,
-  type AuthorChapterIntent,
+getChapterIntent,
+loadChapterIntents
 } from "../models/chapter-intent.js";
-import { buildAuthorIntentBlock } from "../utils/intent-injection.js";
-import { loadSceneTemplates, buildSceneTemplatesBlock } from "../utils/scene-template-loader.js";
-import { parseMemo, PlannerParseError } from "../utils/chapter-memo-parser.js";
 import {
-  buildPlannerUserMessage,
-  getPlannerMemoSystemPrompt,
-} from "./planner-prompts.js";
-import {
-  composeCurrentArcProse,
-  extractCollaboratorRows,
-  extractOpponentRows,
-  extractProtagonistRow,
-  extractRelevantThreads,
-  formatRecentSummaries,
-  formatRecyclableHooks,
-  readBookRules,
-  readCharacterMatrix,
-  readEmotionalArcs,
-  readPendingHooks,
-  readSubplotBoard,
-} from "./planner-context.js";
+ChapterIntentSchema,
+type ChapterIntent,
+type ChapterMemo,
+} from "../models/input-governance.js";
+import { buildPromptManifest,getAvailableInputTokens,type PromptFragment } from "../models/prompt-manifest.js";
 import type { StoredHook } from "../state/memory-db.js";
+import { parseMemo,PlannerParseError } from "../utils/chapter-memo-parser.js";
+import { buildAuthorIntentBlock } from "../utils/intent-injection.js";
+import {
+renderHookSnapshot,
+renderSummarySnapshot,
+} from "../utils/memory-retrieval.js";
+import {
+gatherPlanningMaterials,
+loadPlanningSeedMaterials,
+} from "../utils/planning-materials.js";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { buildSceneTemplatesBlock,loadSceneTemplates } from "../utils/scene-template-loader.js";
+import { BaseAgent } from "./base.js";
+import {
+composeCurrentArcProse,
+extractCollaboratorRows,
+extractOpponentRows,
+extractProtagonistRow,
+extractRelevantThreads,
+formatRecentSummaries,
+formatRecyclableHooks,
+readBookRules,
+readCharacterMatrix,
+readEmotionalArcs,
+readPendingHooks,
+readSubplotBoard,
+} from "./planner-context.js";
+import {
+buildPlannerUserMessage,
+getPlannerMemoSystemPrompt,
+} from "./planner-prompts.js";
+import { readBookRules as readAuthoritativeBookRules } from "./rules-reader.js";
 
 export interface PlanChapterInput {
   readonly book: BookConfig;

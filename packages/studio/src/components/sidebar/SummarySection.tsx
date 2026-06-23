@@ -3,13 +3,12 @@ import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { useChatStore } from "../../store/chat";
 import type { BookSummary } from "../../store/chat";
 import { fetchJson } from "../../hooks/use-api";
 import { SidebarCard } from "./SidebarCard";
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = { cjk, code, math };
 
 const SIDEBAR_MD_CLASS =
   "text-xs text-muted-foreground leading-relaxed " +

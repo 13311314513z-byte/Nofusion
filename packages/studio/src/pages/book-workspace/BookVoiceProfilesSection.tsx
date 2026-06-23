@@ -1,9 +1,9 @@
+import { AlertCircle,Hash,MessageSquare,Mic,Play,RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { fetchJson, useApi } from "../../hooks/use-api";
-import type { Theme } from "../../hooks/use-theme";
+import { fetchJson,useApi } from "../../hooks/use-api";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { Mic, Play, RefreshCw, AlertCircle, MessageSquare, Hash, BarChart3 } from "lucide-react";
+import type { Theme } from "../../hooks/use-theme";
 
 interface VoiceProfileItem {
   characterId: string;
@@ -50,7 +50,7 @@ interface BookVoiceProfilesSectionProps {
   readonly sse: { readonly messages: ReadonlyArray<SSEMessage>; readonly connected: boolean };
 }
 
-export function BookVoiceProfilesSection({ bookId, nav, theme, t }: BookVoiceProfilesSectionProps) {
+export function BookVoiceProfilesSection({ bookId, nav: _nav, theme: _theme, t: _t }: BookVoiceProfilesSectionProps) {
   const [analyzingChar, setAnalyzingChar] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 

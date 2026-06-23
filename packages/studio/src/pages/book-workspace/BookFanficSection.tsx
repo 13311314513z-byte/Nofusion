@@ -1,10 +1,10 @@
+import { AlertTriangle,BookOpen,Eye,Play,RefreshCw,Save,ShieldAlert,X } from "lucide-react";
 import { useState } from "react";
-import { useApi, fetchJson } from "../../hooks/use-api";
-import type { Theme } from "../../hooks/use-theme";
+import { fetchJson,useApi } from "../../hooks/use-api";
+import { useColors } from "../../hooks/use-colors";
 import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
-import { useColors } from "../../hooks/use-colors";
-import { RefreshCw, Save, BookOpen, Eye, X, AlertTriangle, ShieldAlert, Play } from "lucide-react";
+import type { Theme } from "../../hooks/use-theme";
 
 interface FanficData {
   readonly bookId: string;
@@ -77,7 +77,7 @@ const MODE_BADGE: Record<
 };
 
 export function BookFanficSection({ bookId, nav, theme, t }: BookFanficSectionProps) {
-  const c = useColors(theme);
+  const _c = useColors(theme);
   const { data, loading, error, refetch } = useApi<FanficData>(`/books/${bookId}/fanfic`);
   const { data: bookData } = useApi<{ book: { title: string; fanficMode?: string } }>(
     `/books/${encodeURIComponent(bookId)}`,

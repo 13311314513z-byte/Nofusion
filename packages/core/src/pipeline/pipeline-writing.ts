@@ -4,45 +4,45 @@
  * Contains _writeNextChapterLocked, the core chapter writing logic.
  * PipelineRunner delegates to this function via .bind(this) callbacks.
  */
-import type { PipelineContext } from "./context.js";
-import type { BookConfig } from "../models/book.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import type { LengthLanguage } from "../utils/length-metrics.js";
-import type { LengthSpec, LengthTelemetry, LengthCountingMode } from "../models/length-governance.js";
-import type { ChapterPipelineResult } from "./pipeline-types.js";
-import type { ChapterMeta } from "../models/chapter.js";
-import type { ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
-import type { AuditIssue, AuditResult } from "../agents/continuity.js";
-import { WriterAgent, type WriteChapterOutput, type WriteChapterInput } from "../agents/writer.js";
-import type { ChapterReviewCycleUsage } from "./chapter-review-cycle.js";
-import type { WebhookEvent } from "../notify/webhook.js";
+import { readFile,readdir,writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { analyzeAITells } from "../agents/ai-tells.js";
+import { BetaReader } from "../agents/beta-reader.js";
+import type { AuditIssue,AuditResult } from "../agents/continuity.js";
 import { ContinuityAuditor } from "../agents/continuity.js";
+import { IssueNormalizer } from "../agents/issue-normalizer.js";
 import { ReviserAgent } from "../agents/reviser.js";
 import { StateValidatorAgent } from "../agents/state-validator.js";
-import { BetaReader } from "../agents/beta-reader.js";
-import { IssueNormalizer } from "../agents/issue-normalizer.js";
-import { createIssue, resolveAuditIssue } from "../models/audit-issue.js";
-import { analyzeAITells } from "../agents/ai-tells.js";
-import { analyzeLongSpanFatigue } from "../utils/long-span-fatigue.js";
-import { buildLengthSpec, countChapterLength, formatLengthCount } from "../utils/length-metrics.js";
-import { anchorAuditIssues } from "../utils/location-anchor.js";
-import { loadIssueConsecutiveCounts, saveIssueConsecutiveCounts, updateConsecutiveCounts } from "../utils/issue-persistence.js";
-import { evaluateBetaReaderModelConstraint, persistBetaReaderShadow } from "../utils/beta-reader-runtime.js";
-import { dispatchNotification, dispatchWebhookEvent } from "../notify/dispatcher.js";
-import { validateChapterTruthPersistence } from "./chapter-truth-validation.js";
-import { persistChapterArtifacts } from "./chapter-persistence.js";
-import { runChapterReviewCycle } from "./chapter-review-cycle.js";
-import { readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { WriterAgent,type WriteChapterInput,type WriteChapterOutput } from "../agents/writer.js";
+import { createIssue,resolveAuditIssue } from "../models/audit-issue.js";
+import type { BookConfig } from "../models/book.js";
 import {
-  loadChapterIntents,
-  getChapterIntent,
-  confirmChapterIntent,
-  saveChapterIntents,
+confirmChapterIntent,
+getChapterIntent,
+loadChapterIntents,
+saveChapterIntents,
 } from "../models/chapter-intent.js";
+import type { ChapterMeta } from "../models/chapter.js";
+import type { GenreProfile } from "../models/genre-profile.js";
+import type { ContextPackage,RuleStack } from "../models/input-governance.js";
+import type { LengthCountingMode,LengthSpec,LengthTelemetry } from "../models/length-governance.js";
+import { dispatchNotification } from "../notify/dispatcher.js";
+import type { WebhookEvent } from "../notify/webhook.js";
+import { evaluateBetaReaderModelConstraint,persistBetaReaderShadow } from "../utils/beta-reader-runtime.js";
+import { loadIssueConsecutiveCounts,saveIssueConsecutiveCounts,updateConsecutiveCounts } from "../utils/issue-persistence.js";
+import type { LengthLanguage } from "../utils/length-metrics.js";
+import { buildLengthSpec,countChapterLength,formatLengthCount } from "../utils/length-metrics.js";
+import { anchorAuditIssues } from "../utils/location-anchor.js";
+import { analyzeLongSpanFatigue } from "../utils/long-span-fatigue.js";
 import {
-  readStoryFrame,
+readStoryFrame,
 } from "../utils/outline-paths.js";
+import { persistChapterArtifacts } from "./chapter-persistence.js";
+import type { ChapterReviewCycleUsage } from "./chapter-review-cycle.js";
+import { runChapterReviewCycle } from "./chapter-review-cycle.js";
+import { validateChapterTruthPersistence } from "./chapter-truth-validation.js";
+import type { PipelineContext } from "./context.js";
+import type { ChapterPipelineResult } from "./pipeline-types.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -137,7 +137,12 @@ export async function processTuiAgentInput(params: {
         message.role === "assistant",
       )
       .pop();
-    const thinking = lastAssistant?.content.find((part) => part.type === "thinking")?.thinking;
+    const assistantThinking = lastAssistant && "thinking" in lastAssistant ? (lastAssistant as { thinking?: string }).thinking : undefined;
+    const thinking = assistantThinking ?? (
+      Array.isArray(lastAssistant?.content)
+        ? lastAssistant.content.find((part) => part.type === "thinking")?.thinking
+        : undefined
+    );
     nextSession = appendInteractionMessage({
       ...nextSession,
       ...(activeBookId ? { activeBookId } : {}),

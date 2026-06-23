@@ -131,7 +131,7 @@ function tryFuzzyMatch(
   // Build a sliding window over the content using normalized comparison.
   // Strategy: normalize both sides, find the normalized target in the
   // normalized content, then map back to original positions.
-  const contentChars = [...content];
+  const _contentChars = [...content];
   const normalizedContent = normalizeWhitespace(content);
 
   const matchStart = normalizedContent.indexOf(normalizedTarget);
@@ -161,7 +161,7 @@ function normalizeWhitespace(text: string): string {
 function mapNormalizedToOriginal(original: string, normalizedPos: number): number {
   let ni = 0; // position in normalized text
   let inWhitespace = false;
-  const leadingSkipped = false;
+  const _leadingSkipped = false;
 
   // Skip leading whitespace in original (matches trim())
   let oi = 0;

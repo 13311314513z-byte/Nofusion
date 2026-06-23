@@ -2,26 +2,26 @@
  * Authors routes — CRUD, sources, reanalyze, diagnostics, and apply-author.
  * Extracted from style.ts (B4).
  */
-import type { ServerContext } from "../server-context.js";
-import { join, resolve, sep } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
 import {
-  listAuthorProfiles,
-  getAuthorProfile,
-  createAuthorProfile,
-  addStyleSource,
-  reanalyzeAuthorProfile,
-  deleteAuthorProfile,
-  saveAuthorDiagnostics,
-  listAuthorDiagnostics,
-  getAuthorDiagnostics,
+addStyleSource,
+createAuthorProfile,
+deleteAuthorProfile,
+getAuthorDiagnostics,
+getAuthorProfile,
+listAuthorDiagnostics,
+listAuthorProfiles,
+reanalyzeAuthorProfile,
+saveAuthorDiagnostics,
 } from "@actalk/inkos-core";
+import { randomUUID } from "node:crypto";
+import { mkdir,writeFile } from "node:fs/promises";
+import { join,resolve,sep } from "node:path";
+import type { ServerContext } from "../server-context.js";
 import {
-  isSafeStyleId,
-  isTextStyleFileType,
-  parseSafeStyleImportUrl,
-  assertSafeStyleImportTarget,
+assertSafeStyleImportTarget,
+isSafeStyleId,
+isTextStyleFileType,
+parseSafeStyleImportUrl,
 } from "../shared/style-import-guards.js";
 
 export function registerAuthorsRoutes(ctx: ServerContext): void {

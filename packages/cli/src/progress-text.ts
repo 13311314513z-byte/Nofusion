@@ -1,11 +1,10 @@
 import {
-  formatImportChaptersComplete,
-  formatImportChaptersDiscovery,
-  formatImportChaptersResume,
-  formatWriteNextComplete,
-  formatWriteNextProgress,
-  formatWriteNextResultLines,
-  type CliLanguage,
+formatImportChaptersDiscovery,
+formatImportChaptersResume,
+formatWriteNextComplete,
+formatWriteNextProgress,
+formatWriteNextResultLines,
+type CliLanguage
 } from "./localization.js";
 
 export { type CliLanguage };

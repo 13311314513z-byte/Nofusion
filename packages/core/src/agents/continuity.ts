@@ -1,25 +1,25 @@
-import { BaseAgent } from "./base.js";
-import type { GenreProfile } from "../models/genre-profile.js";
+import { readFile,readdir } from "node:fs/promises";
+import { join } from "node:path";
+import type { AuditIssue } from "../models/audit-issue.js";
+import { createIssue } from "../models/audit-issue.js";
 import type { BookRules } from "../models/book-rules.js";
 import type { FanficMode } from "../models/book.js";
-import type { ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
-import { readGenreProfile, readBookLanguage, readBookRules } from "./rules-reader.js";
-import { getFanficDimensionConfig, FANFIC_DIMENSIONS } from "./fanfic-dimensions.js";
-import { readFile, readdir } from "node:fs/promises";
-import { filterHooks, filterSummaries, filterSubplots, filterEmotionalArcs, filterCharacterMatrix } from "../utils/context-filter.js";
+import { loadChapterIntents } from "../models/chapter-intent.js";
+import type { GenreProfile } from "../models/genre-profile.js";
+import type { ChapterMemo,ContextPackage,RuleStack } from "../models/input-governance.js";
+import { buildPromptManifest,getAvailableInputTokens,type PromptFragment } from "../models/prompt-manifest.js";
+import { filterCharacterMatrix,filterEmotionalArcs,filterHooks,filterSubplots,filterSummaries } from "../utils/context-filter.js";
 import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
-import { loadChapterIntents, getChapterIntent } from "../models/chapter-intent.js";
 import { buildAuthorCommitmentChecklist } from "../utils/intent-injection.js";
-import { logPromptManifest } from "../utils/prompt-tracing.js";
-import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
-import { createIssue } from "../models/audit-issue.js";
-import type { AuditIssue } from "../models/audit-issue.js";
 import {
-  readVolumeMap,
-  readCharacterContext,
-  readCurrentStateWithFallback,
+readCharacterContext,
+readCurrentStateWithFallback,
+readVolumeMap,
 } from "../utils/outline-paths.js";
-import { join } from "node:path";
+import { logPromptManifest } from "../utils/prompt-tracing.js";
+import { BaseAgent } from "./base.js";
+import { FANFIC_DIMENSIONS,getFanficDimensionConfig } from "./fanfic-dimensions.js";
+import { readBookLanguage,readBookRules,readGenreProfile } from "./rules-reader.js";
 
 export type { AuditIssue } from "../models/audit-issue.js";
 

@@ -16,7 +16,7 @@
  * - revisionRound?: number  // 0 = initial, 1+ = post-revision
  */
 
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile,mkdir,readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditResult } from "../agents/continuity.js";
 

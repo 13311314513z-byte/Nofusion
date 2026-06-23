@@ -6,8 +6,8 @@
  * It does NOT call Core preprocessText/relayoutText.
  */
 
-import type { InspectionCode, InspectionFinding, InspectionResult } from "../shared/contracts.js";
 import { detectDuplicateRhetoric } from "@actalk/inkos-core";
+import type { InspectionCode,InspectionFinding,InspectionResult } from "../shared/contracts.js";
 
 // ---------------------------------------------------------------------------
 // Request validation
@@ -257,7 +257,7 @@ export function inspectText(text: string, checks?: InspectionCode[]): Inspection
 /**
  * Count total number of a regex pattern matches in text (up to a limit).
  */
-function countMatches(text: string, pattern: RegExp, limit: number): number {
+function _countMatches(text: string, pattern: RegExp, limit: number): number {
   let count = 0;
   const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
   while (re.exec(text) !== null) {

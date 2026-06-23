@@ -6,25 +6,25 @@
  *          buildFoundationReviewFeedback, assertValidArchitectOutput,
  *          getFoundationRevision, copyDirShallow, copyDirRecursive.
  */
-import { join } from "node:path";
-import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import type { PipelineContext } from "./context.js";
-import type { BookConfig } from "../models/book.js";
-import type { LengthLanguage } from "../utils/length-metrics.js";
+import { mkdir,readdir,readFile,rename,rm,writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { ArchitectOutput } from "../agents/architect.js";
 import { ArchitectAgent } from "../agents/architect.js";
 import { FoundationReviewerAgent } from "../agents/foundation-reviewer.js";
-import {
-  persistFoundationSourceBundle,
-} from "../import/foundation-source.js";
-import {
-  readStoryFrame,
-  readVolumeMap,
-  readCharacterContext,
-} from "../utils/outline-paths.js";
 import { readGenreProfile } from "../agents/rules-reader.js";
+import {
+persistFoundationSourceBundle,
+} from "../import/foundation-source.js";
+import type { BookConfig } from "../models/book.js";
 import type { GenreProfile } from "../models/genre-profile.js";
+import type { LengthLanguage } from "../utils/length-metrics.js";
+import {
+readCharacterContext,
+readStoryFrame,
+readVolumeMap,
+} from "../utils/outline-paths.js";
+import type { PipelineContext } from "./context.js";
 import type { InitBookOptions } from "./runner.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -393,18 +393,13 @@ export async function reviseFoundation(
   await copyDirRecursive(join(storyDir, "roles"), join(backupDir, "roles"));
 
   const book = await ctx.state.loadBookConfig(bookId);
-  let oldStoryBible: string;
-  let oldVolumeOutline: string;
-  let oldBookRules: string;
-  let oldCharacterMatrix: string;
-
   // C6: Always use Phase 5 read paths — utilities have built-in fallback for old books
-  [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
+  const [oldStoryBible, oldVolumeOutline, oldCharacterMatrix] = await Promise.all([
     readStoryFrame(bookDir),
     readVolumeMap(bookDir),
     readCharacterContext(bookDir),
   ]);
-  oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
+  const oldBookRules = await readFile(join(storyDir, "book_rules.md"), "utf-8").catch(() => "");
 
   const architect = new ArchitectAgent(ctx.agentCtxFor("architect", bookId));
   const foundation = await architect.generateFoundation(book, undefined, undefined, {

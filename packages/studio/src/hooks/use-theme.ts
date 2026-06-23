@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
 
 export type Theme = "light" | "dark";
 
@@ -13,7 +13,7 @@ export function getTimeBasedThemeForHour(hour: number): Theme {
   return hour >= 6 && hour < 18 ? "light" : "dark";
 }
 
-function getTimeBasedTheme(): Theme {
+function _getTimeBasedTheme(): Theme {
   return getTimeBasedThemeForHour(new Date().getHours());
 }
 

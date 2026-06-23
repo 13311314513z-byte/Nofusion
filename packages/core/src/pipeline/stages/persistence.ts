@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir,writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ChapterMeta } from "../../models/chapter.js";
 import type { StateManager } from "../../state/manager.js";
 import type { Logger } from "../../utils/logger.js";
-import type { ChapterMeta } from "../../models/chapter.js";
 
 /**
  * Pipeline persistence stage — saves chapter artifacts, updates indices,
@@ -40,7 +40,7 @@ export interface PersistenceOutput {
  * Persist a chapter to disk and update the chapter index.
  */
 export async function runPersistenceStage(input: PersistenceInput): Promise<PersistenceOutput> {
-  const { state, logger, projectRoot, bookId, chapterNumber, content, meta, title } = input;
+  const { state, logger, projectRoot: _projectRoot, bookId, chapterNumber, content, meta, title } = input;
 
   const bookDir = state.bookDir(bookId);
   const chaptersDir = join(bookDir, "chapters");

@@ -1,35 +1,34 @@
-import { BaseAgent } from "./base.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import type { BookRules } from "../models/book-rules.js";
-import type { LengthSpec } from "../models/length-governance.js";
-import type { AuditIssue } from "./continuity.js";
-import type { ChapterIntent, ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
-import { readGenreProfile, readBookLanguage, readBookRules } from "./rules-reader.js";
-import { countChapterLength } from "../utils/length-metrics.js";
-import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
-import { filterSummaries } from "../utils/context-filter.js";
-import {
-  buildGovernedCharacterMatrixWorkingSet,
-  buildGovernedHookWorkingSet,
-  mergeTableMarkdownByKey,
-} from "../utils/governed-working-set.js";
-import { applySpotFixPatches, parseSpotFixPatches } from "../utils/spot-fix-patches.js";
-import {
-  buildNarrativeIntentBrief,
-  renderMemoAsNarrativeBlock,
-  renderNarrativeSelectedContext,
-  sanitizeNarrativeEvidenceBlock,
-} from "../utils/narrative-control.js";
-import { selectReviseModeFromFixScope } from "../utils/patch-boundary.js";
-import { IssueNormalizer } from "./issue-normalizer.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { GenreProfile } from "../models/genre-profile.js";
+import type { ChapterIntent,ChapterMemo,ContextPackage,RuleStack } from "../models/input-governance.js";
+import type { LengthSpec } from "../models/length-governance.js";
+import { filterSummaries } from "../utils/context-filter.js";
+import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
 import {
-  readStoryFrame,
-  readVolumeMap,
-  readCharacterContext,
-  readCurrentStateWithFallback,
+buildGovernedCharacterMatrixWorkingSet,
+buildGovernedHookWorkingSet,
+mergeTableMarkdownByKey,
+} from "../utils/governed-working-set.js";
+import { countChapterLength } from "../utils/length-metrics.js";
+import {
+buildNarrativeIntentBrief,
+renderMemoAsNarrativeBlock,
+renderNarrativeSelectedContext,
+sanitizeNarrativeEvidenceBlock,
+} from "../utils/narrative-control.js";
+import {
+readCharacterContext,
+readCurrentStateWithFallback,
+readStoryFrame,
+readVolumeMap,
 } from "../utils/outline-paths.js";
+import { selectReviseModeFromFixScope } from "../utils/patch-boundary.js";
+import { applySpotFixPatches,parseSpotFixPatches } from "../utils/spot-fix-patches.js";
+import { BaseAgent } from "./base.js";
+import type { AuditIssue } from "./continuity.js";
+import { IssueNormalizer } from "./issue-normalizer.js";
+import { readBookLanguage,readBookRules,readGenreProfile } from "./rules-reader.js";
 
 export type ReviseMode = "auto" | "polish" | "rewrite" | "rework" | "anti-detect" | "spot-fix";
 

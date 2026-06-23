@@ -4,11 +4,11 @@
  * All functions are module-level and receive explicit dependencies.
  * They do NOT import runner.ts to prevent circular dependencies.
  */
-import { MemoryDB, tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
-import { loadNarrativeMemorySeed, loadSnapshotCurrentStateFacts } from "../state/runtime-state-store.js";
-import { rewriteStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
-import type { StateManager } from "../state/manager.js";
 import type { WriteChapterOutput } from "../agents/writer.js";
+import type { StateManager } from "../state/manager.js";
+import { tryCreateMemoryDB,type Fact } from "../state/memory-db.js";
+import { loadNarrativeMemorySeed,loadSnapshotCurrentStateFacts } from "../state/runtime-state-store.js";
+import { rewriteStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
 import type { PipelineConfig } from "./context.js";
 
 // ─── Dependency bag ──────────────────────────────────────────────────────────

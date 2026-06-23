@@ -11,16 +11,16 @@
  * @module
  */
 
-import type { AuthorChapterIntent, AuthorScenePlan, AuthorCharacterState } from "../models/chapter-intent.schema.js";
 import type { ChapterGoalCard } from "../models/chapter-goal.js";
+import type { AuthorChapterIntent,AuthorCharacterState,AuthorScenePlan } from "../models/chapter-intent.schema.js";
 
 // ─── Re-exports from story-markdown.ts ─────────────────────────────
 
 export {
-  normalizeHookId,
-  parseChapterSummariesMarkdown,
-  parseCurrentStateFacts,
-  parsePendingHooksMarkdown,
+normalizeHookId,
+parseChapterSummariesMarkdown,
+parseCurrentStateFacts,
+parsePendingHooksMarkdown
 } from "./story-markdown.js";
 
 // ─── Helpers ───────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ export function parseChapterIntentFromMarkdown(
       };
       // Parse required beats / forbidden moves from nested lists after ### heading
       const bodyAfterHeading = block.replace(/^###[^\n]*\n?/, "");
-      const beatsKV = parseKeyValue(bodyAfterHeading);
+      const _beatsKV = parseKeyValue(bodyAfterHeading);
       const beatsList = bodyAfterHeading.match(/\*\*(?:必达节拍|Required Beats)\*\*:\s*\n((?:\s{2}-[^\n]*\n?)*)/);
       if (beatsList) scene.requiredBeats = parseBulletList(beatsList[1]!);
       const movesList = bodyAfterHeading.match(/\*\*(?:禁止动作|Forbidden Moves)\*\*:\s*\n((?:\s{2}-[^\n]*\n?)*)/);

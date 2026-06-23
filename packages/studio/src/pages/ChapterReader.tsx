@@ -1,34 +1,31 @@
-import { useState, useCallback, useRef } from "react";
-import { fetchJson, useApi, postApi } from "../hooks/use-api";
-import type { Theme } from "../hooks/use-theme";
-import type { TFunction } from "../hooks/use-i18n";
-import { useColors } from "../hooks/use-colors";
-import type { CoreStyleProfile } from "./style-types.js";
-import type { FullStyleDiagnostics, DuplicateRhetoricFinding } from "@actalk/inkos-core";
+import type { DuplicateRhetoricFinding,FullStyleDiagnostics } from "@actalk/inkos-core";
 import {
-  ChevronLeft,
-  Check,
-  X,
-  List,
-  RotateCcw,
-  BookOpen,
-  CheckCircle2,
-  XCircle,
-  Hash,
-  Type,
-  Clock,
-  Pencil,
-  Save,
-  Eye,
-  ShieldCheck,
-  AlertTriangle,
-  Loader2,
-  Info,
-  Wand2,
-  BarChart3,
-  ChevronDown,
-  Bug,
+AlertTriangle,
+BarChart3,
+BookOpen,
+Bug,
+CheckCircle2,
+ChevronDown,
+Clock,
+Eye,
+Hash,
+Info,
+List,
+Loader2,
+Pencil,
+RotateCcw,
+Save,
+ShieldCheck,
+Type,
+Wand2,
+XCircle
 } from "lucide-react";
+import { useCallback,useState } from "react";
+import { fetchJson,postApi,useApi } from "../hooks/use-api";
+import { useColors } from "../hooks/use-colors";
+import type { TFunction } from "../hooks/use-i18n";
+import type { Theme } from "../hooks/use-theme";
+import type { CoreStyleProfile } from "./style-types.js";
 
 interface ChapterData {
   readonly chapterNumber: number;
@@ -388,7 +385,7 @@ function StyleAnalysisSidebar({ styleProfile, styleDiagnostics, rhetoricFindings
 }
 
 /** Heuristic text variation for common style issues — used when AI rewrite is not available. */
-function generateVariedReplacement(originalText: string, pattern: string): string {
+function generateVariedReplacement(originalText: string, _pattern: string): string {
   if (!originalText.trim()) return originalText;
 
   const SYNONYM_LIB: Record<string, ReadonlyArray<string>> = {
@@ -429,7 +426,7 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   theme: Theme;
   t: TFunction;
 }) {
-  const c = useColors(theme);
+  const _c = useColors(theme);
   const { data, loading, error, refetch } = useApi<ChapterData>(
     `/books/${bookId}/chapters/${chapterNumber}`,
   );
@@ -446,7 +443,7 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   const [styleProfile, setStyleProfile] = useState<CoreStyleProfile | null>(null);
   const [styleDiagnostics, setStyleDiagnostics] = useState<FullStyleDiagnostics | null>(null);
   const [rhetoricFindings, setRhetoricFindings] = useState<ReadonlyArray<DuplicateRhetoricFinding>>([]);
-  const [rhetoricLoading, setRhetoricLoading] = useState(false);
+  const [rhetoricLoading, _setRhetoricLoading] = useState(false);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState<string | null>(null);
 
@@ -582,7 +579,7 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   }, [editing, data]);
 
   /** Apply text replacement to editContent */
-  const applyTextReplacement = useCallback((start: number, end: number, replacement: string) => {
+  const _applyTextReplacement = useCallback((start: number, end: number, replacement: string) => {
     if (!editing) {
       // Enter edit mode first
       if (data) setEditContent(data.content);

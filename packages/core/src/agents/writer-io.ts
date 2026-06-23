@@ -2,12 +2,11 @@
  * writer-io.ts — saveChapter / saveNewTruthFiles / appendChapterSummary extracted from writer.ts (Phase 1).
  * Pure functions with explicit dependency injection. No dependency on WriterAgent.
  */
+import { mkdir,readFile,writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { saveRuntimeStateSnapshot } from "../state/runtime-state-store.js";
 import type { RuntimeStateSnapshot } from "../state/state-reducer.js";
 import type { WriteChapterOutput } from "./writer-types.js";
-import type { RuntimeStateDelta } from "../models/runtime-state.js";
 
 // ─── sanitizeFilename ────────────────────────────────────────────────────────
 

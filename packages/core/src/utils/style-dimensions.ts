@@ -10,8 +10,8 @@
  *   - Dimension samples extraction
  */
 
-import { detectDuplicateRhetoric, type DuplicateRhetoricResult, type RhetoricCategory } from "../utils/semantic-duplication.js";
-import type { StyleFingerprint, PunctuationRhythm, SensoryBreakdown } from "../models/style-profile.js";
+import type { StyleFingerprint } from "../models/style-profile.js";
+import { detectDuplicateRhetoric,type DuplicateRhetoricResult,type RhetoricCategory } from "../utils/semantic-duplication.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -203,7 +203,7 @@ const DIALOGUE_TAGS = ["说", "道", "问", "回答", "喊", "叫", "骂", "嚷"
  */
 export function computeDialogueFeatures(
   text: string,
-  language: "zh" | "en" = "zh",
+  _language: "zh" | "en" = "zh",
 ): DialogueFeatures {
   const lines = text.split("\n");
   let dialogueChars = 0;

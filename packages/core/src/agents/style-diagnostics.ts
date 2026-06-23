@@ -544,8 +544,7 @@ export function detectTransitionClustering(
     for (let i = 0; i < paragraphs.length; i++) {
       const re = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
       let countInParagraph = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(paragraphs[i])) !== null) {
+      while (re.exec(paragraphs[i]) !== null) {
         countInParagraph++;
         totalCount++;
       }
@@ -665,8 +664,7 @@ function countConnectives(sentence: string, language: "zh" | "en"): { count: num
   const categories = new Set<string>();
   for (const { pattern, category } of patterns) {
     const re = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(sentence)) !== null) {
+    while (re.exec(sentence) !== null) {
       count++;
       categories.add(category);
     }
@@ -693,7 +691,7 @@ function maxAttributeChain(sentence: string, language: "zh" | "en"): number {
     return max;
   }
   // English: consecutive adjectives before a noun (simplified)
-  const adjPattern = /\b(?:the|a|an)?\s*(?:\w+\s+){0,5}(?:\w+\s+)(?:\w+\s+)?\w+\b/gi;
+  const _adjPattern = /\b(?:the|a|an)?\s*(?:\w+\s+){0,5}(?:\w+\s+)(?:\w+\s+)?\w+\b/gi;
   // Simpler: count commas between determiner and noun
   const segments = sentence.split(/\b\w+\b/);
   let max = 0;
@@ -812,8 +810,7 @@ const SERMON_PATTERNS_EN = /\b(?:we should|we must|it is important to|it is wort
 function countPattern(text: string, pattern: RegExp): number {
   const re = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
   let count = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) count++;
+  while (re.exec(text) !== null) count++;
   return count;
 }
 

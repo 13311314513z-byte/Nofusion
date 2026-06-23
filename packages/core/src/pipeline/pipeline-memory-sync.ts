@@ -4,12 +4,10 @@
  * Contains syncCurrentStateFactHistory, syncLegacyStructuredStateFromMarkdown,
  * and syncNarrativeMemoryIndex.
  */
-import type { PipelineContext } from "./context.js";
-import type { LengthLanguage } from "../utils/length-metrics.js";
 import type { WriteChapterOutput } from "../agents/writer.js";
 import { rewriteStructuredStateFromMarkdown } from "../state/state-bootstrap.js";
-import { loadSnapshotCurrentStateFacts } from "../state/runtime-state-store.js";
-import { tryCreateMemoryDB, type Fact } from "../state/memory-db.js";
+import type { LengthLanguage } from "../utils/length-metrics.js";
+import type { PipelineContext } from "./context.js";
 
 export interface MemorySyncDeps {
   bookDir: (bookId: string) => string;

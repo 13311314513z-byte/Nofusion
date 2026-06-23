@@ -1,107 +1,96 @@
-import { BaseAgent } from "./base.js";
-import type { BookConfig } from "../models/book.js";
-import type { GenreProfile } from "../models/genre-profile.js";
-import type { BookRules } from "../models/book-rules.js";
-import { buildWriterSystemPrompt, type FanficContext } from "./writer-prompts.js";
-import { buildSettlerSystemPrompt, buildSettlerUserPrompt } from "./settler-prompts.js";
-import { buildObserverSystemPrompt, buildObserverUserPrompt } from "./observer-prompts.js";
-import {
-  buildEndpointLockSection,
-} from "../utils/intent-injection.js";
-import type { OpeningFrame, ClosingFrame, PathConstraints } from "../models/chapter-intent.schema.js";
-import { parseSettlerDeltaOutput } from "./settler-delta-parser.js";
-import { parseSettlementOutput } from "./settler-parser.js";
-import { readGenreProfile, readBookRules } from "./rules-reader.js";
-import {
-  detectCrossChapterRepetition,
-  detectParagraphLengthDrift,
-  normalizePostWriteSurface,
-  validatePostWrite,
-  type PostWriteViolation,
-} from "./post-write-validator.js";
-import { analyzeAITells } from "./ai-tells.js";
-import type { ChapterIntent, ChapterMemo, ContextPackage, RuleStack } from "../models/input-governance.js";
+import { join } from "node:path";
+import type { ClosingFrame,OpeningFrame,PathConstraints } from "../models/chapter-intent.schema.js";
+import type { ChapterIntent,ChapterMemo,ContextPackage,RuleStack } from "../models/input-governance.js";
 import type { LengthSpec } from "../models/length-governance.js";
+import { buildPromptManifest,getAvailableInputTokens,type PromptFragment } from "../models/prompt-manifest.js";
 import type { RuntimeStateDelta } from "../models/runtime-state.js";
-import { buildLengthSpec, countChapterLength } from "../utils/length-metrics.js";
+import { type RuntimeStateArtifacts } from "../state/runtime-state-store.js";
+import type { RuntimeStateSnapshot } from "../state/state-reducer.js";
 import {
-  capContextBlock,
-  filterHooks,
-  filterSummaries,
-  filterSubplots,
-  filterEmotionalArcs,
-  filterCharacterMatrix,
+capContextBlock,
+filterCharacterMatrix,
+filterEmotionalArcs,
+filterHooks,
+filterSubplots,
+filterSummaries,
 } from "../utils/context-filter.js";
 import { buildGovernedMemoryEvidenceBlocks } from "../utils/governed-context.js";
 import {
-  buildGovernedCharacterMatrixWorkingSet,
-  buildGovernedHookWorkingSet,
-  mergeCharacterMatrixMarkdown,
-  mergeTableMarkdownByKey,
+buildGovernedCharacterMatrixWorkingSet,
+buildGovernedHookWorkingSet
 } from "../utils/governed-working-set.js";
-import { extractPOVFromOutline, filterMatrixByPOV, filterHooksByPOV } from "../utils/pov-filter.js";
-import { parseCreativeOutput } from "./writer-parser.js";
-import { buildRuntimeStateArtifacts, saveRuntimeStateSnapshot, type RuntimeStateArtifacts } from "../state/runtime-state-store.js";
-import type { RuntimeStateSnapshot } from "../state/state-reducer.js";
-import { parsePendingHooksMarkdown } from "../utils/memory-retrieval.js";
 import { analyzeHookHealth } from "../utils/hook-health.js";
-import { buildEnglishVarianceBrief } from "../utils/long-span-fatigue.js";
 import {
-  buildNarrativeIntentBrief,
-  renderMemoAsNarrativeBlock,
-  renderNarrativeSelectedContext,
-  sanitizeNarrativeEvidenceBlock,
+buildEndpointLockSection,
+} from "../utils/intent-injection.js";
+import { buildLengthSpec,countChapterLength } from "../utils/length-metrics.js";
+import { buildEnglishVarianceBrief } from "../utils/long-span-fatigue.js";
+import { parsePendingHooksMarkdown } from "../utils/memory-retrieval.js";
+import {
+renderMemoAsNarrativeBlock,
+renderNarrativeSelectedContext,
+sanitizeNarrativeEvidenceBlock
 } from "../utils/narrative-control.js";
+import { extractPOVFromOutline,filterHooksByPOV,filterMatrixByPOV } from "../utils/pov-filter.js";
 import { logPromptManifest } from "../utils/prompt-tracing.js";
-import { buildPromptManifest, getAvailableInputTokens, type PromptFragment } from "../models/prompt-manifest.js";
-import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { analyzeAITells } from "./ai-tells.js";
+import { BaseAgent } from "./base.js";
+import {
+detectCrossChapterRepetition,
+detectParagraphLengthDrift,
+normalizePostWriteSurface,
+validatePostWrite
+} from "./post-write-validator.js";
+import { readBookRules,readGenreProfile } from "./rules-reader.js";
+import { parseSettlementOutput } from "./settler-parser.js";
+import { parseCreativeOutput } from "./writer-parser.js";
+import { buildWriterSystemPrompt,type FanficContext } from "./writer-prompts.js";
 
 import {
-  LEGACY_WRITER_CONTEXT_BUDGET,
-  type WriteChapterInput,
-  type SettleChapterStateInput,
-  type TokenUsage,
-  type WriteChapterOutput,
+LEGACY_WRITER_CONTEXT_BUDGET,
+type SettleChapterStateInput,
+type TokenUsage,
+type WriteChapterInput,
+type WriteChapterOutput,
 } from "./writer-types.js";
 
 import {
-  saveChapter as saveWriterChapter,
-  saveNewTruthFiles as saveWriterTruthFiles,
-  appendChapterSummary as appendWriterChapterSummary,
-  sanitizeFilename as sanitizeWriterFilename,
-  type SaveChapterDeps,
-} from "./writer-io.js";
-import {
-  renderDeltaSummaryRow as renderWriterDeltaSummaryRow,
-  normalizeRuntimeStateDeltaChapter as normalizeWriterRuntimeStateDeltaChapter,
-  buildRuntimeStateArtifactsIfPresent as buildWriterRuntimeStateArtifactsIfPresent,
-  resolveRuntimeStateArtifactsForOutput as resolveWriterRuntimeStateArtifactsForOutput,
-} from "./writer-runtime-state.js";
-import {
-  loadRecentChapters as loadWriterRecentChapters,
-  readFileOrDefault as readWriterFileOrDefault,
-  buildStyleFingerprint as buildWriterStyleFingerprint,
-  extractDialogueFingerprints as extractWriterDialogueFingerprints,
-  loadVoiceProfiles as loadWriterVoiceProfiles,
-  findRelevantSummaries as findWriterRelevantSummaries,
+buildStyleFingerprint as buildWriterStyleFingerprint,
+extractDialogueFingerprints as extractWriterDialogueFingerprints,
+findRelevantSummaries as findWriterRelevantSummaries,
+loadRecentChapters as loadWriterRecentChapters,
+loadVoiceProfiles as loadWriterVoiceProfiles,
+readFileOrDefault as readWriterFileOrDefault,
 } from "./writer-context.js";
 import {
-  runSettlementPhase,
-  buildSettlerGovernedControlBlock,
-  verifyPreWriteCheckAlignsWithMemo as verifyPreWriteCheckAlignsWithMemoFn,
-  type SettlementHost,
-  type SettlementParams,
+appendChapterSummary as appendWriterChapterSummary,
+sanitizeFilename as sanitizeWriterFilename,
+saveChapter as saveWriterChapter,
+saveNewTruthFiles as saveWriterTruthFiles,
+type SaveChapterDeps,
+} from "./writer-io.js";
+import {
+buildRuntimeStateArtifactsIfPresent as buildWriterRuntimeStateArtifactsIfPresent,
+normalizeRuntimeStateDeltaChapter as normalizeWriterRuntimeStateDeltaChapter,
+renderDeltaSummaryRow as renderWriterDeltaSummaryRow,
+resolveRuntimeStateArtifactsForOutput as resolveWriterRuntimeStateArtifactsForOutput,
+} from "./writer-runtime-state.js";
+import {
+buildSettlerGovernedControlBlock,
+runSettlementPhase,
+verifyPreWriteCheckAlignsWithMemo as verifyPreWriteCheckAlignsWithMemoFn,
+type SettlementHost,
+type SettlementParams,
 } from "./writer-settlement.js";
 
 // Re-export for package index backward compatibility
-export type { WriteChapterInput, WriteChapterOutput, TokenUsage, SettleChapterStateInput };
+export type { SettleChapterStateInput,TokenUsage,WriteChapterInput,WriteChapterOutput };
 
 import {
-  readStoryFrame,
-  readVolumeMap,
-  readCharacterContext,
-  readCurrentStateWithFallback,
+readCharacterContext,
+readCurrentStateWithFallback,
+readStoryFrame,
+readVolumeMap,
 } from "../utils/outline-paths.js";
 
 export class WriterAgent extends BaseAgent {
